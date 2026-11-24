@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { inkDisplayOutput } from './animeInkPass';
 
 export type TimeOfDay = 'day' | 'sunset' | 'night';
 
@@ -234,9 +235,13 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 		fog: false,
 		uniforms: {
 			uLocalUp: { value: new THREE.Vector3(0, 1, 0) },
-			topColor: { value: new THREE.Color(0x2892e8) },
-			midColor: { value: new THREE.Color(0x78cbf8) },
-			horizonColor: { value: new THREE.Color(0xffdcb8) }
+			uTime: { value: 0 },
+			uInkDisplayOutput: inkDisplayOutput,
+			topColor: { value: new THREE.Color(0x2fa7a6) },
+			midColor: { value: new THREE.Color(0x5cc7bd) },
+			horizonColor: { value: new THREE.Color(0xa9e4d6) },
+			cloudLight: { value: new THREE.Color(0xc6f0e4) },
+			cloudShade: { value: new THREE.Color(0x86d6c8) }
 		},
 		vertexShader: `
 			varying vec3 vDir;
@@ -247,16 +252,60 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 		`,
 		fragmentShader: `
 			uniform vec3 uLocalUp;
+			uniform float uTime;
+			uniform float uInkDisplayOutput;
 			uniform vec3 topColor;
 			uniform vec3 midColor;
 			uniform vec3 horizonColor;
+			uniform vec3 cloudLight;
+			uniform vec3 cloudShade;
 			varying vec3 vDir;
+
+			float hash3(vec3 p) {
+				p = fract(p * 0.3183099 + 0.1);
+				p *= 17.0;
+				return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+			}
+			float noise3(vec3 x) {
+				vec3 i = floor(x);
+				vec3 f = fract(x);
+				f = f * f * (3.0 - 2.0 * f);
+				return mix(mix(mix(hash3(i + vec3(0,0,0)), hash3(i + vec3(1,0,0)), f.x),
+				               mix(hash3(i + vec3(0,1,0)), hash3(i + vec3(1,1,0)), f.x), f.y),
+				           mix(mix(hash3(i + vec3(0,0,1)), hash3(i + vec3(1,0,1)), f.x),
+				               mix(hash3(i + vec3(0,1,1)), hash3(i + vec3(1,1,1)), f.x), f.y), f.z);
+			}
+			float fbm(vec3 p) {
+				float v = 0.0;
+				float a = 0.5;
+				for (int i = 0; i < 5; i++) {
+					v += a * noise3(p);
+					p = p * 2.03 + vec3(1.7, 9.2, 3.1);
+					a *= 0.5;
+				}
+				return v;
+			}
+
 			void main() {
-				float elev = dot(normalize(vDir), normalize(uLocalUp));
-				vec3 col = mix(horizonColor, midColor, smoothstep(-0.22, 0.1, elev));
-				col = mix(col, topColor, smoothstep(0.08, 0.45, elev));
+				vec3 d = normalize(vDir);
+				float elev = dot(d, normalize(uLocalUp));
+				vec3 col = mix(horizonColor, midColor, smoothstep(-0.25, 0.15, elev));
+				col = mix(col, topColor, smoothstep(0.12, 0.6, elev));
+
+				// Painterly anime clouds: stretched brush-stroke fbm, cut into flat cel tones
+				vec3 p = d * vec3(2.2, 3.4, 2.2) + vec3(uTime * 0.012, 0.0, uTime * 0.006);
+				float n = fbm(p + fbm(p * 1.7) * 0.6);
+				float cloud = smoothstep(0.50, 0.53, n);
+				float cloudCore = smoothstep(0.60, 0.63, n);
+				// Lit rim on the upper side of each cloud (sun from above)
+				float rim = smoothstep(0.50, 0.53, fbm(p + vec3(0.0, -0.06, 0.0) + fbm(p * 1.7) * 0.6));
+				vec3 cc = mix(cloudShade, cloudLight, cloudCore);
+				cc = mix(cc, cloudLight * 1.06, (1.0 - rim) * cloud * 0.6);
+				col = mix(col, cc, cloud);
+
 				gl_FragColor = vec4(col, 1.0);
 				#include <colorspace_fragment>
+				if (uInkDisplayOutput > 0.5) gl_FragColor = sRGBTransferOETF(gl_FragColor);
 			}
 		`
 	});
@@ -302,18 +351,22 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 
 	const applyTime = (mode: TimeOfDay, sun: THREE.DirectionalLight, ambient: THREE.AmbientLight) => {
 		if (mode === 'day') {
-			skyMat.uniforms.topColor.value.setHex(0x2892e8);
-			skyMat.uniforms.midColor.value.setHex(0x78cbf8);
-			skyMat.uniforms.horizonColor.value.setHex(0xffdcb8);
+			skyMat.uniforms.topColor.value.setHex(0x2fa7a6);
+			skyMat.uniforms.midColor.value.setHex(0x5cc7bd);
+			skyMat.uniforms.horizonColor.value.setHex(0xa9e4d6);
+			skyMat.uniforms.cloudLight.value.setHex(0xc6f0e4);
+			skyMat.uniforms.cloudShade.value.setHex(0x86d6c8);
 			sun.color.setHex(0xfff1dc);
 			sun.intensity = 1.55;
 			ambient.intensity = 0.82;
 			starMat.opacity = 0.08;
-			cloudMat.color.setHex(0xfffdf8);
+			cloudMat.color.setHex(0xf2fbf7);
 		} else if (mode === 'sunset') {
 			skyMat.uniforms.topColor.value.setHex(0x3b2d68);
 			skyMat.uniforms.midColor.value.setHex(0xf08556);
 			skyMat.uniforms.horizonColor.value.setHex(0xffe4a0);
+			skyMat.uniforms.cloudLight.value.setHex(0xffd6b0);
+			skyMat.uniforms.cloudShade.value.setHex(0xd9806a);
 			sun.color.setHex(0xffa45b);
 			sun.intensity = 1.8;
 			ambient.intensity = 0.68;
@@ -323,6 +376,8 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 			skyMat.uniforms.topColor.value.setHex(0x0b1026);
 			skyMat.uniforms.midColor.value.setHex(0x1e254d);
 			skyMat.uniforms.horizonColor.value.setHex(0x3b4880);
+			skyMat.uniforms.cloudLight.value.setHex(0x4a5690);
+			skyMat.uniforms.cloudShade.value.setHex(0x2b3463);
 			sun.color.setHex(0xa5c8ff);
 			sun.intensity = 0.9;
 			ambient.intensity = 0.48;

@@ -10,14 +10,14 @@ export function createTreeLeavesMaterial(
 
 	return new ShaderMaterial({
 		name: 'TreeLeaves',
-		transparent: true,
+		transparent: false,
 		side: DoubleSide,
 		depthWrite: true,
 		uniforms: {
 			tTrees: { value: leavesTexture },
-			uColor1: { value: new Color('#5b9f7b') },
-			uColor2: { value: new Color('#649c75') },
-			uColor3: { value: new Color('#4e8c6d') },
+			uColor1: { value: new Color('#5aa86a') },
+			uColor2: { value: new Color('#4f9c63') },
+			uColor3: { value: new Color('#3f8a5c') },
 			uTime: { value: 0 },
 			uScale: { value: 0.28 },
 			uLightPosition: { value: lightPosition.clone() }

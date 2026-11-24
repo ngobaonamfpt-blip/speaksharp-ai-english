@@ -38,17 +38,18 @@ varying vec3 vWorldPosition;
 varying float vRand;
 
 void main() {
-	vec4 leaf = texture2D(tTrees, vUv);
-	if (leaf.a < 0.35) discard;
-
+	// Solid fluffy anime canopy (no checker pattern): flat 3-tone cel shading
 	vec3 tint = mix(uColor1, uColor2, vRand);
 	tint = mix(tint, uColor3, step(0.6, vRand));
-	vec3 color = mix(tint, leaf.rgb, 0.65);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-	float shade = max(dot(normalize(vNormal), lightDir), 0.0);
-	color *= 0.55 + shade * 0.45;
+	float shade = dot(normalize(vNormal), lightDir);
+	vec3 lit = tint * 1.12 + vec3(0.03, 0.05, 0.0);
+	vec3 mid = tint * 0.86;
+	vec3 dark = tint * vec3(0.52, 0.62, 0.70);
+	vec3 color = mix(dark, mid, smoothstep(-0.05, 0.02, shade));
+	color = mix(color, lit, smoothstep(0.42, 0.48, shade));
 
-	gl_FragColor = vec4(color, leaf.a);
+	gl_FragColor = vec4(color, 1.0);
 }
 `;

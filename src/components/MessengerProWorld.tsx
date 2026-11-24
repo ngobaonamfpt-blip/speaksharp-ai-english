@@ -21,10 +21,12 @@ import {
   WebGLRenderer,
   type AnimationMixer,
   type BatchedMesh,
+  type Material,
   type ShaderMaterial,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
+import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
 
 // Patch Three.js once with BVH accelerated raycasting (~500-1000x faster walking & wall-slide!)
 (BufferGeometry.prototype as unknown as Record<string, unknown>).computeBoundsTree = computeBoundsTree;
@@ -127,7 +129,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [soundMuted, setSoundMuted] = useState(false);
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
-  const [outlineFx, setOutlineFx] = useState(false);
+  const [outlineFx, setOutlineFx] = useState(true);
 
   const [hatColor, setHatColor] = useState('#232a2f');
   const [shirtColor, setShirtColor] = useState('#c93b3b');
@@ -606,6 +608,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       Math.max(1, host.clientWidth >> 1),
       Math.max(1, host.clientHeight >> 1)
     );
+    const animeInk = new AnimeInkPass(
+      Math.max(1, host.clientWidth),
+      Math.max(1, host.clientHeight),
+      camera
+    );
+    let waterDepthCaptured = false;
     const startedAt = performance.now();
     let cancelled = false;
 
@@ -617,6 +625,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       const dw = Math.max(1, clientWidth >> 1);
       const dh = Math.max(1, clientHeight >> 1);
       resizeSceneDepthTarget(sceneDepthTarget, dw, dh);
+      animeInk.setSize(clientWidth, clientHeight);
+      waterDepthCaptured = false;
       runtime.composer?.resize(clientWidth, clientHeight);
       if (runtime.gameplayWaterMaterial) {
         setGameplayWaterDepth(
@@ -735,6 +745,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           setMessengerLight(runtime.materials, sun.position);
           scene.add(bundle.group);
         }
+        // Patch built-in materials (chibi, clouds, rings) so their sRGB output matches AnimeInkPass
+        scene.traverse((obj) => {
+          const mat = (obj as Mesh).material as Material | Material[] | undefined;
+          if (!mat) return;
+          if (Array.isArray(mat)) mat.forEach(patchMaterialForInk);
+          else patchMaterialForInk(mat);
+        });
         runtime.ready = true;
         setStatus('ready');
       } catch (err) {
@@ -999,8 +1016,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
 
       if (mode === 'gameplay' && runtime.gameplayWater && runtime.gameplayWaterMaterial) {
-        // In Fast mode: single 1-pass render (only capture depth once on frame 1 or when Ultra FX is enabled)
-        if (frameCount === 1 || (liveOutlineFxRef.current && frameCount % 4 === 1)) {
+        // Capture the water shoreline depth once after the planet has loaded (and after resizes)
+        if (runtime.ready && !waterDepthCaptured) {
+          waterDepthCaptured = true;
           runtime.gameplayWater.visible = false;
           renderer.setRenderTarget(sceneDepthTarget);
           renderer.clear();
@@ -1014,14 +1032,16 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             sceneDepthTarget.height
           );
         }
-        if (liveOutlineFxRef.current && runtime.composer) {
-          runtime.composer.render();
-        } else {
-          renderer.render(scene, camera);
-        }
-      } else if (liveOutlineFxRef.current && runtime.composer) {
-        runtime.composer.render();
+      }
+
+      if (atmosphere) atmosphere.skyMat.uniforms.uTime.value = elapsed;
+
+      // 🎨 Anime Ink mode (default): hand-drawn outlines + flat cel grading, like Messenger by Abeto
+      if (liveOutlineFxRef.current && mode !== 'npcs') {
+        inkDisplayOutput.value = 1;
+        animeInk.render(renderer, scene, camera, elapsed);
       } else {
+        inkDisplayOutput.value = 0;
         renderer.render(scene, camera);
       }
     };
@@ -1045,6 +1065,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       resizeObserver.disconnect();
       audio.dispose();
       toonGradient.dispose();
+      animeInk.dispose();
       runtime.composer?.dispose();
       sceneDepthTarget.dispose();
       controls.dispose();
@@ -1272,12 +1293,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             onClick: cycleTime,
           },
           {
-            label: outlineFx ? '✨' : '⚡',
-            title: outlineFx ? 'Viền mực Ultra (nhấn để chuyển Mượt)' : 'Chế độ Mượt 60+ FPS (nhấn để bật Viền mực)',
+            label: outlineFx ? '🎨' : '⚡',
+            title: outlineFx ? 'Phong cách Anime Ink (nhấn để chuyển Mượt)' : 'Chế độ Mượt 165 FPS (nhấn để bật Anime Ink)',
             onClick: () => {
               setOutlineFx((v) => {
                 const next = !v;
-                showToast(next ? '✨ Đã bật hiệu ứng viền mực Ultra' : '⚡ Đã bật chế độ Mượt (FPS tối đa)');
+                showToast(next ? '🎨 Đã bật phong cách Anime Ink vẽ tay' : '⚡ Đã bật chế độ Mượt (FPS tối đa)');
                 return next;
               });
             },
