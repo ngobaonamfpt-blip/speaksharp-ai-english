@@ -66,6 +66,8 @@ import {
   createSoftDropShadow,
   createToonGradient,
   PLANET_QUEST_STOPS,
+  setCourierHairStyle,
+  type HairStyle,
   type QuestStop,
   type TimeOfDay,
 } from '../lib/messenger/playerController';
@@ -152,7 +154,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
   const [hatColor, setHatColor] = useState('#232a2f');
   const [shirtColor, setShirtColor] = useState('#c93b3b');
-  const [bagColor, setBagColor] = useState('#8a5430');
+  const [bagColor, setBagColor] = useState('#4b5563');
+  const [hairStyle, setHairStyle] = useState<HairStyle>('bob');
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [floatingEmotes, setFloatingEmotes] = useState<
@@ -188,11 +191,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const liveOutlineFxRef = useRef(outlineFx);
   const liveWardrobeRef = useRef(wardrobeOpen);
   const liveDialogOpenRef = useRef(Boolean(activeDialog));
-  const liveOutfitRef = useRef({ hat: hatColor, shirt: shirtColor, bag: bagColor });
+  const liveOutfitRef = useRef({ hat: hatColor, shirt: shirtColor, bag: bagColor, hair: hairStyle });
   const onEarnXpRef = useRef(onEarnXp);
 
   const applyTimeRef = useRef<((t: TimeOfDay) => void) | null>(null);
-  const applyOutfitRef = useRef<((h: string, s: string, b: string) => void) | null>(null);
+  const applyOutfitRef = useRef<((h: string, s: string, b: string, hair: HairStyle) => void) | null>(null);
   const triggerEmoteRef = useRef<((e: string) => void) | null>(null);
   const triggerInteractRef = useRef<(() => void) | null>(null);
   const completeQuestRef = useRef<((stopId: string, xp: number, label: string) => void) | null>(null);
@@ -224,9 +227,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     liveDialogOpenRef.current = Boolean(activeDialog);
   }, [activeDialog]);
   useEffect(() => {
-    liveOutfitRef.current = { hat: hatColor, shirt: shirtColor, bag: bagColor };
-    applyOutfitRef.current?.(hatColor, shirtColor, bagColor);
-  }, [hatColor, shirtColor, bagColor]);
+    liveOutfitRef.current = { hat: hatColor, shirt: shirtColor, bag: bagColor, hair: hairStyle };
+    applyOutfitRef.current?.(hatColor, shirtColor, bagColor, hairStyle);
+  }, [hatColor, shirtColor, bagColor, hairStyle]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -365,16 +368,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const wallNormal = new Vector3();
     const checkWallSlide = (posDir: Vector3, moveDir: Vector3, curR: number): Vector3 | null => {
       if (runtime.terrainChunks.length === 0) return moveDir;
-      wallOrigin.copy(posDir).multiplyScalar(curR + 0.14);
+      // Cast at chest height (+0.22) so low curbs, steps & sidewalks NEVER block walking!
+      wallOrigin.copy(posDir).multiplyScalar(curR + 0.22);
       raycaster.set(wallOrigin, moveDir);
-      raycaster.far = 0.17;
+      raycaster.far = 0.13;
       const meshes = runtime.terrainChunks.map((c) => c.mesh);
       const hits = raycaster.intersectObjects(meshes, false);
       if (hits.length === 0) return moveDir;
       const hit = hits[0];
-      if (!hit.face) return null;
+      if (!hit.face) return moveDir;
       wallNormal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
-      if (Math.abs(wallNormal.dot(posDir)) > 0.62) return moveDir;
+      // Ignore backfaces (so you can never get trapped inside a mesh) & ignore gentle slopes/stairs
+      if (wallNormal.dot(moveDir) > -0.18 || Math.abs(wallNormal.dot(posDir)) > 0.45) return moveDir;
       const slide = moveDir.clone().addScaledVector(wallNormal, -moveDir.dot(wallNormal));
       slide.addScaledVector(posDir, -slide.dot(posDir));
       if (slide.lengthSq() < 0.04) return null;
@@ -385,7 +390,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       hatColor: new Color(liveOutfitRef.current.hat).getHex(),
       shirtColor: new Color(liveOutfitRef.current.shirt).getHex(),
       bagColor: new Color(liveOutfitRef.current.bag).getHex(),
-      scarfColor: 0xf5bd33,
+      hairStyle: liveOutfitRef.current.hair,
     });
     player.traverse((o) => {
       if ((o as Mesh).isMesh) o.castShadow = true;
@@ -479,7 +484,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       });
     };
 
-    applyOutfitRef.current = (hat: string, shirt: string, bag: string) => {
+    applyOutfitRef.current = (hat: string, shirt: string, bag: string, hair: HairStyle) => {
+      setCourierHairStyle(player, hair);
       const cHat = new Color(hat);
       const cShirt = new Color(shirt);
       const cBag = new Color(bag);
@@ -487,16 +493,15 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         if (!(o as Mesh).isMesh) return;
         const mat = (o as Mesh).material as { color?: Color };
         if (!mat?.color) return;
-        if (o.name === 'hatMeshDome' || o.name === 'hatMeshVisor' || o.name === 'hatMeshBtn')
-          mat.color.copy(cHat);
+        if (o.name === 'hatMeshDome' || o.name === 'hatMeshBtn') mat.color.copy(cHat);
         if (
           o.name === 'shirtMesh' ||
-          o.name === 'shirtMeshHem' ||
           o.name === 'shirtMeshArmL' ||
-          o.name === 'shirtMeshArmR'
+          o.name === 'shirtMeshArmR' ||
+          o.name === 'hatMeshVisor'
         )
           mat.color.copy(cShirt);
-        if (o.name === 'bagMesh' || o.name === 'bagStrap') mat.color.copy(cBag);
+        if (o.name === 'bagMesh') mat.color.copy(cBag);
       });
     };
 
@@ -1619,10 +1624,42 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               ✕
             </button>
           </div>
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6770', marginBottom: 5 }}>
+              Kiểu tóc / Phụ kiện
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+              {(
+                [
+                  { id: 'bob', label: '💇 Tóc Bob' },
+                  { id: 'buns', label: '🎀 Búi đôi' },
+                  { id: 'cap', label: '🧢 Mũ bưu tá' },
+                  { id: 'headphones', label: '🎧 Tai nghe' },
+                ] as const
+              ).map((st) => (
+                <button
+                  key={st.id}
+                  onClick={() => setHairStyle(st.id)}
+                  style={{
+                    border: '2px solid #1d2a33',
+                    background: hairStyle === st.id ? '#f5bd33' : '#fff',
+                    color: '#1d2a33',
+                    borderRadius: 8,
+                    padding: '4px 6px',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {st.label}
+                </button>
+              ))}
+            </div>
+          </div>
           {[
-            { label: 'Màu mũ', list: HAT_SWATCHES, val: hatColor, set: setHatColor },
-            { label: 'Màu áo', list: SHIRT_SWATCHES, val: shirtColor, set: setShirtColor },
-            { label: 'Màu túi', list: BAG_SWATCHES, val: bagColor, set: setBagColor },
+            { label: 'Màu tóc', list: HAT_SWATCHES, val: hatColor, set: setHatColor },
+            { label: 'Màu áo khoác', list: SHIRT_SWATCHES, val: shirtColor, set: setShirtColor },
+            { label: 'Màu túi đeo', list: BAG_SWATCHES, val: bagColor, set: setBagColor },
           ].map((row) => (
             <div key={row.label} style={{ marginBottom: 8 }}>
               <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6770', marginBottom: 4 }}>

@@ -389,203 +389,274 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 	return { skyMat, cloudRing, stars, applyTime };
 }
 
-/** Smooth Organic Chibi Courier Character (scaled for Gameplay planet radius ~9 -> height ~0.72 units) */
+export type HairStyle = 'bob' | 'buns' | 'cap' | 'headphones';
+
+/**
+ * Stylish Slender Anime Courier Character inspired by Messenger by Abeto
+ * (cropped wide-leg shorts, white-trimmed jacket, crossbody satchel, anime hair + 4 swappable styles)
+ */
 export function buildChibiCourier(
 	toonGradient: THREE.DataTexture,
-	opts: { hatColor: number; shirtColor: number; bagColor: number; scarfColor?: number }
+	opts: { hatColor: number; shirtColor: number; bagColor: number; scarfColor?: number; hairStyle?: HairStyle }
 ): THREE.Group {
 	const root = new THREE.Group();
 	const bodyRoot = new THREE.Group();
 	bodyRoot.name = 'bodyRoot';
-	bodyRoot.scale.setScalar(0.135); // True alley-walkable human proportion on Gameplay planet!
+	bodyRoot.scale.setScalar(0.118); // True alley-walkable anime teen height (~0.32 units)
 	root.add(bodyRoot);
 
 	const toon = (c: number) => new THREE.MeshToonMaterial({ color: c, gradientMap: toonGradient });
-	const skinM = toon(0xfde2c8);
+	const skinM = toon(0xfde0c8);
 	const shirtM = toon(opts.shirtColor);
-	const hatM = toon(opts.hatColor);
+	const hairM = toon(opts.hatColor);
 	const bagM = toon(opts.bagColor);
-	const bagFlapM = toon(new THREE.Color(opts.bagColor).multiplyScalar(0.84).getHex());
-	const pantsM = toon(0x2d3748);
-	const shoeM = toon(0x5c3d2e);
-	const scarfM = toon(opts.scarfColor ?? 0xf5bd33);
-	const brassM = toon(0xf5bd33);
-	const whiteM = toon(0xfffdf7);
+	const strapM = toon(0x232a2f);
+	const pantsM = toon(0x28313b);
+	const sockM = toon(0xf5f5f0);
+	const shoeM = toon(0x1f262e);
+	const whiteTrimM = toon(0xfffdf7);
+	const goldM = toon(0xf5bd33);
 
-	// Rounded Legs & Shoes
-	const legGeo = new THREE.CapsuleGeometry(0.115, 0.16, 8, 12);
-	const shoeGeo = new THREE.SphereGeometry(0.145, 12, 10);
-	([-0.18, 0.18] as const).forEach((lx, i) => {
+	// 1. Articulated Anime Legs: Wide Cropped Pants + Slim Calves + Socks + Chunky Sneakers
+	([-0.145, 0.145] as const).forEach((lx, i) => {
 		const leg = new THREE.Group();
 		leg.name = i === 0 ? 'leftLeg' : 'rightLeg';
-		leg.position.set(lx, 0.44, 0);
-		const lm = new THREE.Mesh(legGeo, pantsM);
-		lm.position.y = -0.14;
-		const sm = new THREE.Mesh(shoeGeo, shoeM);
-		sm.scale.set(1.02, 0.7, 1.38);
-		sm.position.set(0, -0.34, 0.06);
-		leg.add(lm, sm);
+		leg.position.set(lx, 1.05, 0);
+
+		const pant = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.145, 0.56, 10), pantsM);
+		pant.position.y = -0.26;
+		leg.add(pant);
+
+		const shin = new THREE.Group();
+		shin.name = i === 0 ? 'leftShin' : 'rightShin';
+		shin.position.y = -0.52;
+		leg.add(shin);
+
+		const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.24, 6, 10), skinM);
+		calf.position.y = -0.15;
+		shin.add(calf);
+
+		const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.064, 0.14, 10), sockM);
+		sock.position.y = -0.32;
+		shin.add(sock);
+
+		const shoe = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.11, 6, 10), shoeM);
+		shoe.rotation.x = Math.PI / 2;
+		shoe.scale.set(1.0, 1.15, 0.8);
+		shoe.position.set(0, -0.43, 0.045);
+		const sole = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.04, 0.25), whiteTrimM);
+		sole.position.set(0, -0.48, 0.045);
+		shin.add(shoe, sole);
+
 		bodyRoot.add(leg);
 	});
 
-	// Chubby Pear Torso
+	// 2. Slender Anime Torso + Tailored Jacket with Crisp White Trim
 	const torsoGroup = new THREE.Group();
 	torsoGroup.name = 'torsoGroup';
-	torsoGroup.position.y = 0.82;
+	torsoGroup.position.y = 1.48;
 	bodyRoot.add(torsoGroup);
 
-	const torso = new THREE.Mesh(new THREE.SphereGeometry(0.36, 16, 12), shirtM);
-	torso.name = 'shirtMesh';
-	torso.scale.set(1.04, 1.2, 0.96);
-	torsoGroup.add(torso);
+	const jacket = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.30, 0.78, 12), shirtM);
+	jacket.name = 'shirtMesh';
+	jacket.scale.set(1.06, 1.0, 0.72);
+	torsoGroup.add(jacket);
 
-	const hem = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.065, 8, 16), shirtM);
-	hem.name = 'shirtMeshHem';
-	hem.rotation.x = Math.PI / 2;
-	hem.position.y = -0.26;
-	torsoGroup.add(hem);
+	const hemTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.312, 0.065, 12), whiteTrimM);
+	hemTrim.scale.set(1.06, 1.0, 0.73);
+	hemTrim.position.y = -0.37;
+	torsoGroup.add(hemTrim);
 
-	// Cross-body strap + Brass buckle + Rounded leather satchel
-	const strap = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.042, 8, 20), bagFlapM);
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.045, 8, 16), whiteTrimM);
+	collar.rotation.x = Math.PI / 2;
+	collar.position.y = 0.38;
+	torsoGroup.add(collar);
+
+	const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.16, 10), skinM);
+	neck.position.y = 0.45;
+	torsoGroup.add(neck);
+
+	// Diagonal Crossbody Messenger Strap & Back-Hip Satchel
+	const strap = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 22), strapM);
 	strap.name = 'bagStrap';
-	strap.scale.set(1.02, 1.15, 0.98);
-	strap.rotation.y = Math.PI * 0.45;
-	strap.rotation.x = 0.52;
-	strap.position.y = 0.04;
+	strap.scale.set(0.96, 1.25, 0.78);
+	strap.rotation.y = Math.PI * 0.42;
+	strap.rotation.z = 0.56;
+	strap.position.set(0, 0.02, 0);
 	torsoGroup.add(strap);
 
-	const buckle = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.022, 8, 12), brassM);
-	buckle.position.set(0.04, 0.08, 0.35);
-	buckle.rotation.z = 0.55;
-	torsoGroup.add(buckle);
-
 	const bagGroup = new THREE.Group();
-	bagGroup.position.set(-0.39, -0.04, -0.04);
-	bagGroup.rotation.z = 0.16;
+	bagGroup.position.set(-0.22, -0.18, -0.22);
+	bagGroup.rotation.set(0.12, 0.35, 0.24);
 	torsoGroup.add(bagGroup);
 
-	const bagMesh = new THREE.Mesh(new THREE.SphereGeometry(0.23, 12, 10), bagM);
+	const bagMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), bagM);
 	bagMesh.name = 'bagMesh';
-	bagMesh.scale.set(0.62, 0.96, 1.22);
+	bagMesh.scale.set(1.22, 0.92, 0.55);
 	bagGroup.add(bagMesh);
 
-	const letter = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.12, 6, 10), whiteM);
+	const bagFlap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.16), bagM);
+	bagFlap.position.set(0, 0.08, -0.02);
+	const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.04), goldM);
+	buckle.position.set(0, 0.01, -0.11);
+	bagGroup.add(bagFlap, buckle);
+
+	const letter = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.035), whiteTrimM);
 	letter.name = 'carriedLetter';
-	letter.scale.set(0.32, 1.0, 1.25);
-	letter.position.set(-0.02, 0.24, 0.02);
-	letter.rotation.z = 0.22;
+	letter.position.set(0.06, 0.2, 0.01);
+	letter.rotation.z = -0.24;
 	letter.visible = false;
 	bagGroup.add(letter);
 
-	// 3-Segment Flowing Scarf
-	const scarfRing = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.105, 8, 16), scarfM);
-	scarfRing.rotation.x = Math.PI / 2;
-	scarfRing.position.y = 0.38;
-	torsoGroup.add(scarfRing);
-
-	const s1 = new THREE.Group();
-	s1.name = 'scarfSeg1';
-	s1.position.set(0.08, 0.36, -0.26);
-	const m1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.22, 6, 10), scarfM);
-	m1.rotation.x = Math.PI / 2;
-	m1.scale.set(1.25, 1, 0.65);
-	m1.position.z = -0.14;
-	s1.add(m1);
-	torsoGroup.add(s1);
-
-	const s2 = new THREE.Group();
-	s2.name = 'scarfSeg2';
-	s2.position.set(0, 0, -0.28);
-	const m2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.2, 6, 10), scarfM);
-	m2.rotation.x = Math.PI / 2;
-	m2.scale.set(1.2, 1, 0.62);
-	m2.position.z = -0.13;
-	s2.add(m2);
-	s1.add(s2);
-
-	const s3 = new THREE.Group();
-	s3.name = 'scarfSeg3';
-	s3.position.set(0, 0, -0.25);
-	const m3 = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.16, 6, 10), scarfM);
-	m3.rotation.x = Math.PI / 2;
-	m3.scale.set(1.15, 1, 0.58);
-	m3.position.z = -0.11;
-	s3.add(m3);
-	s2.add(s3);
-
-	// Rounded Arms
-	const armGeo = new THREE.CapsuleGeometry(0.095, 0.24, 6, 10);
-	const handGeo = new THREE.SphereGeometry(0.095, 8, 8);
-	([-0.4, 0.4] as const).forEach((ax, i) => {
+	// 3. Slim Articulated Anime Arms with Jacket Sleeves & Hands
+	([-0.31, 0.31] as const).forEach((ax, i) => {
 		const arm = new THREE.Group();
 		arm.name = i === 0 ? 'leftArm' : 'rightArm';
-		arm.position.set(ax, 0.24, 0);
-		const am = new THREE.Mesh(armGeo, shirtM);
-		am.name = i === 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
-		am.position.y = -0.15;
-		const hm = new THREE.Mesh(handGeo, skinM);
-		hm.position.y = -0.33;
-		arm.add(am, hm);
+		arm.position.set(ax, 0.30, 0);
+		arm.rotation.z = i === 0 ? 0.14 : -0.14;
+
+		const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.105, 0.46, 10), shirtM);
+		sleeve.name = i === 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
+		sleeve.position.y = -0.22;
+		const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.106, 0.108, 0.04, 10), whiteTrimM);
+		cuff.position.y = -0.44;
+		const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.16, 6, 8), skinM);
+		forearm.position.y = -0.54;
+		const hand = new THREE.Mesh(new THREE.SphereGeometry(0.068, 8, 8), skinM);
+		hand.scale.set(0.9, 1.1, 0.75);
+		hand.position.y = -0.66;
+
+		arm.add(sleeve, cuff, forearm, hand);
 		torsoGroup.add(arm);
 	});
 
-	// Oversized Chibi Head + Oval Eyes + Rosy Cheeks + Curved-Brim Cap
+	// 4. Sculpted Anime Head + Expressive Eyes + 4 Swappable Hairstyles
 	const headGroup = new THREE.Group();
 	headGroup.name = 'headGroup';
-	headGroup.position.y = 0.72;
+	headGroup.position.y = 0.78;
 	torsoGroup.add(headGroup);
 
-	const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 18, 14), skinM);
-	head.scale.set(1.06, 0.96, 1.02);
+	const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 14), skinM);
+	head.scale.set(0.98, 1.04, 0.96);
 	headGroup.add(head);
 
-	const eyeM = new THREE.MeshBasicMaterial({ color: 0x1a2026 });
+	const eyeM = new THREE.MeshBasicMaterial({ color: 0x182026 });
 	const catchM = new THREE.MeshBasicMaterial({ color: 0xffffff });
-	const blushM = new THREE.MeshBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.75 });
-	([-0.145, 0.145] as const).forEach((ex) => {
-		const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 8, 8), eyeM);
-		eye.scale.set(0.85, 1.28, 0.55);
-		eye.position.set(ex, 0.03, 0.385);
-		const gl = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), catchM);
-		gl.position.set(ex + 0.016, 0.058, 0.412);
+	const blushM = new THREE.MeshBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.65 });
+	([-0.105, 0.105] as const).forEach((ex) => {
+		const eye = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), eyeM);
+		eye.scale.set(0.82, 1.35, 0.45);
+		eye.position.set(ex, -0.01, 0.275);
+		const gl = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 6), catchM);
+		gl.position.set(ex + 0.012, 0.018, 0.295);
 		headGroup.add(eye, gl);
 	});
-	([-0.245, 0.245] as const).forEach((bx) => {
-		const b = new THREE.Mesh(new THREE.CircleGeometry(0.068, 12), blushM);
-		b.scale.set(1.25, 0.75, 1);
-		b.position.set(bx, -0.06, 0.365);
+	([-0.18, 0.18] as const).forEach((bx) => {
+		const b = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), blushM);
+		b.scale.set(1.25, 0.65, 1);
+		b.position.set(bx, -0.08, 0.255);
 		b.rotation.y = bx < 0 ? -0.45 : 0.45;
 		headGroup.add(b);
 	});
 
-	const capDome = new THREE.Mesh(
-		new THREE.SphereGeometry(0.455, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.58),
-		hatM
+	const hairCrown = new THREE.Mesh(
+		new THREE.SphereGeometry(0.33, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.65),
+		hairM
 	);
-	capDome.name = 'hatMeshDome';
-	capDome.scale.set(1.06, 0.96, 1.08);
-	capDome.position.set(0, 0.07, -0.02);
-	capDome.rotation.x = -0.18;
+	hairCrown.name = 'hatMeshDome';
+	hairCrown.scale.set(1.03, 1.06, 1.05);
+	hairCrown.position.set(0, 0.03, -0.02);
+	hairCrown.rotation.x = -0.22;
+	headGroup.add(hairCrown);
 
-	const capBtn = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), hatM);
-	capBtn.name = 'hatMeshBtn';
-	capBtn.position.set(0, 0.5, -0.09);
+	const backHair = new THREE.Mesh(
+		new THREE.CylinderGeometry(0.28, 0.31, 0.28, 12, 1, false, Math.PI * 0.55, Math.PI * 0.9),
+		hairM
+	);
+	backHair.name = 'hatMeshBtn';
+	backHair.position.set(0, -0.10, -0.04);
+	headGroup.add(backHair);
 
-	const brim = new THREE.Mesh(new THREE.SphereGeometry(0.36, 14, 8), hatM);
+	([-0.12, 0, 0.12] as const).forEach((fx, idx) => {
+		const bang = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.22, 5), hairM);
+		bang.name = 'hatMeshDome';
+		bang.rotation.x = Math.PI + 0.18;
+		bang.rotation.z = (idx - 1) * -0.18;
+		bang.position.set(fx, 0.14, 0.265);
+		headGroup.add(bang);
+	});
+
+	// Style A: Messenger Bob Hair
+	const styleBob = new THREE.Group();
+	styleBob.name = 'style-bob';
+	([-0.26, 0.26] as const).forEach((sx) => {
+		const lock = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.22, 6, 8), hairM);
+		lock.position.set(sx, -0.08, 0.04);
+		lock.rotation.z = sx < 0 ? 0.12 : -0.12;
+		styleBob.add(lock);
+	});
+	headGroup.add(styleBob);
+
+	// Style B: Twin Anime Hair Buns with Yellow Ties
+	const styleBuns = new THREE.Group();
+	styleBuns.name = 'style-buns';
+	([-0.26, 0.26] as const).forEach((bx) => {
+		const bun = new THREE.Mesh(new THREE.SphereGeometry(0.145, 12, 10), hairM);
+		bun.position.set(bx, 0.24, -0.05);
+		const tie = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 12), goldM);
+		tie.position.set(bx * 0.88, 0.2, -0.04);
+		tie.rotation.y = bx < 0 ? 0.7 : -0.7;
+		styleBuns.add(bun, tie);
+	});
+	styleBuns.visible = false;
+	headGroup.add(styleBuns);
+
+	// Style C: Stylish Mailman Cap
+	const styleCap = new THREE.Group();
+	styleCap.name = 'style-cap';
+	const capTop = new THREE.Mesh(
+		new THREE.SphereGeometry(0.355, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52),
+		shirtM
+	);
+	capTop.position.set(0, 0.08, -0.01);
+	const brim = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), shirtM);
 	brim.name = 'hatMeshVisor';
-	brim.scale.set(1.12, 0.14, 0.92);
-	brim.position.set(0, 0.17, 0.31);
-	brim.rotation.x = 0.16;
+	brim.scale.set(1.08, 0.13, 0.88);
+	brim.position.set(0, 0.16, 0.25);
+	brim.rotation.x = 0.15;
+	const badge = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), goldM);
+	badge.position.set(0, 0.25, 0.34);
+	styleCap.add(capTop, brim, badge);
+	styleCap.visible = false;
+	headGroup.add(styleCap);
 
-	const capBadge = new THREE.Mesh(new THREE.SphereGeometry(0.065, 8, 8), brassM);
-	capBadge.scale.set(1.25, 0.9, 0.5);
-	capBadge.position.set(0, 0.29, 0.43);
+	// Style D: Cozy Retro Headphones
+	const styleHeadphones = new THREE.Group();
+	styleHeadphones.name = 'style-headphones';
+	const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 20, Math.PI), whiteTrimM);
+	band.position.y = 0.06;
+	([-0.34, 0.34] as const).forEach((hx) => {
+		const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.075, 12), goldM);
+		cup.rotation.z = Math.PI / 2;
+		cup.position.set(hx, 0.02, 0);
+		styleHeadphones.add(cup);
+	});
+	styleHeadphones.add(band);
+	styleHeadphones.visible = false;
+	headGroup.add(styleHeadphones);
 
-	headGroup.add(capDome, capBtn, brim, capBadge);
+	setCourierHairStyle(root, opts.hairStyle ?? 'bob');
 	return root;
 }
 
-/** Lively Bouncy Walk Cycle + Idle Breathing + 3-Segment Flowing Scarf Animation */
+export function setCourierHairStyle(grp: THREE.Group, style: HairStyle): void {
+	(['bob', 'buns', 'cap', 'headphones'] as HairStyle[]).forEach((s) => {
+		const node = grp.getObjectByName(`style-${s}`);
+		if (node) node.visible = s === style;
+	});
+}
+
+/** Fluid Anime Walk / Sprint / Idle / Jump-Glide Animation */
 export function animateChibi(
 	grp: THREE.Group,
 	opts: { t: number; phase?: number; moving: boolean; sprinting?: boolean; jumpH?: number; jumpHeld?: boolean; squash?: number }
@@ -596,57 +667,78 @@ export function animateChibi(
 	const head = grp.getObjectByName('headGroup');
 	const ll = grp.getObjectByName('leftLeg');
 	const rl = grp.getObjectByName('rightLeg');
+	const ls = grp.getObjectByName('leftShin');
+	const rs = grp.getObjectByName('rightShin');
 	const la = grp.getObjectByName('leftArm');
 	const ra = grp.getObjectByName('rightArm');
-	const s1 = grp.getObjectByName('scarfSeg1');
-	const s2 = grp.getObjectByName('scarfSeg2');
-	const s3 = grp.getObjectByName('scarfSeg3');
 
-	const freq = sprinting ? 13.5 : 9.5;
-	const breath = Math.sin(t * 2.6 + phase);
+	const freq = sprinting ? 13.5 : 9.2;
+	const breath = Math.sin(t * 2.5 + phase);
 	const invSq = 1 / Math.sqrt(squash);
 
 	if (body) {
-		body.scale.set(0.135 * invSq, 0.135 * squash, 0.135 * invSq);
+		body.scale.set(0.118 * invSq, 0.118 * squash, 0.118 * invSq);
 		if (moving && jumpH < 0.02) {
-			body.position.y = Math.abs(Math.sin(t * freq + phase)) * 0.024;
-			body.rotation.z = Math.sin(t * freq + phase) * 0.085;
+			body.position.y = Math.abs(Math.sin(t * freq + phase)) * 0.022;
+			body.rotation.z = Math.sin(t * freq + phase) * 0.045;
 		} else {
-			body.position.y *= 0.85;
-			body.rotation.z *= 0.85;
+			body.position.y *= 0.84;
+			body.rotation.z *= 0.84;
 		}
 	}
 	if (torso) {
-		const bs = 1 + breath * 0.026;
-		torso.scale.set(bs, 1 - breath * 0.018, bs);
+		const bs = 1 + breath * 0.018;
+		torso.scale.set(bs, 1 - breath * 0.012, bs);
+		const targetLean = moving ? (sprinting ? 0.24 : 0.1) : 0;
+		torso.rotation.x += (targetLean - torso.rotation.x) * 0.18;
+		torso.rotation.y = moving ? Math.sin(t * freq + phase) * 0.12 : Math.sin(t * 1.4 + phase) * 0.03;
 	}
 	if (head) {
-		head.rotation.z = moving ? -Math.sin(t * freq + phase) * 0.09 : Math.sin(t * 1.4 + phase) * 0.07;
-		head.rotation.x = moving ? 0.06 : Math.sin(t * 2.1 + phase) * 0.04;
+		head.rotation.z = moving ? Math.sin(t * freq * 0.5 + phase) * 0.05 : breath * 0.03;
+		head.rotation.y = moving ? 0 : Math.sin(t * 1.1 + phase) * 0.08;
 	}
-	const swing = moving ? Math.sin(t * freq + phase) * (sprinting ? 0.82 : 0.58) : 0;
-	if (ll && rl) {
-		ll.rotation.x += (swing - ll.rotation.x) * 0.3;
-		rl.rotation.x += (-swing - rl.rotation.x) * 0.3;
-	}
-	if (la && ra) {
-		const glideRaise = jumpH > 0.15 && jumpHeld ? 2.15 : 0;
-		la.rotation.z += (-glideRaise - 0.12 - la.rotation.z) * 0.22;
-		ra.rotation.z += (glideRaise + 0.12 - ra.rotation.z) * 0.22;
-		la.rotation.x += (-swing * 0.9 - la.rotation.x) * 0.3;
-		ra.rotation.x += (swing * 0.9 - ra.rotation.x) * 0.3;
-	}
-	const scSpeed = moving ? (sprinting ? 14 : 10) : 3.2;
-	const scAmp = moving ? (sprinting ? 0.28 : 0.2) : 0.09;
-	const lift = moving ? (sprinting ? 0.35 : 0.2) : -0.18;
-	if (s1) {
-		s1.rotation.x = lift + Math.sin(t * scSpeed + phase) * scAmp;
-		s1.rotation.y = Math.cos(t * scSpeed * 0.7 + phase) * scAmp * 0.7;
-	}
-	if (s2) {
-		s2.rotation.x = Math.sin(t * scSpeed - 0.9 + phase) * scAmp * 1.25;
-	}
-	if (s3) {
-		s3.rotation.x = Math.sin(t * scSpeed - 1.8 + phase) * scAmp * 1.5;
+
+	if (jumpH > 0.025) {
+		const gliding = jumpHeld;
+		if (ll) ll.rotation.x = gliding ? -0.35 : -0.55;
+		if (rl) rl.rotation.x = gliding ? 0.25 : 0.45;
+		if (ls) ls.rotation.x = 0.55;
+		if (rs) rs.rotation.x = 0.65;
+		if (la) {
+			la.rotation.x = -0.3;
+			la.rotation.z = gliding ? 1.15 : 0.55;
+		}
+		if (ra) {
+			ra.rotation.x = -0.3;
+			ra.rotation.z = gliding ? -1.15 : -0.55;
+		}
+	} else if (moving) {
+		const sw = Math.sin(t * freq + phase);
+		const amp = sprinting ? 0.82 : 0.56;
+		if (ll) ll.rotation.x = sw * amp;
+		if (rl) rl.rotation.x = -sw * amp;
+		if (ls) ls.rotation.x = Math.max(0, -sw) * (sprinting ? 0.95 : 0.55);
+		if (rs) rs.rotation.x = Math.max(0, sw) * (sprinting ? 0.95 : 0.55);
+		if (la) {
+			la.rotation.x = -sw * amp * 0.85;
+			la.rotation.z = 0.16;
+		}
+		if (ra) {
+			ra.rotation.x = sw * amp * 0.85;
+			ra.rotation.z = -0.16;
+		}
+	} else {
+		if (ll) ll.rotation.x *= 0.8;
+		if (rl) rl.rotation.x *= 0.8;
+		if (ls) ls.rotation.x *= 0.8;
+		if (rs) rs.rotation.x *= 0.8;
+		if (la) {
+			la.rotation.x *= 0.8;
+			la.rotation.z = 0.14 + breath * 0.03;
+		}
+		if (ra) {
+			ra.rotation.x *= 0.8;
+			ra.rotation.z = -0.14 - breath * 0.03;
+		}
 	}
 }
