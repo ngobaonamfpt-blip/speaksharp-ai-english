@@ -92,26 +92,26 @@ void main() {
 		// Small sandy dirt specks right beside the water bank
 		float dirtSpeck = step(0.76, triplanarNoise.r) * (1.0 - step(6.95, worldR));
 
-		vec3 grassLit = vec3(0.32, 0.65, 0.41);   // #52a669 vibrant anime meadow green
-		vec3 grassVar = vec3(0.28, 0.59, 0.38);   // subtle painterly meadow patch
-		vec3 sandBank = vec3(0.74, 0.65, 0.49);   // #bda67d warm sandy riverbank
-		vec3 cliffEarth = vec3(0.66, 0.61, 0.52); // warm cel-shaded rock cliff
+		vec3 grassLit = vec3(0.35, 0.67, 0.44);   // #59ab70 airy coastal meadow green
+		vec3 grassVar = vec3(0.32, 0.62, 0.41);   // subtle sunlit patch
+		vec3 sandBank = vec3(0.82, 0.77, 0.62);   // #d1c49e warm sunlit sand bank
+		vec3 cliffEarth = vec3(0.76, 0.73, 0.63); // airy warm cream-stone cliff
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
 		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
 	}
 
-	// Crisp 2-step anime cel shading with cool teal-tinted shadows
+	// Soft sunlit 2-step anime cel shading with airy cool sky-tinted shadows (never dark!)
 	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r += 0.03; // shift shadow slightly cooler toward teal/blue
-	colorShadow.y = min(1.0, colorShadow.y * 1.12);
-	colorShadow.z *= 0.68;
+	colorShadow.r += 0.025;
+	colorShadow.y = min(1.0, colorShadow.y * 1.05);
+	colorShadow.z *= 0.80;
 	colorShadow = hsv2rgb(colorShadow);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
 	float shade = max(dot(worldNormal, lightDir), 0.0);
-	float shadowCut = smoothstep(0.24, 0.32, shade);
+	float shadowCut = smoothstep(0.18, 0.30, shade);
 	color = mix(colorShadow, color, shadowCut);
 
 	gl_FragColor = vec4(color, 1.0);

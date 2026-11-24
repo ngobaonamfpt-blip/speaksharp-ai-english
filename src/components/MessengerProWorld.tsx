@@ -1,7 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AmbientLight,
-  BasicShadowMap,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -13,11 +12,13 @@ import {
   Matrix4,
   Mesh,
   MeshBasicMaterial,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   Quaternion,
   Raycaster,
   RingGeometry,
   Scene,
+  ShadowMaterial,
   TextureLoader,
   Vector3,
   WebGLRenderer,
@@ -152,9 +153,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [emoteDrawerOpen, setEmoteDrawerOpen] = useState(false);
 
-  const [hatColor, setHatColor] = useState('#232a2f');
-  const [shirtColor, setShirtColor] = useState('#c93b3b');
-  const [bagColor, setBagColor] = useState('#4b5563');
+  const [hatColor, setHatColor] = useState('#34424d');
+  const [shirtColor, setShirtColor] = useState('#c6514d');
+  const [bagColor, setBagColor] = useState('#36404a');
   const [hairStyle, setHairStyle] = useState<HairStyle>('bob');
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -255,9 +256,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
     renderer.setSize(host.clientWidth, host.clientHeight);
-    // Crisp hard-edged cel shadow map around player & NPCs
+    // Soft-edged 3D directional shadows (cool sky-tinted like messenger.abeto.co!)
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = BasicShadowMap;
+    renderer.shadowMap.type = PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -731,18 +732,42 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
           const terrainObj = bundle.group.getObjectByName('GameplayTerrain') ?? bundle.group;
           const chunks: Array<{ mesh: Mesh; box: Box3 }> = [];
+          // Cool sky-tinted translucent ShadowMaterial overlay so custom ShaderMaterial terrain
+          // receives REAL 3D silhouette shadows from player, buildings, cliffs & trees!
+          const groundShadowMat = new ShadowMaterial({
+            color: 0x1d4050,
+            opacity: 0.34,
+            depthWrite: false,
+            polygonOffset: true,
+            polygonOffsetFactor: -1,
+            polygonOffsetUnits: -1,
+          });
+          const shadowReceivers: Mesh[] = [];
           terrainObj.traverse((obj) => {
             if ((obj as Mesh).isMesh) {
               const m = obj as Mesh;
-              m.castShadow = false;
-              m.receiveShadow = true;
+              m.castShadow = true;
+              m.receiveShadow = false;
               const geo = m.geometry as BufferGeometry & { computeBoundsTree?: () => void };
               if (geo.computeBoundsTree && !(geo as unknown as { boundsTree?: unknown }).boundsTree) {
                 geo.computeBoundsTree();
               }
               const b = new Box3().setFromObject(m);
               chunks.push({ mesh: m, box: b });
+
+              const sr = new Mesh(m.geometry, groundShadowMat);
+              sr.receiveShadow = true;
+              sr.castShadow = false;
+              sr.renderOrder = 2;
+              shadowReceivers.push(sr);
             }
+          });
+          shadowReceivers.forEach((sr) => terrainObj.add(sr));
+
+          // Let trees cast leafy shadows onto grassy hills & boulders too!
+          const leavesObj = bundle.group.getObjectByName('TreeLeaves');
+          leavesObj?.traverse((o) => {
+            if ((o as Mesh).isMesh) o.castShadow = true;
           });
           runtime.terrainChunks = chunks;
 
@@ -967,9 +992,15 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         tmpQ.setFromRotationMatrix(tmpMat);
         player.quaternion.slerp(tmpQ, 0.35);
 
-        // Keep tight shadow frustum centered right on the player for crisp street shadows
-        if (frameCount % 3 === 0) {
+        // Keep follow directional sun ~55 deg above player's local horizon so 3D shadows
+        // always project cleanly across streets, cliffs & grass anywhere on the sphere!
+        if (frameCount % 2 === 0) {
           sun.target.position.copy(player.position);
+          sunDirOffset
+            .copy(pState.posDir)
+            .multiplyScalar(9.5)
+            .addScaledVector(tmpRight, 5.2)
+            .addScaledVector(pState.camForward, 3.8);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
         }

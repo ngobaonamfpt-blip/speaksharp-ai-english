@@ -186,9 +186,9 @@ export class CozyLoFiAudio {
 	}
 }
 
-/** 3-Step Cel-Shading Gradient Map */
+/** Soft Sun-Washed 3-Step Anime Cel-Shading Gradient Map (airy shadows like Abeto Messenger!) */
 export function createToonGradient(): THREE.DataTexture {
-	const data = new Uint8Array([125, 135, 152, 255, 204, 210, 214, 255, 255, 255, 255, 255]);
+	const data = new Uint8Array([186, 192, 206, 255, 224, 228, 234, 255, 255, 255, 255, 255]);
 	const tex = new THREE.DataTexture(data, 3, 1, THREE.RGBAFormat);
 	tex.minFilter = THREE.NearestFilter;
 	tex.magFilter = THREE.NearestFilter;

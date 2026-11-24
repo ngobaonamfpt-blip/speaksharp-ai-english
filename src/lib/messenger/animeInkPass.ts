@@ -93,82 +93,62 @@ vec3 hsv2rgb(vec3 c) {
 
 void main() {
   vec2 texel = 1.0 / uResolution;
-
-  // --- Hand-drawn "boiling" line jitter (steps ~6 times per second) ---
-  float boil = floor(uTime * 6.0);
-  vec2 jitter = (vec2(noise(vUv * 90.0 + boil * 3.17), noise(vUv * 90.0 + 17.0 + boil * 1.93)) - 0.5) * texel * 1.6;
-  vec2 uvL = vUv + jitter;
   vec2 o = texel * uLineWidth;
 
-  // --- Depth Sobel (normalised by distance) ---
-  float dC = linearDepth(uvL);
-  float d00 = linearDepth(uvL + vec2(-o.x, -o.y));
-  float d10 = linearDepth(uvL + vec2(0.0, -o.y));
-  float d20 = linearDepth(uvL + vec2(o.x, -o.y));
-  float d01 = linearDepth(uvL + vec2(-o.x, 0.0));
-  float d21 = linearDepth(uvL + vec2(o.x, 0.0));
-  float d02 = linearDepth(uvL + vec2(-o.x, o.y));
-  float d12 = linearDepth(uvL + vec2(0.0, o.y));
-  float d22 = linearDepth(uvL + vec2(o.x, o.y));
+  // --- Clean, delicate "ligne claire" Depth Sobel (no harsh boil jitter) ---
+  float dC = linearDepth(vUv);
+  float d00 = linearDepth(vUv + vec2(-o.x, -o.y));
+  float d10 = linearDepth(vUv + vec2(0.0, -o.y));
+  float d20 = linearDepth(vUv + vec2(o.x, -o.y));
+  float d01 = linearDepth(vUv + vec2(-o.x, 0.0));
+  float d21 = linearDepth(vUv + vec2(o.x, 0.0));
+  float d02 = linearDepth(vUv + vec2(-o.x, o.y));
+  float d12 = linearDepth(vUv + vec2(0.0, o.y));
+  float d22 = linearDepth(vUv + vec2(o.x, o.y));
   float gx = (d20 + 2.0 * d21 + d22) - (d00 + 2.0 * d01 + d02);
   float gy = (d02 + 2.0 * d12 + d22) - (d00 + 2.0 * d10 + d20);
   float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
-  depthEdge = smoothstep(0.06, 0.16, depthEdge);
+  depthEdge = smoothstep(0.075, 0.19, depthEdge);
 
-  // --- Colour Sobel for interior ink lines (windows, doors, signs) ---
-  float l00 = luma(sampleColor(uvL + vec2(-o.x, -o.y)));
-  float l10 = luma(sampleColor(uvL + vec2(0.0, -o.y)));
-  float l20 = luma(sampleColor(uvL + vec2(o.x, -o.y)));
-  float l01 = luma(sampleColor(uvL + vec2(-o.x, 0.0)));
-  float l21 = luma(sampleColor(uvL + vec2(o.x, 0.0)));
-  float l02 = luma(sampleColor(uvL + vec2(-o.x, o.y)));
-  float l12 = luma(sampleColor(uvL + vec2(0.0, o.y)));
-  float l22 = luma(sampleColor(uvL + vec2(o.x, o.y)));
+  // --- Subtle Colour Sobel for interior lines (windows, collars, pockets) ---
+  float l00 = luma(sampleColor(vUv + vec2(-o.x, -o.y)));
+  float l10 = luma(sampleColor(vUv + vec2(0.0, -o.y)));
+  float l20 = luma(sampleColor(vUv + vec2(o.x, -o.y)));
+  float l01 = luma(sampleColor(vUv + vec2(-o.x, 0.0)));
+  float l21 = luma(sampleColor(vUv + vec2(o.x, 0.0)));
+  float l02 = luma(sampleColor(vUv + vec2(-o.x, o.y)));
+  float l12 = luma(sampleColor(vUv + vec2(0.0, o.y)));
+  float l22 = luma(sampleColor(vUv + vec2(o.x, o.y)));
   float cx = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
   float cy = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
-  float colorEdge = smoothstep(0.22, 0.42, sqrt(cx * cx + cy * cy));
+  float colorEdge = smoothstep(0.28, 0.52, sqrt(cx * cx + cy * cy));
 
-  // Fade lines on very distant geometry & never draw lines on the sky
   bool isSky = texture2D(tDepth, vUv).x > 0.99995;
-  float distFade = 1.0 - smoothstep(38.0, 90.0, dC);
-  float ink = max(depthEdge, colorEdge * 0.75) * distFade;
-  // Slightly broken, sketchy ink (pen pressure variation)
-  ink *= 0.78 + 0.22 * noise(vUv * vec2(260.0, 140.0) + boil);
+  float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
+  float ink = max(depthEdge, colorEdge * 0.52) * distFade;
   if (isSky) ink = 0.0;
 
-  // --- Flat anime colour grading ---
+  // --- Airy, sun-washed Studio Ghibli / Abeto pastel grading (natural & soft!) ---
   vec3 col = sampleColor(vUv);
   vec3 hsv = rgb2hsv(col);
-  hsv.y = clamp(hsv.y * 1.12, 0.0, 1.0);
-  // Soft posterize the value channel into flat cel bands
-  float bands = 5.0;
-  float v = hsv.z;
-  float vq = floor(v * bands + 0.5) / bands;
-  hsv.z = mix(v, vq, 0.35);
+  // Gently soften harsh saturation and lift deep shadows for natural coastal sunlight
+  hsv.y = clamp(hsv.y * 0.92, 0.0, 1.0);
+  hsv.z = mix(hsv.z, sqrt(max(hsv.z, 0.0)), 0.14);
   col = hsv2rgb(hsv);
 
+  // Subtle warm sunlit lift on highlights + cool sky bounce on shadows (never dark!)
   float L = luma(col);
-  // Teal/blue cool shadows, warm pastel highlights (like Messenger key art)
-  float shadowAmt = 1.0 - smoothstep(0.18, 0.55, L);
-  col = mix(col, col * uShadowTint * 1.25, shadowAmt * 0.45);
-  col = mix(col, col + vec3(0.04, 0.03, 0.0), smoothstep(0.65, 0.95, L));
+  col = mix(col, col + vec3(0.025, 0.035, 0.045), (1.0 - smoothstep(0.15, 0.55, L)) * 0.45);
+  col = mix(col, col + vec3(0.03, 0.025, 0.01), smoothstep(0.60, 0.95, L) * 0.6);
 
-  // --- Pencil hatching in deep shadows (screen-space diagonal lines) ---
-  if (!isSky) {
-    vec2 px = vUv * uResolution;
-    float hatch = step(0.82, fract((px.x + px.y) / 6.0 + noise(px * 0.05) * 0.4));
-    float hatchMask = (1.0 - smoothstep(0.12, 0.32, L)) * distFade;
-    col = mix(col, uInkColor, hatch * hatchMask * 0.28);
-  }
+  // --- Delicate charcoal-slate ink (62% opacity, airy & crisp like Abeto!) ---
+  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.62);
 
-  // --- Apply ink ---
-  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.92);
-
-  // --- Paper grain + soft vignette ---
-  float grain = hash(vUv * uResolution + boil * 0.37) - 0.5;
-  col += grain * 0.025;
+  // Very subtle paper grain + whisper-light edge framing
+  float grain = hash(vUv * uResolution) - 0.5;
+  col += grain * 0.012;
   vec2 vc = vUv - 0.5;
-  col *= 1.0 - dot(vc, vc) * 0.22;
+  col *= 1.0 - dot(vc, vc) * 0.05;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
@@ -184,7 +164,7 @@ export const inkDisplayOutput = { value: 0 };
 
 export function patchMaterialForInk(material: Material) {
   const m = material as Material & { userData: Record<string, unknown> };
-  if (m.userData.inkPatched || (material as ShaderMaterial).isShaderMaterial) return;
+  if (m.userData.inkPatched || (material as ShaderMaterial).isShaderMaterial || material.type === 'ShadowMaterial') return;
   m.userData.inkPatched = true;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uInkDisplayOutput = inkDisplayOutput;
@@ -225,9 +205,9 @@ export class AnimeInkPass {
         uNear: { value: cam.near ?? 0.1 },
         uFar: { value: cam.far ?? 400 },
         uTime: { value: 0 },
-        uInkColor: { value: new Color('#1d2a33') },
-        uShadowTint: { value: new Color('#6f93b8') },
-        uLineWidth: { value: 1.0 },
+        uInkColor: { value: new Color('#2c353d') },
+        uShadowTint: { value: new Color('#7ea3be') },
+        uLineWidth: { value: 0.85 },
       },
     });
 
@@ -243,8 +223,8 @@ export class AnimeInkPass {
     const h = Math.max(1, Math.floor(height));
     this.target.setSize(w, h);
     this.material.uniforms.uResolution.value.set(w, h);
-    // Thicker ink on large screens so lines read like hand-drawn pen strokes
-    this.material.uniforms.uLineWidth.value = h > 900 ? 1.5 : 1.0;
+    // Keep lines crisp and delicate (~0.85-1.1px) like Abeto ligne claire
+    this.material.uniforms.uLineWidth.value = h > 950 ? 1.1 : 0.85;
   }
 
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, time: number) {
