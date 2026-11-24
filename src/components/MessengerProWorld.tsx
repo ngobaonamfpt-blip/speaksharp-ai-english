@@ -64,13 +64,18 @@ import {
   buildChibiCourier,
   CozyLoFiAudio,
   createAtmosphereRig,
+  createDustPuffRig,
+  createSoaringBirdsRig,
   createSoftDropShadow,
   createToonGradient,
   PLANET_QUEST_STOPS,
   setCourierHairStyle,
+  setCourierTopStyle,
+  type EmoteAction,
   type HairStyle,
   type QuestStop,
   type TimeOfDay,
+  type TopStyle,
 } from '../lib/messenger/playerController';
 
 // Patch Three.js once with BVH accelerated raycasting (~1000x faster walking & wall-slide!)
@@ -117,10 +122,45 @@ const SCENE_PRESETS: Record<
   },
 };
 
-const HAT_SWATCHES = ['#232a2f', '#2563eb', '#16a34a', '#b91c1c', '#7c3aed', '#f59e0b'];
-const SHIRT_SWATCHES = ['#c93b3b', '#2563eb', '#0d9488', '#ea580c', '#ec4899', '#1e293b'];
-const BAG_SWATCHES = ['#8a5430', '#451a03', '#15803d', '#1d4ed8', '#be123c', '#334155'];
+const HAT_SWATCHES = ['#34424d', '#2b4c7e', '#2f6e52', '#8c3b3b', '#5d4777', '#b57b3c'];
+const SHIRT_SWATCHES = ['#c6514d', '#3b6ea5', '#3d8b7d', '#d47a44', '#c96b8c', '#333f4b'];
+const PANTS_SWATCHES = ['#26313d', '#3e4c59', '#6e5c4a', '#2d4a3e', '#4c3f5c', '#c8bfa8'];
+const SHOE_SWATCHES = ['#1c2128', '#8c3b3b', '#2b4c7e', '#5c4b3b', '#f2eee4', '#3d6b56'];
+const BAG_SWATCHES = ['#36404a', '#6e4a32', '#2f5e46', '#2b4c7e', '#993d4b', '#d4a24c'];
 const EMOTES = ['👋', '❤️', '✨', '😊', '📦', '☕', '🎵', '🔥'];
+const OUTFIT_STORAGE_KEY = 'speaksharp_courier_outfit_v1';
+const QUEST_STORAGE_KEY = 'speaksharp_courier_quests_v1';
+
+function loadSavedOutfit() {
+  try {
+    const raw = localStorage.getItem(OUTFIT_STORAGE_KEY);
+    if (raw) return JSON.parse(raw) as Partial<{
+      hat: string;
+      shirt: string;
+      pants: string;
+      shoe: string;
+      bag: string;
+      hair: HairStyle;
+      top: TopStyle;
+    }>;
+  } catch {
+    // ignore
+  }
+  return {};
+}
+
+function loadSavedQuests(): string[] {
+  try {
+    const raw = localStorage.getItem(QUEST_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // ignore
+  }
+  return [];
+}
 
 const PAPER_BTN_STYLE: React.CSSProperties = {
   width: 44,
@@ -153,10 +193,16 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [emoteDrawerOpen, setEmoteDrawerOpen] = useState(false);
 
-  const [hatColor, setHatColor] = useState('#34424d');
-  const [shirtColor, setShirtColor] = useState('#c6514d');
-  const [bagColor, setBagColor] = useState('#36404a');
-  const [hairStyle, setHairStyle] = useState<HairStyle>('bob');
+  const savedOutfit = useRef(loadSavedOutfit()).current;
+  const [hatColor, setHatColor] = useState(savedOutfit.hat ?? '#34424d');
+  const [shirtColor, setShirtColor] = useState(savedOutfit.shirt ?? '#c6514d');
+  const [pantsColor, setPantsColor] = useState(savedOutfit.pants ?? '#26313d');
+  const [shoeColor, setShoeColor] = useState(savedOutfit.shoe ?? '#1c2128');
+  const [bagColor, setBagColor] = useState(savedOutfit.bag ?? '#36404a');
+  const [hairStyle, setHairStyle] = useState<HairStyle>(savedOutfit.hair ?? 'bob');
+  const [topStyle, setTopStyle] = useState<TopStyle>(savedOutfit.top ?? 'coat');
+  const [listeningMic, setListeningMic] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState('');
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
   const [floatingEmotes, setFloatingEmotes] = useState<
@@ -171,7 +217,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     delivered: 0,
     fps: 60,
   });
-  const [completedStops, setCompletedStops] = useState<string[]>([]);
+  const [completedStops, setCompletedStops] = useState<string[]>(() => loadSavedQuests());
   const [nearbyStop, setNearbyStop] = useState<QuestStop | null>(null);
   const [nearbyIsTarget, setNearbyIsTarget] = useState(false);
 
@@ -192,11 +238,21 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const liveOutlineFxRef = useRef(outlineFx);
   const liveWardrobeRef = useRef(wardrobeOpen);
   const liveDialogOpenRef = useRef(Boolean(activeDialog));
-  const liveOutfitRef = useRef({ hat: hatColor, shirt: shirtColor, bag: bagColor, hair: hairStyle });
+  const liveOutfitRef = useRef({
+    hat: hatColor,
+    shirt: shirtColor,
+    pants: pantsColor,
+    shoe: shoeColor,
+    bag: bagColor,
+    hair: hairStyle,
+    top: topStyle,
+  });
   const onEarnXpRef = useRef(onEarnXp);
 
   const applyTimeRef = useRef<((t: TimeOfDay) => void) | null>(null);
-  const applyOutfitRef = useRef<((h: string, s: string, b: string, hair: HairStyle) => void) | null>(null);
+  const applyOutfitRef = useRef<
+    ((o: typeof liveOutfitRef.current) => void) | null
+  >(null);
   const triggerEmoteRef = useRef<((e: string) => void) | null>(null);
   const triggerInteractRef = useRef<(() => void) | null>(null);
   const completeQuestRef = useRef<((stopId: string, xp: number, label: string) => void) | null>(null);
@@ -228,9 +284,31 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     liveDialogOpenRef.current = Boolean(activeDialog);
   }, [activeDialog]);
   useEffect(() => {
-    liveOutfitRef.current = { hat: hatColor, shirt: shirtColor, bag: bagColor, hair: hairStyle };
-    applyOutfitRef.current?.(hatColor, shirtColor, bagColor, hairStyle);
-  }, [hatColor, shirtColor, bagColor, hairStyle]);
+    const next = {
+      hat: hatColor,
+      shirt: shirtColor,
+      pants: pantsColor,
+      shoe: shoeColor,
+      bag: bagColor,
+      hair: hairStyle,
+      top: topStyle,
+    };
+    liveOutfitRef.current = next;
+    applyOutfitRef.current?.(next);
+    try {
+      localStorage.setItem(OUTFIT_STORAGE_KEY, JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  }, [hatColor, shirtColor, pantsColor, shoeColor, bagColor, hairStyle, topStyle]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(QUEST_STORAGE_KEY, JSON.stringify(completedStops));
+    } catch {
+      // ignore
+    }
+  }, [completedStops]);
 
   const showToast = (msg: string) => {
     setToast(msg);
@@ -287,6 +365,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     const toonGradient = createToonGradient();
     const atmosphere = mode !== 'npcs' ? createAtmosphereRig(scene, toonGradient) : null;
+    const dustRig = mode === 'gameplay' ? createDustPuffRig(scene) : null;
+    const birdsRig = mode !== 'npcs' ? createSoaringBirdsRig(scene) : null;
     const audio = new CozyLoFiAudio();
     audio.setMuted(liveMutedRef.current);
     audioRef.current = audio;
@@ -390,8 +470,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const player = buildChibiCourier(toonGradient, {
       hatColor: new Color(liveOutfitRef.current.hat).getHex(),
       shirtColor: new Color(liveOutfitRef.current.shirt).getHex(),
+      pantsColor: new Color(liveOutfitRef.current.pants).getHex(),
+      shoeColor: new Color(liveOutfitRef.current.shoe).getHex(),
       bagColor: new Color(liveOutfitRef.current.bag).getHex(),
       hairStyle: liveOutfitRef.current.hair,
+      topStyle: liveOutfitRef.current.top,
     });
     player.traverse((o) => {
       if ((o as Mesh).isMesh) o.castShadow = true;
@@ -474,35 +557,49 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     };
 
     const activeEmotes: Array<{ id: string; emoji: string; expires: number }> = [];
+    let activeEmoteAnim: { action: EmoteAction; start: number; dur: number } | null = null;
 
     triggerEmoteRef.current = (emoji: string) => {
       audio.init();
       audio.playEmote();
+      const nowT = performance.now();
       activeEmotes.push({
-        id: `${Date.now()}-${Math.random()}`,
+        id: `${nowT}-${Math.random()}`,
         emoji,
-        expires: performance.now() + 2100,
+        expires: nowT + 2100,
       });
+      if (emoji === '👋') {
+        activeEmoteAnim = { action: 'wave', start: nowT, dur: 1300 };
+      } else if (emoji === '✨' || emoji === '🔥') {
+        activeEmoteAnim = { action: 'spin', start: nowT, dur: 900 };
+      } else if (emoji === '❤️' || emoji === '😊') {
+        activeEmoteAnim = { action: 'cheer', start: nowT, dur: 1100 };
+      }
     };
 
-    applyOutfitRef.current = (hat: string, shirt: string, bag: string, hair: HairStyle) => {
-      setCourierHairStyle(player, hair);
-      const cHat = new Color(hat);
-      const cShirt = new Color(shirt);
-      const cBag = new Color(bag);
-      player.traverse((o) => {
-        if (!(o as Mesh).isMesh) return;
-        const mat = (o as Mesh).material as { color?: Color };
+    applyOutfitRef.current = (o) => {
+      setCourierHairStyle(player, o.hair);
+      setCourierTopStyle(player, o.top);
+      const cHat = new Color(o.hat);
+      const cShirt = new Color(o.shirt);
+      const cPants = new Color(o.pants);
+      const cShoe = new Color(o.shoe);
+      const cBag = new Color(o.bag);
+      player.traverse((obj) => {
+        if (!(obj as Mesh).isMesh) return;
+        const mat = (obj as Mesh).material as { color?: Color };
         if (!mat?.color) return;
-        if (o.name === 'hatMeshDome' || o.name === 'hatMeshBtn') mat.color.copy(cHat);
+        if (obj.name === 'hatMeshDome' || obj.name === 'hatMeshBtn') mat.color.copy(cHat);
         if (
-          o.name === 'shirtMesh' ||
-          o.name === 'shirtMeshArmL' ||
-          o.name === 'shirtMeshArmR' ||
-          o.name === 'hatMeshVisor'
+          obj.name === 'shirtMesh' ||
+          obj.name === 'shirtMeshArmL' ||
+          obj.name === 'shirtMeshArmR' ||
+          obj.name === 'hatMeshVisor'
         )
           mat.color.copy(cShirt);
-        if (o.name === 'bagMesh') mat.color.copy(cBag);
+        if (obj.name === 'pantsMesh') mat.color.copy(cPants);
+        if (obj.name === 'shoeMesh') mat.color.copy(cShoe);
+        if (obj.name === 'bagMesh') mat.color.copy(cBag);
       });
     };
 
@@ -907,6 +1004,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
 
       if (atmosphere) atmosphere.cloudRing.rotation.y += 0.001;
+      if (birdsRig) birdsRig.update(elapsed);
+      if (dustRig) dustRig.update();
 
       if (mode === 'gameplay' && livePlayModeRef.current && runtime.ready) {
         controls.enabled = false;
@@ -962,6 +1061,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           }
           if (frameCount % (sprinting ? 11 : 16) === 0 && pState.jumpH < 0.03) {
             audio.playStep();
+            if (sprinting) dustRig?.spawn(player.position, pState.posDir, 1, 0.012);
           }
         } else {
           pState.forward.addScaledVector(pState.posDir, -pState.forward.dot(pState.posDir)).normalize();
@@ -972,6 +1072,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           pState.jumpVel = 0.068;
           pState.squash = 1.26;
           audio.playJump();
+          dustRig?.spawn(player.position, pState.posDir, 4, 0.018);
         }
         if (pState.jumpH > 0 || pState.jumpVel > 0) {
           const gliding = jumpHeld && pState.jumpVel < 0;
@@ -982,6 +1083,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             pState.jumpH = 0;
             pState.jumpVel = 0;
             pState.squash = 0.78;
+            dustRig?.spawn(player.position, pState.posDir, 5, 0.022);
           }
         }
         pState.squash += (1 - pState.squash) * 0.18;
@@ -1009,6 +1111,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         playerShadowHolder.quaternion.setFromUnitVectors(UP, pState.posDir);
         playerShadowDisc.scale.setScalar(Math.max(0.45, 1 - pState.jumpH * 0.35));
 
+        let emoteAction: EmoteAction = null;
+        let emoteProgress = 0;
+        if (activeEmoteAnim) {
+          const p = (now - activeEmoteAnim.start) / activeEmoteAnim.dur;
+          if (p >= 1) {
+            activeEmoteAnim = null;
+          } else {
+            emoteAction = activeEmoteAnim.action;
+            emoteProgress = p;
+          }
+        }
+
         animateChibi(player, {
           t: elapsed,
           moving,
@@ -1016,6 +1130,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           jumpH: pState.jumpH,
           jumpHeld,
           squash: pState.squash,
+          emoteAction,
+          emoteProgress,
         });
 
         if (atmosphere) atmosphere.skyMat.uniforms.uLocalUp.value.copy(pState.posDir);
@@ -1255,6 +1371,61 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       feedback: choice.npcFeedback,
       completedNow: true,
     });
+  };
+
+  const handleVoiceReply = () => {
+    if (!activeDialog) return;
+    const SpeechRec =
+      (window as unknown as { SpeechRecognition?: new () => unknown; webkitSpeechRecognition?: new () => unknown })
+        .SpeechRecognition ??
+      (window as unknown as { webkitSpeechRecognition?: new () => unknown }).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      showToast('⚠️ Trình duyệt chưa hỗ trợ Web Speech Recognition (hãy dùng Chrome/Edge)!');
+      return;
+    }
+    try {
+      const rec = new SpeechRec() as {
+        lang: string;
+        interimResults: boolean;
+        maxAlternatives: number;
+        onstart: () => void;
+        onend: () => void;
+        onerror: () => void;
+        onresult: (e: { results: ArrayLike<ArrayLike<{ transcript: string }>> }) => void;
+        start: () => void;
+      };
+      rec.lang = 'en-US';
+      rec.interimResults = false;
+      rec.maxAlternatives = 1;
+      rec.onstart = () => {
+        setListeningMic(true);
+        setVoiceTranscript('');
+      };
+      rec.onend = () => setListeningMic(false);
+      rec.onerror = () => {
+        setListeningMic(false);
+        showToast('🎙️ Không nghe rõ giọng nói — bạn thử nói lại hoặc chọn câu trả lời bên dưới nhé!');
+      };
+      rec.onresult = (ev) => {
+        const spoken = ev.results?.[0]?.[0]?.transcript?.trim() ?? '';
+        setVoiceTranscript(spoken);
+        if (spoken.split(/\s+/).length >= 2) {
+          const praise = `Awesome English pronunciation! "${spoken}" — thank you so much, courier!`;
+          speakEnglish(praise);
+          completeQuestRef.current?.(
+            activeDialog.stop.id,
+            40,
+            `Nói tiếng Anh trực tiếp với ${activeDialog.stop.name}`
+          );
+          setActiveDialog((d) => (d ? { ...d, feedback: praise, completedNow: true } : null));
+        } else {
+          showToast('🎙️ Hãy nói 1 câu tiếng Anh đầy đủ (ít nhất 2 từ) nhé!');
+        }
+      };
+      rec.start();
+    } catch {
+      setListeningMic(false);
+    }
   };
 
   return (
@@ -1620,15 +1791,17 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         </div>
       )}
 
-      {/* WARDROBE POPOVER (camera automatically swoops to face the courier!) */}
+      {/* WARDROBE POPOVER (5-slot customization + localStorage persistence!) */}
       {wardrobeOpen && (
         <div
           style={{
             position: 'absolute',
-            bottom: 84,
+            bottom: 72,
             right: 68,
             zIndex: 20,
-            width: 224,
+            width: 244,
+            maxHeight: 'calc(100vh - 160px)',
+            overflowY: 'auto',
             background: '#fffdf7',
             border: '2.5px solid #1d2a33',
             boxShadow: '5px 5px 0 #1d2a33',
@@ -1655,9 +1828,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               ✕
             </button>
           </div>
-          <div style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6770', marginBottom: 5 }}>
-              Kiểu tóc / Phụ kiện
+          <div style={{ marginBottom: 9 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6770', marginBottom: 4 }}>
+              Kiểu tóc / Mũ (5 mẫu)
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
               {(
@@ -1666,6 +1839,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                   { id: 'buns', label: '🎀 Búi đôi' },
                   { id: 'cap', label: '🧢 Mũ bưu tá' },
                   { id: 'headphones', label: '🎧 Tai nghe' },
+                  { id: 'strawhat', label: '👒 Mũ rơm' },
                 ] as const
               ).map((st) => (
                 <button
@@ -1687,9 +1861,43 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               ))}
             </div>
           </div>
+
+          <div style={{ marginBottom: 9 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#5b6770', marginBottom: 4 }}>
+              Kiểu áo
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 5 }}>
+              {(
+                [
+                  { id: 'coat', label: '🧥 Áo khoác' },
+                  { id: 'tee', label: '👕 Áo phông' },
+                ] as const
+              ).map((tp) => (
+                <button
+                  key={tp.id}
+                  onClick={() => setTopStyle(tp.id)}
+                  style={{
+                    border: '2px solid #1d2a33',
+                    background: topStyle === tp.id ? '#f5bd33' : '#fff',
+                    color: '#1d2a33',
+                    borderRadius: 8,
+                    padding: '4px 6px',
+                    fontSize: 11,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                  }}
+                >
+                  {tp.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           {[
             { label: 'Màu tóc', list: HAT_SWATCHES, val: hatColor, set: setHatColor },
-            { label: 'Màu áo khoác', list: SHIRT_SWATCHES, val: shirtColor, set: setShirtColor },
+            { label: 'Màu áo', list: SHIRT_SWATCHES, val: shirtColor, set: setShirtColor },
+            { label: 'Màu quần', list: PANTS_SWATCHES, val: pantsColor, set: setPantsColor },
+            { label: 'Màu giày', list: SHOE_SWATCHES, val: shoeColor, set: setShoeColor },
             { label: 'Màu túi đeo', list: BAG_SWATCHES, val: bagColor, set: setBagColor },
           ].map((row) => (
             <div key={row.label} style={{ marginBottom: 8 }}>
@@ -1864,6 +2072,31 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
           {!activeDialog.completedNow ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              <button
+                onClick={handleVoiceReply}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  border: '2px solid #1d2a33',
+                  background: listeningMic ? '#ef4444' : '#dcfce7',
+                  color: listeningMic ? '#fff' : '#14532d',
+                  borderRadius: 10,
+                  padding: '7px 11px',
+                  fontSize: 12.5,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  boxShadow: '2px 2px 0 #1d2a33',
+                }}
+              >
+                <span>{listeningMic ? '🔴 Đang nghe tiếng Anh của bạn...' : '🎤 Nói tiếng Anh trả lời trực tiếp (+40 XP)'}</span>
+              </button>
+              {voiceTranscript && (
+                <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2563eb', textAlign: 'center' }}>
+                  Bạn vừa nói: “{voiceTranscript}”
+                </div>
+              )}
               {activeDialog.quest.choices.map((choice, idx) => (
                 <button
                   key={idx}

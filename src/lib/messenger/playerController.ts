@@ -389,19 +389,29 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 	return { skyMat, cloudRing, stars, applyTime };
 }
 
-export type HairStyle = 'bob' | 'buns' | 'cap' | 'headphones';
+export type HairStyle = 'bob' | 'buns' | 'cap' | 'headphones' | 'strawhat';
+export type TopStyle = 'coat' | 'tee';
+export type EmoteAction = 'wave' | 'spin' | 'cheer' | null;
 
 /**
  * High-Detail Sculpted Anime Courier Character modeled closely on Messenger by Abeto:
- *  - Layered shaggy anime hair (5 jagged bangs + flipped nape tufts) & sculpted anime jawline/nose/eyes
- *  - Flared A-line red button-up coat with cream-white folded lapel collar (+ red stripe),
- *    2 pointed cream chest pocket flaps w/ buttons, 4 front buttons, white cuff & hem stripes
- *  - Matte charcoal crossbody strap & hip pouch with white accent stripe
- *  - Wide-leg dark cropped shorts, cream crew socks, and chunky black high-top sneakers w/ white stripes
+ *  - Layered shaggy anime hair (5 jagged bangs + flipped nape tufts) & sculpted anime jawline/nose/blinking eyes
+ *  - 2 Swappable Tops: Flared A-line button-up coat OR Sporty Messenger tee w/ gold trim
+ *  - 5 Swappable Hairstyles/Headgear + 5-slot color customization (hair, top, pants, shoes, bag)
+ *  - Emote physical animations (wave, spin-jump, cheer) & natural eye-blinking
  */
 export function buildChibiCourier(
 	toonGradient: THREE.DataTexture,
-	opts: { hatColor: number; shirtColor: number; bagColor: number; scarfColor?: number; hairStyle?: HairStyle }
+	opts: {
+		hatColor: number;
+		shirtColor: number;
+		bagColor: number;
+		pantsColor?: number;
+		shoeColor?: number;
+		scarfColor?: number;
+		hairStyle?: HairStyle;
+		topStyle?: TopStyle;
+	}
 ): THREE.Group {
 	const root = new THREE.Group();
 	const bodyRoot = new THREE.Group();
@@ -415,11 +425,13 @@ export function buildChibiCourier(
 	const hairM = toon(opts.hatColor);
 	const bagM = toon(opts.bagColor);
 	const strapM = toon(0x1f252c);
-	const pantsM = toon(0x1e242b);
+	const pantsM = toon(opts.pantsColor ?? 0x26313d);
 	const sockM = toon(0xf2eee4);
-	const shoeM = toon(0x1c2128);
+	const shoeM = toon(opts.shoeColor ?? 0x1c2128);
 	const creamM = toon(0xf5f1e6);
 	const goldM = toon(0xf5bd33);
+	const strawM = toon(0xe0cfa2);
+	const ribbonM = toon(0x74b589);
 	const darkInkM = new THREE.MeshBasicMaterial({ color: 0x161c22 });
 
 	// 1. Wide-Leg Cropped Shorts + Slim Calves + Cream Crew Socks + Chunky High-Top Sneakers w/ White Stripes
@@ -428,8 +440,8 @@ export function buildChibiCourier(
 		leg.name = i === 0 ? 'leftLeg' : 'rightLeg';
 		leg.position.set(lx, 1.06, 0);
 
-		// Wide flared culotte pant leg
 		const pant = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.165, 0.60, 12), pantsM);
+		pant.name = 'pantsMesh';
 		pant.scale.set(1.0, 1.0, 0.92);
 		pant.position.y = -0.28;
 		leg.add(pant);
@@ -443,15 +455,15 @@ export function buildChibiCourier(
 		calf.position.y = -0.12;
 		shin.add(calf);
 
-		// Cream crew sock
 		const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.062, 0.13, 10), sockM);
 		sock.position.y = -0.26;
 		shin.add(sock);
 
-		// Chunky high-top black anime sneaker
 		const collarTop = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.088, 0.13, 10), shoeM);
+		collarTop.name = 'shoeMesh';
 		collarTop.position.set(0, -0.35, 0.01);
 		const foot = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.13, 6, 10), shoeM);
+		foot.name = 'shoeMesh';
 		foot.rotation.x = Math.PI / 2;
 		foot.scale.set(0.96, 1.15, 0.82);
 		foot.position.set(0, -0.42, 0.055);
@@ -499,10 +511,15 @@ export function buildChibiCourier(
 	vSplit.rotation.y = Math.PI;
 	torsoGroup.add(vSplit);
 
+	// Coat detail group (hidden when TopStyle === 'tee')
+	const coatDetails = new THREE.Group();
+	coatDetails.name = 'top-coat-details';
+	torsoGroup.add(coatDetails);
+
 	// Oversized Cream-White Folded Shirt Collar (Left & Right lapels + back fold + thin red trim!)
 	const backCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.215, 0.13, 12, 1, false, Math.PI * 0.55, Math.PI * 0.9), creamM);
 	backCollar.position.set(0, 0.395, -0.02);
-	torsoGroup.add(backCollar);
+	coatDetails.add(backCollar);
 
 	([-1, 1] as const).forEach((side) => {
 		const lapel = new THREE.Group();
@@ -513,7 +530,7 @@ export function buildChibiCourier(
 		redTrim.name = 'shirtMesh';
 		redTrim.position.y = -0.042;
 		lapel.add(flap, redTrim);
-		torsoGroup.add(lapel);
+		coatDetails.add(lapel);
 	});
 
 	// Two Pointed Cream Chest Pocket Flaps with tiny red buttons (iconic Messenger jacket!)
@@ -532,7 +549,7 @@ export function buildChibiCourier(
 		pBtn.rotation.x = Math.PI / 2;
 		pBtn.position.set(0, -0.015, 0.008);
 		pocket.add(pTop, pTip, pBtn);
-		torsoGroup.add(pocket);
+		coatDetails.add(pocket);
 	});
 
 	// 4 Cream Coat Buttons neatly down the front placket
@@ -540,8 +557,21 @@ export function buildChibiCourier(
 		const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.022, 8), creamM);
 		btn.rotation.x = Math.PI / 2;
 		btn.position.set(bi === 3 ? -0.04 : 0.0, by, 0.205 + (0.23 - by) * 0.06);
-		torsoGroup.add(btn);
+		coatDetails.add(btn);
 	});
+
+	// Sporty Tee trim group (gold neckline + athletic chest stripe like final_step_59.png!)
+	const teeDetails = new THREE.Group();
+	teeDetails.name = 'top-tee-details';
+	const teeRing = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.032, 8, 16), goldM);
+	teeRing.rotation.x = Math.PI / 2;
+	teeRing.position.y = 0.39;
+	const teeStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.275, 0.285, 0.055, 16), goldM);
+	teeStripe.scale.set(1.06, 1.0, 0.73);
+	teeStripe.position.y = 0.06;
+	teeDetails.add(teeRing, teeStripe);
+	teeDetails.visible = false;
+	torsoGroup.add(teeDetails);
 
 	// Rounded shoulder caps for natural anime silhouette
 	([-0.23, 0.23] as const).forEach((sx) => {
@@ -647,28 +677,32 @@ export function buildChibiCourier(
 		headGroup.add(ear);
 	});
 
-	// Cool, Crisp Anime Eyes (almond-shaped dark eyes + angled upper lash + strong anime eyebrows + calm mouth!)
+	// Cool, Crisp Blinkable Anime Eyes + Bold Eyebrows
+	const eyeBlinkGroup = new THREE.Group();
+	eyeBlinkGroup.name = 'eyeBlinkGroup';
+	eyeBlinkGroup.position.set(0, -0.005, 0);
+	headGroup.add(eyeBlinkGroup);
+
 	const whiteEyeM = new THREE.MeshBasicMaterial({ color: 0xffffff });
 	([-0.092, 0.092] as const).forEach((ex) => {
 		const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.044, 10, 8), whiteEyeM);
 		sclera.scale.set(1.15, 0.72, 0.32);
-		sclera.position.set(ex, -0.005, 0.238);
+		sclera.position.set(ex, 0, 0.238);
 
 		const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), darkInkM);
 		pupil.scale.set(1.05, 0.88, 0.42);
-		pupil.position.set(ex, -0.006, 0.252);
+		pupil.position.set(ex, -0.001, 0.252);
 
-		// Sharp upper anime eyelash line
 		const lash = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.018, 0.022), darkInkM);
-		lash.position.set(ex, 0.022, 0.256);
+		lash.position.set(ex, 0.027, 0.256);
 		lash.rotation.z = ex < 0 ? -0.1 : 0.1;
 
-		// Bold anime eyebrow
 		const brow = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.026, 0.022), darkInkM);
 		brow.position.set(ex, 0.068, 0.252);
 		brow.rotation.z = ex < 0 ? -0.14 : 0.14;
 
-		headGroup.add(sclera, pupil, lash, brow);
+		eyeBlinkGroup.add(sclera, pupil, lash);
+		headGroup.add(brow);
 	});
 
 	// Calm neat anime mouth line (matches reference e4dca0c6!)
@@ -774,26 +808,68 @@ export function buildChibiCourier(
 	styleHeadphones.visible = false;
 	headGroup.add(styleHeadphones);
 
+	// Style E: Explorer Straw Hat w/ Sage Ribbon (inspired by Scout!)
+	const styleStraw = new THREE.Group();
+	styleStraw.name = 'style-strawhat';
+	const strawBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.50, 0.52, 0.035, 18), strawM);
+	strawBrim.position.set(0, 0.22, -0.01);
+	const strawCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.31, 0.22, 16), strawM);
+	strawCrown.position.set(0, 0.33, -0.01);
+	const strawBand = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.315, 0.06, 16), ribbonM);
+	strawBand.position.set(0, 0.255, -0.01);
+	styleStraw.add(strawBrim, strawCrown, strawBand);
+	styleStraw.visible = false;
+	headGroup.add(styleStraw);
+
 	setCourierHairStyle(root, opts.hairStyle ?? 'bob');
+	setCourierTopStyle(root, opts.topStyle ?? 'coat');
 	return root;
 }
 
 export function setCourierHairStyle(grp: THREE.Group, style: HairStyle): void {
-	(['bob', 'buns', 'cap', 'headphones'] as HairStyle[]).forEach((s) => {
+	(['bob', 'buns', 'cap', 'headphones', 'strawhat'] as HairStyle[]).forEach((s) => {
 		const node = grp.getObjectByName(`style-${s}`);
 		if (node) node.visible = s === style;
 	});
 }
 
-/** Fluid Anime Walk / Sprint / Idle / Jump-Glide Animation */
+export function setCourierTopStyle(grp: THREE.Group, style: TopStyle): void {
+	const coat = grp.getObjectByName('top-coat-details');
+	const tee = grp.getObjectByName('top-tee-details');
+	if (coat) coat.visible = style === 'coat';
+	if (tee) tee.visible = style === 'tee';
+}
+
+/** Fluid Anime Walk / Sprint / Idle / Jump-Glide + Natural Eye Blink + 3D Emote Action Animations */
 export function animateChibi(
 	grp: THREE.Group,
-	opts: { t: number; phase?: number; moving: boolean; sprinting?: boolean; jumpH?: number; jumpHeld?: boolean; squash?: number }
+	opts: {
+		t: number;
+		phase?: number;
+		moving: boolean;
+		sprinting?: boolean;
+		jumpH?: number;
+		jumpHeld?: boolean;
+		squash?: number;
+		emoteAction?: EmoteAction;
+		emoteProgress?: number;
+	}
 ) {
-	const { t, phase = 0, moving, sprinting = false, jumpH = 0, jumpHeld = false, squash = 1 } = opts;
+	const {
+		t,
+		phase = 0,
+		moving,
+		sprinting = false,
+		jumpH = 0,
+		jumpHeld = false,
+		squash = 1,
+		emoteAction = null,
+		emoteProgress = 0
+	} = opts;
 	const body = grp.getObjectByName('bodyRoot');
 	const torso = grp.getObjectByName('torsoGroup');
 	const head = grp.getObjectByName('headGroup');
+	const eyes = grp.getObjectByName('eyeBlinkGroup');
 	const ll = grp.getObjectByName('leftLeg');
 	const rl = grp.getObjectByName('rightLeg');
 	const ls = grp.getObjectByName('leftShin');
@@ -805,14 +881,30 @@ export function animateChibi(
 	const breath = Math.sin(t * 2.5 + phase);
 	const invSq = 1 / Math.sqrt(squash);
 
+	// Natural periodic eye blink (~0.14s blink every 3.8s)
+	if (eyes) {
+		const blinkCycle = (t + phase * 0.7) % 3.8;
+		const blinkScale = blinkCycle > 3.66 ? Math.max(0.08, Math.abs(Math.cos((blinkCycle - 3.66) * Math.PI / 0.14))) : 1;
+		eyes.scale.y = blinkScale;
+	}
+
 	if (body) {
 		body.scale.set(0.132 * invSq, 0.132 * squash, 0.132 * invSq);
-		if (moving && jumpH < 0.02) {
-			body.position.y = Math.abs(Math.sin(t * freq + phase)) * 0.022;
-			body.rotation.z = Math.sin(t * freq + phase) * 0.045;
+		if (emoteAction === 'spin') {
+			body.rotation.y = emoteProgress * Math.PI * 2;
+			body.position.y = Math.sin(emoteProgress * Math.PI) * 0.08;
 		} else {
-			body.position.y *= 0.84;
-			body.rotation.z *= 0.84;
+			body.rotation.y *= 0.78;
+			if (moving && jumpH < 0.02) {
+				body.position.y = Math.abs(Math.sin(t * freq + phase)) * 0.022;
+				body.rotation.z = Math.sin(t * freq + phase) * 0.045;
+			} else if (emoteAction === 'cheer') {
+				body.position.y = Math.abs(Math.sin(emoteProgress * Math.PI * 3)) * 0.045;
+				body.rotation.z = Math.sin(emoteProgress * Math.PI * 4) * 0.08;
+			} else {
+				body.position.y *= 0.84;
+				body.rotation.z *= 0.84;
+			}
 		}
 	}
 	if (torso) {
@@ -823,7 +915,7 @@ export function animateChibi(
 		torso.rotation.y = moving ? Math.sin(t * freq + phase) * 0.12 : Math.sin(t * 1.4 + phase) * 0.03;
 	}
 	if (head) {
-		head.rotation.z = moving ? Math.sin(t * freq * 0.5 + phase) * 0.05 : breath * 0.03;
+		head.rotation.z = emoteAction === 'cheer' ? Math.sin(emoteProgress * Math.PI * 4) * 0.18 : moving ? Math.sin(t * freq * 0.5 + phase) * 0.05 : breath * 0.03;
 		head.rotation.y = moving ? 0 : Math.sin(t * 1.1 + phase) * 0.08;
 	}
 
@@ -850,24 +942,149 @@ export function animateChibi(
 		if (rs) rs.rotation.x = Math.max(0, sw) * (sprinting ? 0.95 : 0.55);
 		if (la) {
 			la.rotation.x = -sw * amp * 0.85;
-			la.rotation.z = 0.16;
+			la.rotation.z = 0.18;
 		}
 		if (ra) {
 			ra.rotation.x = sw * amp * 0.85;
-			ra.rotation.z = -0.16;
+			ra.rotation.z = -0.18;
 		}
 	} else {
 		if (ll) ll.rotation.x *= 0.8;
 		if (rl) rl.rotation.x *= 0.8;
 		if (ls) ls.rotation.x *= 0.8;
 		if (rs) rs.rotation.x *= 0.8;
-		if (la) {
-			la.rotation.x *= 0.8;
-			la.rotation.z = 0.14 + breath * 0.03;
-		}
-		if (ra) {
-			ra.rotation.x *= 0.8;
-			ra.rotation.z = -0.14 - breath * 0.03;
+		if (emoteAction === 'wave' && ra) {
+			// Raise right arm & wave cheerfully!
+			ra.rotation.x = -0.35;
+			ra.rotation.z = -2.45 + Math.sin(t * 16) * 0.38;
+			if (la) {
+				la.rotation.x *= 0.8;
+				la.rotation.z = 0.2;
+			}
+		} else if (emoteAction === 'cheer' && la && ra) {
+			la.rotation.x = -0.25;
+			ra.rotation.x = -0.25;
+			la.rotation.z = 2.35 + Math.sin(t * 14) * 0.25;
+			ra.rotation.z = -2.35 - Math.sin(t * 14) * 0.25;
+		} else {
+			if (la) {
+				la.rotation.x *= 0.8;
+				la.rotation.z = 0.18 + breath * 0.03;
+			}
+			if (ra) {
+				ra.rotation.x *= 0.8;
+				ra.rotation.z = -0.18 - breath * 0.03;
+			}
 		}
 	}
+}
+
+/** Anime Footstep & Landing Dust Puff Pool (ultra-lightweight, zero GC allocation!) */
+export function createDustPuffRig(scene: THREE.Scene) {
+	const geo = new THREE.DodecahedronGeometry(0.045, 0);
+	const mat = new THREE.MeshBasicMaterial({ color: 0xf4f0e4, transparent: true, opacity: 0.75 });
+	const pool: Array<{ mesh: THREE.Mesh; life: number; vel: THREE.Vector3 }> = [];
+	for (let i = 0; i < 18; i++) {
+		const m = new THREE.Mesh(geo, mat.clone());
+		m.visible = false;
+		scene.add(m);
+		pool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
+	}
+	let cursor = 0;
+
+	const spawn = (origin: THREE.Vector3, upDir: THREE.Vector3, count = 1, spread = 0.015) => {
+		const t1 = new THREE.Vector3(1, 0, 0).cross(upDir);
+		if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(upDir);
+		t1.normalize();
+		const t2 = upDir.clone().cross(t1).normalize();
+		for (let i = 0; i < count; i++) {
+			const p = pool[cursor++ % pool.length];
+			const a = Math.random() * Math.PI * 2;
+			p.mesh.position.copy(origin).addScaledVector(upDir, 0.03);
+			p.mesh.scale.setScalar(0.75 + Math.random() * 0.5);
+			p.mesh.visible = true;
+			p.life = 1;
+			p.vel
+				.copy(upDir)
+				.multiplyScalar(0.008 + Math.random() * 0.008)
+				.addScaledVector(t1, Math.cos(a) * spread)
+				.addScaledVector(t2, Math.sin(a) * spread);
+		}
+	};
+
+	const update = () => {
+		for (const p of pool) {
+			if (p.life <= 0) continue;
+			p.life -= 0.045;
+			p.mesh.position.add(p.vel);
+			p.mesh.scale.multiplyScalar(1.035);
+			(p.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, p.life * 0.72);
+			if (p.life <= 0) p.mesh.visible = false;
+		}
+	};
+
+	return { spawn, update };
+}
+
+/** Graceful Flapping 3D Anime Seabirds Soaring Above the Planet */
+export function createSoaringBirdsRig(scene: THREE.Scene) {
+	const group = new THREE.Group();
+	group.name = 'SoaringBirds';
+	const mat = new THREE.MeshBasicMaterial({ color: 0xf7f7f2, side: THREE.DoubleSide });
+	const wingGeo = new THREE.BoxGeometry(0.24, 0.012, 0.09);
+	wingGeo.translate(0.12, 0, 0);
+
+	const birds: Array<{
+		root: THREE.Group;
+		leftW: THREE.Mesh;
+		rightW: THREE.Mesh;
+		orbitR: number;
+		speed: number;
+		phase: number;
+		tilt: number;
+	}> = [];
+
+	for (let i = 0; i < 6; i++) {
+		const b = new THREE.Group();
+		const body = new THREE.Mesh(new THREE.ConeGeometry(0.032, 0.16, 5), mat);
+		body.rotation.x = Math.PI / 2;
+		const leftW = new THREE.Mesh(wingGeo, mat);
+		const rightW = new THREE.Mesh(wingGeo, mat);
+		rightW.rotation.y = Math.PI;
+		b.add(body, leftW, rightW);
+		group.add(b);
+		birds.push({
+			root: b,
+			leftW,
+			rightW,
+			orbitR: 11.4 + (i % 3) * 1.1,
+			speed: 0.16 + (i % 2) * 0.05,
+			phase: (i / 6) * Math.PI * 2,
+			tilt: ((i % 3) - 1) * 0.45
+		});
+	}
+	scene.add(group);
+
+	const tmpNext = new THREE.Vector3();
+	const update = (elapsed: number) => {
+		for (const b of birds) {
+			const a = elapsed * b.speed + b.phase;
+			const nextA = a + 0.05;
+			const x = Math.cos(a) * b.orbitR * Math.cos(b.tilt);
+			const y = Math.sin(b.tilt) * b.orbitR + Math.sin(a * 2) * 0.4;
+			const z = Math.sin(a) * b.orbitR * Math.cos(b.tilt);
+			b.root.position.set(x, y, z);
+			tmpNext.set(
+				Math.cos(nextA) * b.orbitR * Math.cos(b.tilt),
+				Math.sin(b.tilt) * b.orbitR + Math.sin(nextA * 2) * 0.4,
+				Math.sin(nextA) * b.orbitR * Math.cos(b.tilt)
+			);
+			b.root.lookAt(tmpNext);
+			const flap = Math.sin(elapsed * 7.5 + b.phase * 3) * 0.55;
+			b.leftW.rotation.z = flap;
+			b.rightW.rotation.z = -flap;
+		}
+	};
+
+	return { group, update };
 }
