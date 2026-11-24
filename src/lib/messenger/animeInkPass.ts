@@ -2,6 +2,7 @@ import {
   Color,
   DepthTexture,
   Mesh,
+  NearestFilter,
   OrthographicCamera,
   PlaneGeometry,
   Scene,
@@ -12,18 +13,46 @@ import {
   WebGLRenderTarget,
   type Camera,
   type Material,
+  type Object3D,
   type PerspectiveCamera,
+  type SkinnedMesh,
   type WebGLRenderer,
 } from 'three';
 
 /**
- * Hand-drawn anime / "Messenger by Abeto" look in a single full-screen pass:
- *  - Ink outlines from depth discontinuities (distance-normalised, so far objects keep thin lines)
- *  - Interior ink lines from colour edges (windows, doors, signs)
- *  - "Boiling" hand-drawn line wobble (jitter changes ~6x per second like 2D animation)
- *  - Flat cel colour grading: soft posterize, teal-tinted shadows, lifted pastel highlights
- *  - Diagonal pencil hatching inside dark shadows + subtle paper grain
+ * Hand-drawn anime / "Messenger by Abeto" ligne-claire ink pass:
+ *  - Depth Sobel for crisp outer object silhouettes
+ *  - View-Space Normal Sobel for every 3D crease/corner (boats, crates, stairs, railings, cliffs, props)
+ *  - SurfaceId / ElementId seam detector for flat panel creases (wooden deck planks, doors, boat stripes)
+ *  - Subtle Colour Sobel for painted signage, lettering & window mullions
+ *  - Airy sun-washed Studio Ghibli / Abeto pastel colour grading
  */
+const infoVertexShader = /* glsl */ `
+attribute float surfaceId;
+attribute float elementId;
+
+varying vec3 vViewNormal;
+flat varying float vSurfaceHash;
+
+void main() {
+  vViewNormal = normalize(normalMatrix * normal);
+  vSurfaceHash = fract(surfaceId * 0.1731 + elementId * 0.4193);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const infoFragmentShader = /* glsl */ `
+precision highp float;
+
+varying vec3 vViewNormal;
+flat varying float vSurfaceHash;
+
+void main() {
+  vec3 n = normalize(vViewNormal) * 0.5 + 0.5;
+  gl_FragColor = vec4(n, vSurfaceHash);
+}
+`;
+
 const vertexShader = /* glsl */ `
 varying vec2 vUv;
 void main() {
@@ -37,6 +66,7 @@ precision highp float;
 
 uniform sampler2D tColor;
 uniform sampler2D tDepth;
+uniform sampler2D tInfo;
 uniform vec2 uResolution;
 uniform float uNear;
 uniform float uFar;
@@ -53,14 +83,6 @@ float hash(vec2 p) {
   return fract(p.x * p.y);
 }
 
-float noise(vec2 p) {
-  vec2 i = floor(p);
-  vec2 f = fract(p);
-  vec2 u = f * f * (3.0 - 2.0 * f);
-  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x),
-             mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-}
-
 float linearDepth(vec2 uv) {
   float d = texture2D(tDepth, uv).x;
   float z = d * 2.0 - 1.0;
@@ -69,11 +91,6 @@ float linearDepth(vec2 uv) {
 
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
-// Target stores display-ready (sRGB-encoded) colours, exactly like the screen
-vec3 lin2srgb(vec3 c) {
-  c = max(c, vec3(0.0));
-  return mix(c * 12.92, 1.055 * pow(c, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), c));
-}
 vec3 sampleColor(vec2 uv) { return texture2D(tColor, uv).rgb; }
 
 vec3 rgb2hsv(vec3 c) {
@@ -91,30 +108,11 @@ vec3 hsv2rgb(vec3 c) {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
-// Reconstruct view-space surface normal from linear depth (catches 90° architectural corners at zero extra draw calls!)
-vec3 viewPosFromDepth(vec2 uv) {
-  float d = linearDepth(uv);
-  vec2 ndc = uv * 2.0 - 1.0;
-  float aspect = uResolution.x / max(uResolution.y, 1.0);
-  return vec3(ndc.x * aspect * 0.43 * d, ndc.y * 0.43 * d, -d);
-}
-
-vec3 reconstructNormal(vec2 uv, vec2 texel) {
-  vec3 pC = viewPosFromDepth(uv);
-  vec3 pR = viewPosFromDepth(uv + vec2(texel.x, 0.0));
-  vec3 pL = viewPosFromDepth(uv - vec2(texel.x, 0.0));
-  vec3 pU = viewPosFromDepth(uv + vec2(0.0, texel.y));
-  vec3 pD = viewPosFromDepth(uv - vec2(0.0, texel.y));
-  vec3 dX = abs(pR.z - pC.z) < abs(pC.z - pL.z) ? (pR - pC) : (pC - pL);
-  vec3 dY = abs(pU.z - pC.z) < abs(pC.z - pD.z) ? (pU - pC) : (pC - pD);
-  return normalize(cross(dX, dY));
-}
-
 void main() {
   vec2 texel = 1.0 / uResolution;
   vec2 o = texel * uLineWidth;
 
-  // --- 1. Razor-sharp Ligne-Claire Depth Sobel (silhouettes & overhangs) ---
+  // --- 1. Depth Sobel (outer silhouettes of buildings, boats, characters, cliffs) ---
   float dC = linearDepth(vUv);
   float d00 = linearDepth(vUv + vec2(-o.x, -o.y));
   float d10 = linearDepth(vUv + vec2(0.0, -o.y));
@@ -127,19 +125,36 @@ void main() {
   float gx = (d20 + 2.0 * d21 + d22) - (d00 + 2.0 * d01 + d02);
   float gy = (d02 + 2.0 * d12 + d22) - (d00 + 2.0 * d10 + d20);
   float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
-  depthEdge = smoothstep(0.095, 0.21, depthEdge);
+  depthEdge = smoothstep(0.062, 0.165, depthEdge);
 
-  // --- 2. View-Space Normal Corner Crease Detection (stairs, curbs, boxes, bridge girders!) ---
-  vec3 nC = reconstructNormal(vUv, texel);
-  vec3 nR = reconstructNormal(vUv + vec2(o.x, 0.0), texel);
-  vec3 nL = reconstructNormal(vUv - vec2(o.x, 0.0), texel);
-  vec3 nU = reconstructNormal(vUv + vec2(0.0, o.y), texel);
-  vec3 nD = reconstructNormal(vUv - vec2(0.0, o.y), texel);
-  float minDot = min(min(dot(nC, nR), dot(nC, nL)), min(dot(nC, nU), dot(nC, nD)));
-  // Only trigger on genuine geometric corners (< ~55 deg) and fade cleanly at far distance
-  float normalEdge = smoothstep(0.58, 0.30, minDot) * (1.0 - smoothstep(10.0, 26.0, dC));
+  // --- 2. View-Space Normal + SurfaceId/ElementId Crease Detection (Abeto tInfo style!) ---
+  vec4 iC = texture2D(tInfo, vUv);
+  vec4 iL = texture2D(tInfo, vUv + vec2(-texel.x, 0.0));
+  vec4 iR = texture2D(tInfo, vUv + vec2(texel.x, 0.0));
+  vec4 iU = texture2D(tInfo, vUv + vec2(0.0, texel.y));
+  vec4 iD = texture2D(tInfo, vUv + vec2(0.0, -texel.y));
 
-  // --- 3. Interior Colour Edge Detection (boat lettering, doors, windows, pockets) ---
+  vec3 nC = iC.rgb * 2.0 - 1.0;
+  vec3 nL = iL.rgb * 2.0 - 1.0;
+  vec3 nR = iR.rgb * 2.0 - 1.0;
+  vec3 nU = iU.rgb * 2.0 - 1.0;
+  vec3 nD = iD.rgb * 2.0 - 1.0;
+
+  // Guard against sky/empty info pixels (cleared to black -> length(iC.rgb) == 0)
+  float hasInfo = step(0.05, dot(iC.rgb, vec3(1.0)));
+  float nDiffH = length(nR - nL);
+  float nDiffV = length(nU - nD);
+  float normalGrad = sqrt(nDiffH * nDiffH + nDiffV * nDiffV);
+  float normalEdge = smoothstep(0.36, 0.78, normalGrad) * hasInfo;
+
+  // Flat panel seam detection via surfaceId/elementId hash (wooden deck planks, crates, boat panels!)
+  float idDiff = max(
+    max(abs(iC.a - iL.a), abs(iC.a - iR.a)),
+    max(abs(iC.a - iU.a), abs(iC.a - iD.a))
+  );
+  float idEdge = step(0.028, idDiff) * hasInfo;
+
+  // --- 3. Colour Sobel for painted decals, boat lettering, cone stripes & window frames ---
   float l00 = luma(sampleColor(vUv + vec2(-o.x, -o.y)));
   float l10 = luma(sampleColor(vUv + vec2(0.0, -o.y)));
   float l20 = luma(sampleColor(vUv + vec2(o.x, -o.y)));
@@ -150,34 +165,35 @@ void main() {
   float l22 = luma(sampleColor(vUv + vec2(o.x, o.y)));
   float cx = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
   float cy = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
-  float colorEdge = smoothstep(0.24, 0.46, sqrt(cx * cx + cy * cy));
+  float colorEdge = smoothstep(0.24, 0.48, sqrt(cx * cx + cy * cy));
 
   bool isSky = texture2D(tDepth, vUv).x > 0.99995;
-  float distFade = 1.0 - smoothstep(28.0, 76.0, dC);
-  float ink = max(max(depthEdge, normalEdge * 0.78), colorEdge * 0.62) * distFade;
+  float nearDetailFade = 1.0 - smoothstep(13.0, 34.0, dC);
+  float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
+
+  float interiorCrease = max(normalEdge * 0.88, idEdge * 0.72) * nearDetailFade;
+  float ink = max(max(depthEdge, colorEdge * 0.52), interiorCrease) * distFade;
   if (isSky) ink = 0.0;
 
-  // --- 4. Vivid Sunlit Abeto / Moebius Coastal Color Grading (crisp, saturated, zero grey haze!) ---
+  // --- Airy, sun-washed Studio Ghibli / Abeto pastel grading ---
   vec3 col = sampleColor(vUv);
   vec3 hsv = rgb2hsv(col);
-  // Restore clean sunlit vibrancy (boat blue, amber door, orange buoy, seafoam bridge!)
-  hsv.y = clamp(hsv.y * 1.15, 0.0, 1.0);
+  hsv.y = clamp(hsv.y * 0.93, 0.0, 1.0);
+  hsv.z = mix(hsv.z, sqrt(max(hsv.z, 0.0)), 0.12);
   col = hsv2rgb(hsv);
 
-  // Subtle crisp S-curve contrast so sunlit whites pop & shadows stay rich cool-slate
-  vec3 contrasted = col * col * (3.0 - 2.0 * col);
-  col = mix(col, contrasted, 0.20);
-
-  // Delicate warm sunlit highlight kiss (never washes out darks!)
   float L = luma(col);
-  col = mix(col, col * vec3(1.03, 1.02, 0.99), smoothstep(0.55, 0.95, L) * 0.65);
+  col = mix(col, col + vec3(0.022, 0.032, 0.042), (1.0 - smoothstep(0.15, 0.55, L)) * 0.42);
+  col = mix(col, col + vec3(0.028, 0.024, 0.01), smoothstep(0.60, 0.95, L) * 0.55);
 
-  // --- 5. Crisp Dark Charcoal-Ink Lines (86% opacity like Abeto Messenger!) ---
-  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.86);
+  // --- Crisp Abeto ligne-claire charcoal-slate ink (76% opacity) ---
+  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.76);
 
-  // Ultra-subtle paper texture
+  // Subtle paper grain & whisper-light edge framing
   float grain = hash(vUv * uResolution) - 0.5;
-  col += grain * 0.008;
+  col += grain * 0.01;
+  vec2 vc = vUv - 0.5;
+  col *= 1.0 - dot(vc, vc) * 0.045;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
@@ -205,12 +221,25 @@ export function patchMaterialForInk(material: Material) {
   material.needsUpdate = true;
 }
 
+const SKIP_INFO_NAMES = new Set([
+  'SkyDome',
+  'TreeLeaves',
+  'AnimeWindStreaks',
+  'ChimneySmoke',
+  'AnimeButterflies',
+  'SoaringBirds',
+  'bodyRoot',
+]);
+
 export class AnimeInkPass {
   private target: WebGLRenderTarget;
+  private infoTarget: WebGLRenderTarget;
+  private infoMaterial: ShaderMaterial;
   private material: ShaderMaterial;
   private quadScene: Scene;
   private quadCamera: OrthographicCamera;
   private quad: Mesh;
+  private savedClearColor = new Color();
 
   constructor(width: number, height: number, camera: Camera) {
     const cam = camera as PerspectiveCamera;
@@ -222,6 +251,18 @@ export class AnimeInkPass {
       depthBuffer: true,
     });
 
+    this.infoTarget = new WebGLRenderTarget(width, height, {
+      type: UnsignedByteType,
+      minFilter: NearestFilter,
+      magFilter: NearestFilter,
+      depthBuffer: true,
+    });
+
+    this.infoMaterial = new ShaderMaterial({
+      vertexShader: infoVertexShader,
+      fragmentShader: infoFragmentShader,
+    });
+
     this.material = new ShaderMaterial({
       vertexShader,
       fragmentShader,
@@ -230,13 +271,14 @@ export class AnimeInkPass {
       uniforms: {
         tColor: { value: this.target.texture },
         tDepth: { value: depthTexture },
+        tInfo: { value: this.infoTarget.texture },
         uResolution: { value: new Vector2(width, height) },
         uNear: { value: cam.near ?? 0.1 },
         uFar: { value: cam.far ?? 400 },
         uTime: { value: 0 },
-        uInkColor: { value: new Color('#1a2229') },
-        uShadowTint: { value: new Color('#6d92ae') },
-        uLineWidth: { value: 0.78 },
+        uInkColor: { value: new Color('#222a32') },
+        uShadowTint: { value: new Color('#7ea3be') },
+        uLineWidth: { value: 0.95 },
       },
     });
 
@@ -251,16 +293,70 @@ export class AnimeInkPass {
     const w = Math.max(1, Math.floor(width));
     const h = Math.max(1, Math.floor(height));
     this.target.setSize(w, h);
+    this.infoTarget.setSize(w, h);
     this.material.uniforms.uResolution.value.set(w, h);
-    // Keep lines razor-sharp & delicate (~0.78-1.0px) so thin cables & stairs stay crisp!
-    this.material.uniforms.uLineWidth.value = h > 950 ? 1.0 : 0.78;
+    this.material.uniforms.uLineWidth.value = h > 950 ? 1.15 : 0.95;
   }
 
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, time: number) {
     this.material.uniforms.uTime.value = time;
+
+    // 1. Render full colour + depth pass
     renderer.setRenderTarget(this.target);
     renderer.clear();
     renderer.render(scene, camera);
+
+    // 2. Render lightweight View-Space Normal + SurfaceId/ElementId pass for crisp interior object creases!
+    const hiddenForInfo: Object3D[] = [];
+    scene.traverse((obj) => {
+      if (!obj.visible) return;
+      if (SKIP_INFO_NAMES.has(obj.name)) {
+        obj.visible = false;
+        hiddenForInfo.push(obj);
+        return;
+      }
+      if ((obj as SkinnedMesh).isSkinnedMesh) {
+        obj.visible = false;
+        hiddenForInfo.push(obj);
+        return;
+      }
+      const m = obj as Mesh;
+      if (m.isMesh) {
+        const mat = m.material;
+        const singleMat = Array.isArray(mat) ? mat[0] : mat;
+        if (
+          singleMat &&
+          (singleMat.type === 'ShadowMaterial' ||
+            singleMat.transparent ||
+            singleMat.depthWrite === false)
+        ) {
+          obj.visible = false;
+          hiddenForInfo.push(obj);
+        }
+      }
+    });
+
+    const prevOverride = scene.overrideMaterial;
+    const prevBg = scene.background;
+    renderer.getClearColor(this.savedClearColor);
+    const prevClearAlpha = renderer.getClearAlpha();
+
+    scene.overrideMaterial = this.infoMaterial;
+    scene.background = null;
+    renderer.setClearColor(0x000000, 0);
+    renderer.setRenderTarget(this.infoTarget);
+    renderer.clear();
+    renderer.render(scene, camera);
+
+    // Restore scene & renderer state cleanly
+    scene.overrideMaterial = prevOverride;
+    scene.background = prevBg;
+    renderer.setClearColor(this.savedClearColor, prevClearAlpha);
+    for (let i = 0; i < hiddenForInfo.length; i++) {
+      hiddenForInfo[i].visible = true;
+    }
+
+    // 3. Composite full-screen ligne-claire ink pass
     renderer.setRenderTarget(null);
     renderer.render(this.quadScene, this.quadCamera);
   }
@@ -268,6 +364,8 @@ export class AnimeInkPass {
   dispose() {
     this.target.depthTexture?.dispose();
     this.target.dispose();
+    this.infoTarget.dispose();
+    this.infoMaterial.dispose();
     this.material.dispose();
     this.quad.geometry.dispose();
   }

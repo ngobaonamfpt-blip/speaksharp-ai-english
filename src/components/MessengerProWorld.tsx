@@ -974,40 +974,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             })
           );
 
-          // Spawn 8 extra living rigged & animated Abeto ambient NPCs & wildlife around town & hills!
-          const ambientNpcSpecs: Array<{ model: string; dir: Vector3; height: number; yaw: number }> = [
-            { model: 'factory-worker-a', dir: new Vector3(0.24, 0.89, 0.39), height: 0.31, yaw: 0.9 },
-            { model: 'fox', dir: new Vector3(0.06, 0.92, 0.38), height: 0.075, yaw: -0.6 },
-            { model: 'young-lady', dir: new Vector3(0.28, 0.85, 0.44), height: 0.30, yaw: 2.1 },
-            { model: 'oldwoman', dir: new Vector3(-0.08, 0.89, 0.45), height: 0.28, yaw: 1.4 },
-            { model: 'owl', dir: new Vector3(-0.48, 0.76, 0.44), height: 0.11, yaw: 0.4 },
-            { model: 'threekid', dir: new Vector3(0.65, 0.28, -0.70), height: 0.27, yaw: -1.1 },
-            { model: 'female-scientist', dir: new Vector3(-0.40, -0.72, 0.56), height: 0.31, yaw: 2.6 },
-            { model: 'male-scientist', dir: new Vector3(0.24, -0.86, -0.45), height: 0.31, yaw: 0.5 },
-          ];
-          await Promise.all(
-            ambientNpcSpecs.map(async (spec) => {
-              try {
-                const spot = findStreetSpot(spec.dir.clone().normalize(), 0.2);
-                const { group: ambNpc, mixer } = await loadRealPlanetNpc(
-                  spec.model,
-                  spec.height,
-                  npcAtlasMat
-                );
-                if (cancelled) return;
-                ambNpc.position.copy(spot.dir).multiplyScalar(spot.r);
-                const baseQ = new Quaternion().setFromUnitVectors(UP, spot.dir);
-                const yawQ = new Quaternion().setFromAxisAngle(UP, spec.yaw);
-                ambNpc.quaternion.copy(baseQ).multiply(yawQ);
-                ambNpc.add(createSoftDropShadow(spec.height * 0.48));
-                scene.add(ambNpc);
-                if (mixer) runtime.npcMixers.push(mixer);
-              } catch {
-                // Skip if optional ambient rig fails
-              }
-            })
-          );
-
           if (cancelled) return;
           runtime.composer = createMessengerComposer(renderer, scene, camera, bundle.lut);
           runtime.composer.resize(host.clientWidth, host.clientHeight);

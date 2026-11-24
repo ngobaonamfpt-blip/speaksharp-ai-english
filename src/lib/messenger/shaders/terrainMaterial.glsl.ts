@@ -68,10 +68,9 @@ vec4 triplanar(sampler2D tex, vec3 normal, vec3 pos, float scale) {
 }
 
 void main() {
-	// TRUE world-space surface normal (fixes view-space normal lighting bug!)
-	vec3 worldNormal = normalize(wNormal);
+	vec3 worldNormal = normalize(vNormal);
 	vec3 radialUp = normalize(wPos);
-	float upness = dot(worldNormal, radialUp);
+	float upness = dot(normalize(wNormal), radialUp);
 	vec4 triplanarNoise = triplanar(tNoise, wNormal, wPos * 0.08, 1.0);
 	float worldR = length(vWorldPosition);
 
@@ -93,35 +92,46 @@ void main() {
 		// Small sandy dirt specks right beside the water bank
 		float dirtSpeck = step(0.76, triplanarNoise.r) * (1.0 - step(6.95, worldR));
 
-		vec3 grassLit = vec3(0.35, 0.69, 0.45);   // vibrant coastal meadow green
-		vec3 grassVar = vec3(0.31, 0.63, 0.41);   // subtle sunlit patch
-		vec3 sandBank = vec3(0.86, 0.80, 0.63);   // warm sunlit sand bank
-		vec3 cliffEarth = vec3(0.84, 0.79, 0.65); // warm sunlit sandy ochre cliff
+		vec3 grassLit = vec3(0.35, 0.67, 0.44);   // #59ab70 airy coastal meadow green
+		vec3 grassVar = vec3(0.32, 0.62, 0.41);   // subtle sunlit patch
+		vec3 sandBank = vec3(0.82, 0.77, 0.62);   // #d1c49e warm sunlit sand bank
+		vec3 cliffEarth = vec3(0.76, 0.73, 0.63); // airy warm cream-stone cliff
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
 		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
+
+		// Hand-drawn rock/cliff contour flecks on vertical cliff faces (like Abeto!)
+		float cliffMask = 1.0 - grassMask;
+		float rockFleck = smoothstep(0.76, 0.84, triplanarNoise.b) * cliffMask;
+		color = mix(color, color * 0.88, rockFleck * 0.55);
 	} else {
-		// Restore rich Abeto painted vibrancy on boats, doors, lifebuoys, bridges & signs!
-		vec3 propHsv = rgb2hsv(color);
-		propHsv.y = min(1.0, propHsv.y * 1.18);
-		propHsv.z = min(1.0, propHsv.z * 1.04);
-		color = hsv2rgb(propHsv);
+		// Subtle hand-illustrated surface details for wooden docks, crates, boat hull & walls!
+		vec4 fineNoise = triplanar(tNoise, wNormal, wPos * 0.28, 1.0);
+		// Warm wooden deck / dock platform surfaces get crisp subtle plank seams & wood tone variation
+		bool isWoodDeck = (upness > 0.65 && baseAtlas.r > 0.46 && baseAtlas.g > 0.42 && baseAtlas.b < 0.68 && (baseAtlas.r - baseAtlas.b) > 0.035);
+		if (isWoodDeck) {
+			float plankCoord = fract(dot(wPos.xz, vec2(4.2, 1.4)));
+			float plankLine = 1.0 - smoothstep(0.0, 0.048, min(plankCoord, 1.0 - plankCoord));
+			float plankTone = step(0.5, fract(dot(floor(wPos.xz * 4.2), vec2(0.37, 0.71)))) * 0.035;
+			color = mix(color, color * 0.72, plankLine * 0.65);
+			color *= (1.0 - plankTone);
+		}
+		// Subtle concrete/plaster weathering speckles on buildings, boxes & boat hull
+		float speck = smoothstep(0.78, 0.86, fineNoise.r);
+		color = mix(color, color * 0.91, speck * 0.35);
 	}
 
-	// Crisp 2-tone Abeto architectural cel-shading with cool slate-teal shadow side!
+	// Soft sunlit 2-step anime cel shading with airy cool sky-tinted shadows (never dark!)
 	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r = fract(colorShadow.r + 0.032);
-	colorShadow.y = min(1.0, colorShadow.y * 1.12);
-	colorShadow.z *= 0.72;
+	colorShadow.r += 0.025;
+	colorShadow.y = min(1.0, colorShadow.y * 1.05);
+	colorShadow.z *= 0.80;
 	colorShadow = hsv2rgb(colorShadow);
-	// Subtle cool sky-bounce tint in deep shadow faces (matches Abeto building walls)
-	colorShadow = mix(colorShadow, vec3(0.36, 0.47, 0.52), 0.14);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-	float shade = dot(worldNormal, lightDir);
-	// Clean, decisive anime terminator between sunlit face & shadowed face
-	float shadowCut = smoothstep(0.14, 0.24, shade);
+	float shade = max(dot(worldNormal, lightDir), 0.0);
+	float shadowCut = smoothstep(0.18, 0.30, shade);
 	color = mix(colorShadow, color, shadowCut);
 
 	gl_FragColor = vec4(color, 1.0);

@@ -46,18 +46,25 @@ function applyWindSway(mat: THREE.MeshToonMaterial, timeUniform: { value: number
   };
 }
 
-/** Build a cute anime-proportioned Japanese street lamp (matches chibi 0.135 scale) */
+/** Build a detailed anime-proportioned Japanese street lamp with flanged base, collar & shade rim */
 function makeStreetLamp(poleMat: THREE.Material, glowMat: THREE.Material): THREE.Group {
   const g = new THREE.Group();
-  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.56, 6), poleMat);
-  pole.position.y = 0.28;
-  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.018, 0.018), poleMat);
-  arm.position.set(0.06, 0.54, 0);
-  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.055, 0.04, 6), poleMat);
-  cap.position.set(0.12, 0.53, 0);
-  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.036, 8, 6), glowMat);
-  bulb.position.set(0.12, 0.495, 0);
-  g.add(pole, arm, cap, bulb);
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.024, 0.032, 0.06, 6), poleMat);
+  base.position.y = 0.03;
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.016, 0.54, 6), poleMat);
+  pole.position.y = 0.30;
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 6), poleMat);
+  collar.position.y = 0.52;
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.016, 0.016), poleMat);
+  arm.position.set(0.065, 0.55, 0);
+  const brace = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.01, 0.01), poleMat);
+  brace.position.set(0.035, 0.525, 0);
+  brace.rotation.z = 0.48;
+  const cap = new THREE.Mesh(new THREE.ConeGeometry(0.062, 0.042, 8), poleMat);
+  cap.position.set(0.13, 0.535, 0);
+  const bulb = new THREE.Mesh(new THREE.SphereGeometry(0.034, 8, 6), glowMat);
+  bulb.position.set(0.13, 0.498, 0);
+  g.add(base, pole, collar, arm, brace, cap, bulb);
   return g;
 }
 
@@ -115,68 +122,97 @@ function makeHangingLantern(
   return { group: g, lanternPivot };
 }
 
-/** Build a yellow/red street postbox like in Messenger anime key art */
+/** Build a detailed Japanese street postbox with pedestal leg, rain hood & mail slot */
 function makePostbox(boxMat: THREE.Material, slotMat: THREE.Material): THREE.Group {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.22, 0.09), boxMat);
-  body.position.y = 0.11;
-  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.022, 0.095), slotMat);
-  slot.position.set(0, 0.17, 0);
-  const label = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.06, 0.094), slotMat);
-  label.position.set(0, 0.1, 0);
-  g.add(body, slot, label);
+  const stand = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.028, 0.11, 6), slotMat);
+  stand.position.y = 0.055;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.19, 0.095), boxMat);
+  body.position.y = 0.19;
+  const roof = new THREE.Mesh(new THREE.BoxGeometry(0.136, 0.024, 0.11), boxMat);
+  roof.position.y = 0.292;
+  const slot = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.02, 0.102), slotMat);
+  slot.position.set(0, 0.245, 0);
+  const label = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.062, 0.10), slotMat);
+  label.position.set(0, 0.165, 0);
+  g.add(stand, body, roof, slot, label);
   return g;
 }
 
-/** Build a retro Japanese drink vending machine */
+/** Build a detailed retro Japanese drink vending machine with drink rows, buttons & pickup chute */
 function makeVendingMachine(
   bodyMat: THREE.Material,
   screenMat: THREE.Material,
   darkMat: THREE.Material
 ): THREE.Group {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.36, 0.13), bodyMat);
-  body.position.y = 0.18;
-  const win = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.14, 0.015), screenMat);
-  win.position.set(0, 0.25, 0.064);
-  const tray = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.02), darkMat);
-  tray.position.set(0, 0.065, 0.064);
-  g.add(body, win, tray);
+  const feet = new THREE.Mesh(new THREE.BoxGeometry(0.21, 0.025, 0.12), darkMat);
+  feet.position.y = 0.012;
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.23, 0.36, 0.135), bodyMat);
+  body.position.y = 0.20;
+  const topTrim = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.022, 0.145), darkMat);
+  topTrim.position.y = 0.385;
+  const win = new THREE.Mesh(new THREE.BoxGeometry(0.175, 0.145, 0.016), screenMat);
+  win.position.set(0, 0.275, 0.066);
+  const shelf1 = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.012, 0.02), darkMat);
+  shelf1.position.set(0, 0.275, 0.07);
+  const shelf2 = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.012, 0.02), darkMat);
+  shelf2.position.set(0, 0.225, 0.07);
+  const coinPanel = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.06, 0.018), darkMat);
+  coinPanel.position.set(0.065, 0.155, 0.066);
+  const tray = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.055, 0.022), darkMat);
+  tray.position.set(0, 0.075, 0.066);
+  g.add(feet, body, topTrim, win, shelf1, shelf2, coinPanel, tray);
   return g;
 }
 
-/** Build a wooden park bench like in the Messenger street scene */
+/** Build a detailed wooden park bench with individual slats, iron armrests & crossbars */
 function makeBench(woodMat: THREE.Material, legMat: THREE.Material): THREE.Group {
   const g = new THREE.Group();
-  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.025, 0.11), woodMat);
-  seat.position.y = 0.095;
-  const back = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.08, 0.02), woodMat);
-  back.position.set(0, 0.16, -0.048);
-  back.rotation.x = -0.15;
-  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.095, 0.095), legMat);
-  legL.position.set(-0.12, 0.047, 0);
+  const seat1 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.018, 0.046), woodMat);
+  seat1.position.set(0, 0.095, 0.028);
+  const seat2 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.018, 0.046), woodMat);
+  seat2.position.set(0, 0.095, -0.026);
+  const back1 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.036, 0.016), woodMat);
+  back1.position.set(0, 0.145, -0.05);
+  back1.rotation.x = -0.16;
+  const back2 = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.036, 0.016), woodMat);
+  back2.position.set(0, 0.188, -0.058);
+  back2.rotation.x = -0.16;
+  const legL = new THREE.Mesh(new THREE.BoxGeometry(0.022, 0.095, 0.105), legMat);
+  legL.position.set(-0.135, 0.047, 0);
   const legR = legL.clone();
-  legR.position.x = 0.12;
-  g.add(seat, back, legL, legR);
+  legR.position.x = 0.135;
+  const armL = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.016, 0.115), legMat);
+  armL.position.set(-0.145, 0.142, 0);
+  const armR = armL.clone();
+  armR.position.x = 0.145;
+  g.add(seat1, seat2, back1, back2, legL, legR, armL, armR);
   return g;
 }
 
-/** Build a cute wooden planter box with lush anime bush */
+/** Build a detailed wooden planter box with rim frame & lush layered anime foliage */
 function makePlanter(
   woodMat: THREE.Material,
   leafMat: THREE.Material,
   flowerMat: THREE.Material
 ): THREE.Group {
   const g = new THREE.Group();
-  const pot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.14), woodMat);
-  pot.position.y = 0.04;
+  const pot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.085, 0.14), woodMat);
+  pot.position.y = 0.042;
+  const rim = new THREE.Mesh(new THREE.BoxGeometry(0.158, 0.02, 0.158), woodMat);
+  rim.position.y = 0.088;
   const bush1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.075, 0), leafMat);
-  bush1.position.set(0, 0.11, 0);
+  bush1.position.set(0, 0.125, 0);
   const bush2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.055, 0), leafMat);
-  bush2.position.set(0.045, 0.1, 0.02);
-  const fl = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), flowerMat);
-  fl.position.set(-0.02, 0.16, 0.03);
-  g.add(pot, bush1, bush2, fl);
+  bush2.position.set(0.045, 0.115, 0.02);
+  const bush3 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.05, 0), leafMat);
+  bush3.position.set(-0.04, 0.11, -0.02);
+  const fl1 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.022, 0), flowerMat);
+  fl1.position.set(-0.02, 0.18, 0.03);
+  const fl2 = new THREE.Mesh(new THREE.DodecahedronGeometry(0.018, 0), flowerMat);
+  fl2.position.set(0.04, 0.165, -0.01);
+  g.add(pot, rim, bush1, bush2, bush3, fl1, fl2);
   return g;
 }
 
