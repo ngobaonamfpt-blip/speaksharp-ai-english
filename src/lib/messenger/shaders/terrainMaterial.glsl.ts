@@ -68,9 +68,10 @@ vec4 triplanar(sampler2D tex, vec3 normal, vec3 pos, float scale) {
 }
 
 void main() {
-	vec3 worldNormal = normalize(vNormal);
+	// TRUE world-space surface normal (fixes view-space normal lighting bug!)
+	vec3 worldNormal = normalize(wNormal);
 	vec3 radialUp = normalize(wPos);
-	float upness = dot(normalize(wNormal), radialUp);
+	float upness = dot(worldNormal, radialUp);
 	vec4 triplanarNoise = triplanar(tNoise, wNormal, wPos * 0.08, 1.0);
 	float worldR = length(vWorldPosition);
 
@@ -92,26 +93,35 @@ void main() {
 		// Small sandy dirt specks right beside the water bank
 		float dirtSpeck = step(0.76, triplanarNoise.r) * (1.0 - step(6.95, worldR));
 
-		vec3 grassLit = vec3(0.35, 0.67, 0.44);   // #59ab70 airy coastal meadow green
-		vec3 grassVar = vec3(0.32, 0.62, 0.41);   // subtle sunlit patch
-		vec3 sandBank = vec3(0.82, 0.77, 0.62);   // #d1c49e warm sunlit sand bank
-		vec3 cliffEarth = vec3(0.76, 0.73, 0.63); // airy warm cream-stone cliff
+		vec3 grassLit = vec3(0.35, 0.69, 0.45);   // vibrant coastal meadow green
+		vec3 grassVar = vec3(0.31, 0.63, 0.41);   // subtle sunlit patch
+		vec3 sandBank = vec3(0.86, 0.80, 0.63);   // warm sunlit sand bank
+		vec3 cliffEarth = vec3(0.84, 0.79, 0.65); // warm sunlit sandy ochre cliff
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
 		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
+	} else {
+		// Restore rich Abeto painted vibrancy on boats, doors, lifebuoys, bridges & signs!
+		vec3 propHsv = rgb2hsv(color);
+		propHsv.y = min(1.0, propHsv.y * 1.18);
+		propHsv.z = min(1.0, propHsv.z * 1.04);
+		color = hsv2rgb(propHsv);
 	}
 
-	// Soft sunlit 2-step anime cel shading with airy cool sky-tinted shadows (never dark!)
+	// Crisp 2-tone Abeto architectural cel-shading with cool slate-teal shadow side!
 	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r += 0.025;
-	colorShadow.y = min(1.0, colorShadow.y * 1.05);
-	colorShadow.z *= 0.80;
+	colorShadow.r = fract(colorShadow.r + 0.032);
+	colorShadow.y = min(1.0, colorShadow.y * 1.12);
+	colorShadow.z *= 0.72;
 	colorShadow = hsv2rgb(colorShadow);
+	// Subtle cool sky-bounce tint in deep shadow faces (matches Abeto building walls)
+	colorShadow = mix(colorShadow, vec3(0.36, 0.47, 0.52), 0.14);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-	float shade = max(dot(worldNormal, lightDir), 0.0);
-	float shadowCut = smoothstep(0.18, 0.30, shade);
+	float shade = dot(worldNormal, lightDir);
+	// Clean, decisive anime terminator between sunlit face & shadowed face
+	float shadowCut = smoothstep(0.14, 0.24, shade);
 	color = mix(colorShadow, color, shadowCut);
 
 	gl_FragColor = vec4(color, 1.0);

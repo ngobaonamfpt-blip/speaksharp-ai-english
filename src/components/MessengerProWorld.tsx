@@ -573,8 +573,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       squash: 1,
       forward: startFwd.clone(),
       camForward: startFwd.clone(),
-      camDist: 1.42,
-      camElev: 0.56,
+      camDist: 1.48,
+      camElev: 0.58,
       dragging: false,
       lastX: 0,
       lastY: 0,
@@ -1138,6 +1138,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             .addScaledVector(fixedSide, 6.2);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
+          if (runtime.materials) setMessengerLight(runtime.materials, sun.position);
         }
 
         // Subtle contact AO shadow under feet (real 3D shadow handles the full silhouette!)

@@ -91,11 +91,30 @@ vec3 hsv2rgb(vec3 c) {
   return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
 }
 
+// Reconstruct view-space surface normal from linear depth (catches 90° architectural corners at zero extra draw calls!)
+vec3 viewPosFromDepth(vec2 uv) {
+  float d = linearDepth(uv);
+  vec2 ndc = uv * 2.0 - 1.0;
+  float aspect = uResolution.x / max(uResolution.y, 1.0);
+  return vec3(ndc.x * aspect * 0.43 * d, ndc.y * 0.43 * d, -d);
+}
+
+vec3 reconstructNormal(vec2 uv, vec2 texel) {
+  vec3 pC = viewPosFromDepth(uv);
+  vec3 pR = viewPosFromDepth(uv + vec2(texel.x, 0.0));
+  vec3 pL = viewPosFromDepth(uv - vec2(texel.x, 0.0));
+  vec3 pU = viewPosFromDepth(uv + vec2(0.0, texel.y));
+  vec3 pD = viewPosFromDepth(uv - vec2(0.0, texel.y));
+  vec3 dX = abs(pR.z - pC.z) < abs(pC.z - pL.z) ? (pR - pC) : (pC - pL);
+  vec3 dY = abs(pU.z - pC.z) < abs(pC.z - pD.z) ? (pU - pC) : (pC - pD);
+  return normalize(cross(dX, dY));
+}
+
 void main() {
   vec2 texel = 1.0 / uResolution;
   vec2 o = texel * uLineWidth;
 
-  // --- Clean, delicate "ligne claire" Depth Sobel (no harsh boil jitter) ---
+  // --- 1. Razor-sharp Ligne-Claire Depth Sobel (silhouettes & overhangs) ---
   float dC = linearDepth(vUv);
   float d00 = linearDepth(vUv + vec2(-o.x, -o.y));
   float d10 = linearDepth(vUv + vec2(0.0, -o.y));
@@ -108,9 +127,19 @@ void main() {
   float gx = (d20 + 2.0 * d21 + d22) - (d00 + 2.0 * d01 + d02);
   float gy = (d02 + 2.0 * d12 + d22) - (d00 + 2.0 * d10 + d20);
   float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
-  depthEdge = smoothstep(0.075, 0.19, depthEdge);
+  depthEdge = smoothstep(0.095, 0.21, depthEdge);
 
-  // --- Subtle Colour Sobel for interior lines (windows, collars, pockets) ---
+  // --- 2. View-Space Normal Corner Crease Detection (stairs, curbs, boxes, bridge girders!) ---
+  vec3 nC = reconstructNormal(vUv, texel);
+  vec3 nR = reconstructNormal(vUv + vec2(o.x, 0.0), texel);
+  vec3 nL = reconstructNormal(vUv - vec2(o.x, 0.0), texel);
+  vec3 nU = reconstructNormal(vUv + vec2(0.0, o.y), texel);
+  vec3 nD = reconstructNormal(vUv - vec2(0.0, o.y), texel);
+  float minDot = min(min(dot(nC, nR), dot(nC, nL)), min(dot(nC, nU), dot(nC, nD)));
+  // Only trigger on genuine geometric corners (< ~55 deg) and fade cleanly at far distance
+  float normalEdge = smoothstep(0.58, 0.30, minDot) * (1.0 - smoothstep(10.0, 26.0, dC));
+
+  // --- 3. Interior Colour Edge Detection (boat lettering, doors, windows, pockets) ---
   float l00 = luma(sampleColor(vUv + vec2(-o.x, -o.y)));
   float l10 = luma(sampleColor(vUv + vec2(0.0, -o.y)));
   float l20 = luma(sampleColor(vUv + vec2(o.x, -o.y)));
@@ -121,34 +150,34 @@ void main() {
   float l22 = luma(sampleColor(vUv + vec2(o.x, o.y)));
   float cx = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
   float cy = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
-  float colorEdge = smoothstep(0.28, 0.52, sqrt(cx * cx + cy * cy));
+  float colorEdge = smoothstep(0.24, 0.46, sqrt(cx * cx + cy * cy));
 
   bool isSky = texture2D(tDepth, vUv).x > 0.99995;
-  float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
-  float ink = max(depthEdge, colorEdge * 0.52) * distFade;
+  float distFade = 1.0 - smoothstep(28.0, 76.0, dC);
+  float ink = max(max(depthEdge, normalEdge * 0.78), colorEdge * 0.62) * distFade;
   if (isSky) ink = 0.0;
 
-  // --- Airy, sun-washed Studio Ghibli / Abeto pastel grading (natural & soft!) ---
+  // --- 4. Vivid Sunlit Abeto / Moebius Coastal Color Grading (crisp, saturated, zero grey haze!) ---
   vec3 col = sampleColor(vUv);
   vec3 hsv = rgb2hsv(col);
-  // Gently soften harsh saturation and lift deep shadows for natural coastal sunlight
-  hsv.y = clamp(hsv.y * 0.92, 0.0, 1.0);
-  hsv.z = mix(hsv.z, sqrt(max(hsv.z, 0.0)), 0.14);
+  // Restore clean sunlit vibrancy (boat blue, amber door, orange buoy, seafoam bridge!)
+  hsv.y = clamp(hsv.y * 1.15, 0.0, 1.0);
   col = hsv2rgb(hsv);
 
-  // Subtle warm sunlit lift on highlights + cool sky bounce on shadows (never dark!)
+  // Subtle crisp S-curve contrast so sunlit whites pop & shadows stay rich cool-slate
+  vec3 contrasted = col * col * (3.0 - 2.0 * col);
+  col = mix(col, contrasted, 0.20);
+
+  // Delicate warm sunlit highlight kiss (never washes out darks!)
   float L = luma(col);
-  col = mix(col, col + vec3(0.025, 0.035, 0.045), (1.0 - smoothstep(0.15, 0.55, L)) * 0.45);
-  col = mix(col, col + vec3(0.03, 0.025, 0.01), smoothstep(0.60, 0.95, L) * 0.6);
+  col = mix(col, col * vec3(1.03, 1.02, 0.99), smoothstep(0.55, 0.95, L) * 0.65);
 
-  // --- Delicate charcoal-slate ink (62% opacity, airy & crisp like Abeto!) ---
-  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.62);
+  // --- 5. Crisp Dark Charcoal-Ink Lines (86% opacity like Abeto Messenger!) ---
+  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.86);
 
-  // Very subtle paper grain + whisper-light edge framing
+  // Ultra-subtle paper texture
   float grain = hash(vUv * uResolution) - 0.5;
-  col += grain * 0.012;
-  vec2 vc = vUv - 0.5;
-  col *= 1.0 - dot(vc, vc) * 0.05;
+  col += grain * 0.008;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
@@ -205,9 +234,9 @@ export class AnimeInkPass {
         uNear: { value: cam.near ?? 0.1 },
         uFar: { value: cam.far ?? 400 },
         uTime: { value: 0 },
-        uInkColor: { value: new Color('#2c353d') },
-        uShadowTint: { value: new Color('#7ea3be') },
-        uLineWidth: { value: 0.85 },
+        uInkColor: { value: new Color('#1a2229') },
+        uShadowTint: { value: new Color('#6d92ae') },
+        uLineWidth: { value: 0.78 },
       },
     });
 
@@ -223,8 +252,8 @@ export class AnimeInkPass {
     const h = Math.max(1, Math.floor(height));
     this.target.setSize(w, h);
     this.material.uniforms.uResolution.value.set(w, h);
-    // Keep lines crisp and delicate (~0.85-1.1px) like Abeto ligne claire
-    this.material.uniforms.uLineWidth.value = h > 950 ? 1.1 : 0.85;
+    // Keep lines razor-sharp & delicate (~0.78-1.0px) so thin cables & stairs stay crisp!
+    this.material.uniforms.uLineWidth.value = h > 950 ? 1.0 : 0.78;
   }
 
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, time: number) {
