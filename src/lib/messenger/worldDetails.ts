@@ -6,6 +6,11 @@ export interface SurfaceSample {
   radius: number;
 }
 
+export interface WorldDetailsBundle {
+  group: THREE.Group;
+  update: (elapsed: number) => void;
+}
+
 const UP = new THREE.Vector3(0, 1, 0);
 
 /** Deterministic seeded PRNG so city props always land in clean, consistent spots */
@@ -17,6 +22,27 @@ function mulberry32(seed: number) {
     let t = Math.imul(a ^ (a >>> 15), 1 | a);
     t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
     return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Inject gentle GPU wind sway into grass & wildflower toon materials (0 CPU cost!) */
+function applyWindSway(mat: THREE.MeshToonMaterial, timeUniform: { value: number }, amp = 0.045) {
+  mat.onBeforeCompile = (shader) => {
+    shader.uniforms.uWindTime = timeUniform;
+    shader.vertexShader = shader.vertexShader
+      .replace(
+        '#include <common>',
+        `#include <common>
+        uniform float uWindTime;`
+      )
+      .replace(
+        '#include <begin_vertex>',
+        `#include <begin_vertex>
+        float swayH = max(0.0, position.y);
+        float phase = uWindTime * 2.4 + position.x * 14.0 + position.z * 11.0;
+        transformed.x += sin(phase) * swayH * ${amp.toFixed(3)};
+        transformed.z += cos(phase * 0.85) * swayH * ${(amp * 0.7).toFixed(3)};`
+      );
   };
 }
 
@@ -35,6 +61,60 @@ function makeStreetLamp(poleMat: THREE.Material, glowMat: THREE.Material): THREE
   return g;
 }
 
+/** Build a swaying Japanese nobori shop banner flag on a wooden pole */
+function makeSwayingBanner(
+  poleMat: THREE.Material,
+  clothMat: THREE.Material,
+  stripeMat: THREE.Material
+): { group: THREE.Group; flagPivot: THREE.Group } {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.009, 0.011, 0.52, 6), poleMat);
+  pole.position.y = 0.26;
+  const crossbar = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.16, 5), poleMat);
+  crossbar.rotation.z = Math.PI / 2;
+  crossbar.position.set(0.075, 0.49, 0);
+
+  const flagPivot = new THREE.Group();
+  flagPivot.position.set(0.075, 0.48, 0);
+  const cloth = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.28, 0.009), clothMat);
+  cloth.position.y = -0.14;
+  const band = new THREE.Mesh(new THREE.BoxGeometry(0.144, 0.045, 0.012), stripeMat);
+  band.position.y = -0.22;
+  flagPivot.add(cloth, band);
+
+  g.add(pole, crossbar, flagPivot);
+  return { group: g, flagPivot };
+}
+
+/** Build a cozy hanging paper lantern post that sways gently in the breeze */
+function makeHangingLantern(
+  poleMat: THREE.Material,
+  lanternMat: THREE.Material,
+  capMat: THREE.Material
+): { group: THREE.Group; lanternPivot: THREE.Group } {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.014, 0.46, 6), poleMat);
+  pole.position.y = 0.23;
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.014, 0.014), poleMat);
+  hook.position.set(0.055, 0.45, 0);
+
+  const lanternPivot = new THREE.Group();
+  lanternPivot.position.set(0.11, 0.44, 0);
+  const cord = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, 0.06, 4), capMat);
+  cord.position.y = -0.03;
+  const body = new THREE.Mesh(new THREE.SphereGeometry(0.048, 10, 8), lanternMat);
+  body.scale.set(0.92, 1.25, 0.92);
+  body.position.y = -0.105;
+  const topCap = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.032, 0.016, 8), capMat);
+  topCap.position.y = -0.055;
+  const botCap = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.024, 0.016, 8), capMat);
+  botCap.position.y = -0.155;
+  lanternPivot.add(cord, body, topCap, botCap);
+
+  g.add(pole, hook, lanternPivot);
+  return { group: g, lanternPivot };
+}
+
 /** Build a yellow/red street postbox like in Messenger anime key art */
 function makePostbox(boxMat: THREE.Material, slotMat: THREE.Material): THREE.Group {
   const g = new THREE.Group();
@@ -49,7 +129,11 @@ function makePostbox(boxMat: THREE.Material, slotMat: THREE.Material): THREE.Gro
 }
 
 /** Build a retro Japanese drink vending machine */
-function makeVendingMachine(bodyMat: THREE.Material, screenMat: THREE.Material, darkMat: THREE.Material): THREE.Group {
+function makeVendingMachine(
+  bodyMat: THREE.Material,
+  screenMat: THREE.Material,
+  darkMat: THREE.Material
+): THREE.Group {
   const g = new THREE.Group();
   const body = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.36, 0.13), bodyMat);
   body.position.y = 0.18;
@@ -78,7 +162,11 @@ function makeBench(woodMat: THREE.Material, legMat: THREE.Material): THREE.Group
 }
 
 /** Build a cute wooden planter box with lush anime bush */
-function makePlanter(woodMat: THREE.Material, leafMat: THREE.Material, flowerMat: THREE.Material): THREE.Group {
+function makePlanter(
+  woodMat: THREE.Material,
+  leafMat: THREE.Material,
+  flowerMat: THREE.Material
+): THREE.Group {
   const g = new THREE.Group();
   const pot = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.08, 0.14), woodMat);
   pot.position.y = 0.04;
@@ -93,30 +181,37 @@ function makePlanter(woodMat: THREE.Material, leafMat: THREE.Material, flowerMat
 }
 
 /**
- * Generates instanced anime grass tufts, wildflowers, and cozy Japanese city props
- * snapped cleanly onto the real BVH planet surface.
+ * Generates living animated world details snapped cleanly onto the real BVH planet surface:
+ * - Wind-swaying anime grass tufts (240) & wildflowers (72)
+ * - Swaying Japanese shop banners, hanging glowing paper lanterns, lamps, benches, postboxes & vending machines
+ * - Flapping 3D anime butterflies orbiting meadow & town spots
+ * - Sweeping translucent Studio Ghibli / Abeto wind breeze ribbons
+ * - Drifting sunlit blossom petals & rising cel-shaded chimney smoke puffs
  */
 export function createWorldDetails(
   toonGradient: THREE.DataTexture,
   sampleSurface: (dir: THREE.Vector3) => SurfaceSample | null
-): THREE.Group {
+): WorldDetailsBundle {
   const root = new THREE.Group();
   root.name = 'AnimeWorldDetails';
   const rand = mulberry32(20261124);
+  const windTime = { value: 0 };
 
   const toon = (hex: number) => new THREE.MeshToonMaterial({ color: hex, gradientMap: toonGradient });
 
-  // 1. Instanced Anime Grass Tufts (~220 tufts = only 1 draw call!)
+  // 1. Wind-Swaying Instanced Anime Grass Tufts (~240 tufts = 1 draw call!)
   const bladeGeo = new THREE.ConeGeometry(0.028, 0.14, 4);
   bladeGeo.translate(0, 0.07, 0);
   const grassMat = toon(0x4ba364);
+  applyWindSway(grassMat, windTime, 0.18);
   const MAX_GRASS = 240;
   const grassInst = new THREE.InstancedMesh(bladeGeo, grassMat, MAX_GRASS);
   grassInst.frustumCulled = false;
 
-  // 2. Instanced Wildflowers (~70 blossoms = 1 draw call!)
+  // 2. Wind-Swaying Instanced Wildflowers (~72 blossoms = 1 draw call!)
   const flowerGeo = new THREE.DodecahedronGeometry(0.024, 0);
   const flowerMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient });
+  applyWindSway(flowerMat, windTime, 0.09);
   const MAX_FLOWERS = 72;
   const flowerInst = new THREE.InstancedMesh(flowerGeo, flowerMat, MAX_FLOWERS);
   flowerInst.frustumCulled = false;
@@ -128,8 +223,8 @@ export function createWorldDetails(
   const spinQ = new THREE.Quaternion();
   let gIdx = 0;
   let fIdx = 0;
+  const meadowSpots: Array<{ point: THREE.Vector3; up: THREE.Vector3 }> = [];
 
-  // Scatter anime grass clusters & wildflowers on gentle grassy hills across the planet
   for (let i = 0; i < 420 && gIdx < MAX_GRASS - 3; i++) {
     const u = rand() * 2 - 1;
     const theta = rand() * Math.PI * 2;
@@ -138,10 +233,12 @@ export function createWorldDetails(
 
     const hit = sampleSurface(dir);
     if (!hit) continue;
-    // Only place on gentle upward-facing land above shoreline
     if (hit.radius < 7.25 || hit.normal.dot(dir) < 0.78) continue;
 
-    // Place a 3-blade anime grass tuft cluster
+    if (meadowSpots.length < 24) {
+      meadowSpots.push({ point: hit.point.clone(), up: dir.clone() });
+    }
+
     const clusterCount = 2 + Math.floor(rand() * 2);
     for (let b = 0; b < clusterCount && gIdx < MAX_GRASS; b++) {
       const jitterX = (rand() - 0.5) * 0.09;
@@ -177,9 +274,11 @@ export function createWorldDetails(
   if (flowerInst.instanceColor) flowerInst.instanceColor.needsUpdate = true;
   root.add(grassInst, flowerInst);
 
-  // 3. Cozy Japanese Town Props around the main town & quest landmarks
+  // 3. Cozy Japanese Town Props + Swaying Shop Banners & Hanging Paper Lanterns
   const poleMat = toon(0x3a464e);
   const glowMat = new THREE.MeshBasicMaterial({ color: 0xfff3c4 });
+  const lanternWarmMat = new THREE.MeshBasicMaterial({ color: 0xffe4a0 });
+  const lanternCoralMat = new THREE.MeshBasicMaterial({ color: 0xffb38a });
   const yellowBoxMat = toon(0xf4b942);
   const redBoxMat = toon(0xd94848);
   const whiteSlotMat = toon(0xf5f5f0);
@@ -190,8 +289,8 @@ export function createWorldDetails(
   const darkIronMat = toon(0x2d3740);
   const bushLeafMat = toon(0x459960);
   const blossomMat = toon(0xffdf6b);
+  const bannerMats = [toon(0xe05d4f), toon(0x4fa39c), toon(0xf0b849), toon(0x5b7fa6)];
 
-  // Hand-picked neighborhood anchor regions (Northern Town, Cliffside, Waterfall, Harbor, South)
   const townAnchors = [
     new THREE.Vector3(0.22, 0.86, 0.46),
     new THREE.Vector3(0.12, 0.91, 0.39),
@@ -204,15 +303,19 @@ export function createWorldDetails(
     new THREE.Vector3(0.30, -0.82, -0.48),
   ];
 
+  const swayingItems: Array<{ pivot: THREE.Group; phase: number; amp: number; speed: number }> = [];
+  const smokeOrigins: Array<{ pos: THREE.Vector3; up: THREE.Vector3 }> = [];
+
   const placeProp = (prop: THREE.Group, targetDir: THREE.Vector3, yawRad: number) => {
-    const hit = sampleSurface(targetDir.clone().normalize());
-    if (!hit || hit.radius < 6.8 || hit.normal.dot(targetDir.clone().normalize()) < 0.72) return;
     const upDir = targetDir.clone().normalize();
+    const hit = sampleSurface(upDir);
+    if (!hit || hit.radius < 6.8 || hit.normal.dot(upDir) < 0.72) return null;
     prop.position.copy(hit.point);
     quat.setFromUnitVectors(UP, upDir);
     spinQ.setFromAxisAngle(UP, yawRad);
     prop.quaternion.copy(quat).multiply(spinQ);
     root.add(prop);
+    return { point: hit.point.clone(), up: upDir };
   };
 
   townAnchors.forEach((anchor, idx) => {
@@ -222,18 +325,49 @@ export function createWorldDetails(
     t1.normalize();
     const t2 = baseDir.clone().cross(t1).normalize();
 
-    // Street lamp at each neighborhood anchor
+    // Street lamp
     placeProp(
       makeStreetLamp(poleMat, glowMat),
       baseDir.clone().addScaledVector(t1, 0.045),
       idx * 1.1
     );
 
-    // Alternating yellow/red postbox, vending machine, wooden bench, and potted plants
+    // Swaying Japanese cloth shop banner!
+    const banner = makeSwayingBanner(woodMat, bannerMats[idx % bannerMats.length], whiteSlotMat);
+    const placedB = placeProp(
+      banner.group,
+      baseDir.clone().addScaledVector(t1, 0.075).addScaledVector(t2, -0.025),
+      idx * 1.4
+    );
+    if (placedB) {
+      swayingItems.push({ pivot: banner.flagPivot, phase: idx * 0.9, amp: 0.19, speed: 2.3 });
+    }
+
+    // Swaying warm glowing paper lantern!
+    const lantern = makeHangingLantern(
+      darkIronMat,
+      idx % 2 === 0 ? lanternWarmMat : lanternCoralMat,
+      darkIronMat
+    );
+    const placedL = placeProp(
+      lantern.group,
+      baseDir.clone().addScaledVector(t2, 0.085),
+      idx * 0.8 + 1.2
+    );
+    if (placedL) {
+      swayingItems.push({ pivot: lantern.lanternPivot, phase: idx * 1.3 + 0.5, amp: 0.14, speed: 1.9 });
+      if (smokeOrigins.length < 4) {
+        smokeOrigins.push({
+          pos: placedL.point.clone().addScaledVector(placedL.up, 1.05),
+          up: placedL.up.clone(),
+        });
+      }
+    }
+
     if (idx % 2 === 0) {
       placeProp(
         makePostbox(idx % 4 === 0 ? yellowBoxMat : redBoxMat, whiteSlotMat),
-        baseDir.clone().addScaledVector(t2, 0.055),
+        baseDir.clone().addScaledVector(t2, 0.048),
         idx * 0.9
       );
     } else {
@@ -249,13 +383,272 @@ export function createWorldDetails(
       baseDir.clone().addScaledVector(t1, -0.06).addScaledVector(t2, 0.03),
       idx * 0.7 + 0.5
     );
-
     placeProp(
       makePlanter(woodMat, bushLeafMat, blossomMat),
-      baseDir.clone().addScaledVector(t1, 0.025).addScaledVector(t2, -0.045),
+      baseDir.clone().addScaledVector(t1, -0.03).addScaledVector(t2, -0.04),
       idx * 1.7
     );
   });
 
-  return root;
+  // 4. Animated Flapping 3D Anime Butterflies (14 colorful butterflies fluttering over town & meadows!)
+  const butterflyGroup = new THREE.Group();
+  butterflyGroup.name = 'AnimeButterflies';
+  const wingGeo = new THREE.PlaneGeometry(0.032, 0.024);
+  wingGeo.translate(0.016, 0, 0);
+  const bfColors = [0xffe45e, 0xfffdf5, 0x93e5f5, 0xffb3c6];
+  const bfMats = bfColors.map(
+    (c) => new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide })
+  );
+
+  const butterflies: Array<{
+    root: THREE.Group;
+    lw: THREE.Mesh;
+    rw: THREE.Mesh;
+    center: THREE.Vector3;
+    up: THREE.Vector3;
+    t1: THREE.Vector3;
+    t2: THREE.Vector3;
+    radius: number;
+    speed: number;
+    phase: number;
+  }> = [];
+
+  const bfAnchors = [
+    ...townAnchors.slice(0, 6).map((a) => {
+      const u = a.clone().normalize();
+      const h = sampleSurface(u);
+      return { point: h ? h.point.clone() : u.clone().multiplyScalar(7.6), up: u };
+    }),
+    ...meadowSpots.slice(0, 8),
+  ];
+
+  bfAnchors.forEach((spot, idx) => {
+    const bRoot = new THREE.Group();
+    const mat = bfMats[idx % bfMats.length];
+    const lw = new THREE.Mesh(wingGeo, mat);
+    const rw = new THREE.Mesh(wingGeo, mat);
+    rw.rotation.y = Math.PI;
+    bRoot.add(lw, rw);
+    butterflyGroup.add(bRoot);
+
+    const t1 = new THREE.Vector3(1, 0, 0).cross(spot.up);
+    if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(spot.up);
+    t1.normalize();
+    const t2 = spot.up.clone().cross(t1).normalize();
+
+    butterflies.push({
+      root: bRoot,
+      lw,
+      rw,
+      center: spot.point.clone().addScaledVector(spot.up, 0.28 + (idx % 3) * 0.14),
+      up: spot.up.clone(),
+      t1,
+      t2,
+      radius: 0.24 + (idx % 4) * 0.09,
+      speed: 0.9 + (idx % 3) * 0.35,
+      phase: idx * 1.37,
+    });
+  });
+  root.add(butterflyGroup);
+
+  // 5. Sweeping Anime Wind Breeze Ribbons gliding across the planet's sky & streets!
+  const windGroup = new THREE.Group();
+  windGroup.name = 'AnimeWindStreaks';
+  const windRibbonCurve = new THREE.CatmullRomCurve3([
+    new THREE.Vector3(-0.75, 0, 0),
+    new THREE.Vector3(-0.25, 0.07, 0.05),
+    new THREE.Vector3(0.25, -0.05, -0.04),
+    new THREE.Vector3(0.75, 0.03, 0),
+  ]);
+  const windRibbonGeo = new THREE.TubeGeometry(windRibbonCurve, 14, 0.012, 4, false);
+  const windStreaks: Array<{
+    mesh: THREE.Mesh;
+    mat: THREE.MeshBasicMaterial;
+    orbitR: number;
+    lat: number;
+    speed: number;
+    phase: number;
+  }> = [];
+
+  for (let i = 0; i < 8; i++) {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xf7fffd,
+      transparent: true,
+      opacity: 0.36,
+      depthWrite: false,
+    });
+    const m = new THREE.Mesh(windRibbonGeo, mat);
+    m.scale.set(1.15 + (i % 3) * 0.35, 1, 1);
+    windGroup.add(m);
+    windStreaks.push({
+      mesh: m,
+      mat,
+      orbitR: 8.8 + (i % 4) * 0.55,
+      lat: ((i % 5) - 2) * 0.38,
+      speed: 0.22 + (i % 3) * 0.06,
+      phase: (i / 8) * Math.PI * 2,
+    });
+  }
+  root.add(windGroup);
+
+  // 6. Drifting Sunlit Blossom Petals / Pollen Motes (48 instanced motes = 1 draw call!)
+  const petalGeo = new THREE.PlaneGeometry(0.036, 0.022);
+  const petalMat = new THREE.MeshBasicMaterial({
+    color: 0xfff8e7,
+    side: THREE.DoubleSide,
+    transparent: true,
+    opacity: 0.82,
+  });
+  const PETAL_COUNT = 48;
+  const petalInst = new THREE.InstancedMesh(petalGeo, petalMat, PETAL_COUNT);
+  petalInst.frustumCulled = false;
+  const petalSeeds = Array.from({ length: PETAL_COUNT }, (_, i) => ({
+    r: 8.15 + rand() * 1.45,
+    lon: rand() * Math.PI * 2,
+    lat: (rand() - 0.5) * Math.PI * 0.85,
+    speed: 0.06 + rand() * 0.08,
+    bobAmp: 0.08 + rand() * 0.14,
+    phase: i * 0.73,
+  }));
+  const petalPalette = [new THREE.Color(0xfffcf2), new THREE.Color(0xffd6e0), new THREE.Color(0xfff1a8)];
+  for (let i = 0; i < PETAL_COUNT; i++) {
+    petalInst.setColorAt(i, petalPalette[i % petalPalette.length]);
+  }
+  if (petalInst.instanceColor) petalInst.instanceColor.needsUpdate = true;
+  root.add(petalInst);
+
+  // 7. Rising Cel-Shaded Chimney Smoke Puffs above harbor rooftops
+  const smokeGroup = new THREE.Group();
+  smokeGroup.name = 'ChimneySmoke';
+  const smokeGeo = new THREE.DodecahedronGeometry(0.042, 0);
+  const smokePuffs: Array<{
+    mesh: THREE.Mesh;
+    mat: THREE.MeshBasicMaterial;
+    origin: THREE.Vector3;
+    up: THREE.Vector3;
+    offset: number;
+  }> = [];
+
+  smokeOrigins.forEach((so, sIdx) => {
+    for (let k = 0; k < 4; k++) {
+      const mat = new THREE.MeshBasicMaterial({
+        color: 0xf4f7f5,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+      });
+      const m = new THREE.Mesh(smokeGeo, mat);
+      smokeGroup.add(m);
+      smokePuffs.push({
+        mesh: m,
+        mat,
+        origin: so.pos,
+        up: so.up,
+        offset: k / 4 + sIdx * 0.17,
+      });
+    }
+  });
+  root.add(smokeGroup);
+
+  // Zero-GC scratch vectors for per-frame living world update
+  const tmpPos = new THREE.Vector3();
+  const tmpNext = new THREE.Vector3();
+  const tmpAxis = new THREE.Vector3();
+
+  const update = (elapsed: number) => {
+    windTime.value = elapsed;
+
+    // 1. Sway street banners & hanging lanterns
+    for (let i = 0; i < swayingItems.length; i++) {
+      const item = swayingItems[i];
+      item.pivot.rotation.z = Math.sin(elapsed * item.speed + item.phase) * item.amp;
+      item.pivot.rotation.x = Math.cos(elapsed * (item.speed * 0.75) + item.phase) * (item.amp * 0.5);
+    }
+
+    // 2. Fluttering butterflies in figure-8 loops
+    for (let i = 0; i < butterflies.length; i++) {
+      const b = butterflies[i];
+      const a = elapsed * b.speed + b.phase;
+      const dx = Math.cos(a) * b.radius;
+      const dy = Math.sin(a * 2) * (b.radius * 0.55);
+      const lift = Math.sin(a * 1.7) * 0.08;
+      tmpPos
+        .copy(b.center)
+        .addScaledVector(b.t1, dx)
+        .addScaledVector(b.t2, dy)
+        .addScaledVector(b.up, lift);
+      b.root.position.copy(tmpPos);
+
+      const na = a + 0.08;
+      tmpNext
+        .copy(b.center)
+        .addScaledVector(b.t1, Math.cos(na) * b.radius)
+        .addScaledVector(b.t2, Math.sin(na * 2) * (b.radius * 0.55))
+        .addScaledVector(b.up, Math.sin(na * 1.7) * 0.08);
+      b.root.lookAt(tmpNext);
+
+      const flap = 0.25 + Math.abs(Math.sin(elapsed * 16 + b.phase)) * 0.95;
+      b.lw.rotation.z = flap;
+      b.rw.rotation.z = -flap;
+    }
+
+    // 3. Sweeping anime wind breeze ribbons
+    for (let i = 0; i < windStreaks.length; i++) {
+      const ws = windStreaks[i];
+      const a = elapsed * ws.speed + ws.phase;
+      const na = a + 0.06;
+      const cosLat = Math.cos(ws.lat);
+      const sinLat = Math.sin(ws.lat);
+      ws.mesh.position.set(
+        Math.cos(a) * ws.orbitR * cosLat,
+        sinLat * ws.orbitR,
+        Math.sin(a) * ws.orbitR * cosLat
+      );
+      tmpNext.set(
+        Math.cos(na) * ws.orbitR * cosLat,
+        sinLat * ws.orbitR,
+        Math.sin(na) * ws.orbitR * cosLat
+      );
+      ws.mesh.lookAt(tmpNext);
+      // Smoothly fade in and out along wind gust cycle
+      const gust = Math.max(0, Math.sin(elapsed * 0.85 + ws.phase * 1.7));
+      ws.mat.opacity = gust * 0.36;
+    }
+
+    // 4. Drifting sunlit blossom petals
+    for (let i = 0; i < PETAL_COUNT; i++) {
+      const p = petalSeeds[i];
+      const lon = p.lon + elapsed * p.speed;
+      const r = p.r + Math.sin(elapsed * 1.3 + p.phase) * p.bobAmp;
+      const cosLat = Math.cos(p.lat);
+      dummy.position.set(
+        Math.cos(lon) * r * cosLat,
+        Math.sin(p.lat) * r,
+        Math.sin(lon) * r * cosLat
+      );
+      dummy.rotation.set(elapsed * 1.2 + p.phase, elapsed * 0.9 + p.phase, elapsed * 0.7);
+      dummy.scale.setScalar(0.85 + Math.sin(elapsed * 2 + p.phase) * 0.2);
+      dummy.updateMatrix();
+      petalInst.setMatrixAt(i, dummy.matrix);
+    }
+    petalInst.instanceMatrix.needsUpdate = true;
+
+    // 5. Rising cel-shaded chimney smoke puffs
+    for (let i = 0; i < smokePuffs.length; i++) {
+      const sp = smokePuffs[i];
+      const cycle = (elapsed * 0.22 + sp.offset) % 1;
+      tmpAxis.set(1, 0, 0).cross(sp.up);
+      if (tmpAxis.lengthSq() < 0.01) tmpAxis.set(0, 0, 1).cross(sp.up);
+      tmpAxis.normalize();
+      sp.mesh.position
+        .copy(sp.origin)
+        .addScaledVector(sp.up, cycle * 0.95)
+        .addScaledVector(tmpAxis, Math.sin(cycle * Math.PI * 2 + i) * 0.12);
+      const sc = 0.45 + cycle * 0.95;
+      sp.mesh.scale.setScalar(sc);
+      sp.mat.opacity = Math.sin(cycle * Math.PI) * 0.38;
+    }
+  };
+
+  return { group: root, update };
 }

@@ -88,5 +88,47 @@ export const npcGalleryEntries: NpcGalleryEntry[] = [
 		model: '/messenger/geometries/npcs/present/scout/scout.drc',
 		bones: '/messenger/geometries/npcs/present/scout/scout-bones.drc',
 		idle: '/messenger/geometries/npcs/present/scout/scout-idle.drc'
+	},
+	{
+		name: 'young-lady',
+		model: '/messenger/geometries/npcs/present/young-lady/young-lady.drc',
+		bones: '/messenger/geometries/npcs/present/young-lady/young-lady-bones.drc',
+		idle: '/messenger/geometries/npcs/present/young-lady/young-lady-idle.drc'
+	},
+	{
+		name: 'owl',
+		model: '/messenger/geometries/npcs/present/owl/owl.drc',
+		bones: '/messenger/geometries/npcs/present/owl/owl-bones.drc',
+		idle: '/messenger/geometries/npcs/present/owl/owl-idle.drc'
+	},
+	{
+		name: 'oldwoman',
+		model: '/messenger/geometries/npcs/present/oldwoman/oldwoman.drc',
+		bones: '/messenger/geometries/npcs/present/oldwoman/oldwoman-bones.drc',
+		idle: '/messenger/geometries/npcs/present/oldwoman/oldwoman-idle.drc'
+	},
+	{
+		name: 'factory-worker-a',
+		model: '/messenger/geometries/npcs/present/factory-worker-a/factory-worker-a.drc',
+		bones: '/messenger/geometries/npcs/present/factory-worker-a/factory-worker-a-bones.drc',
+		idle: '/messenger/geometries/npcs/present/factory-worker-a/factory-worker-a-idle.drc'
+	},
+	{
+		name: 'female-scientist',
+		model: '/messenger/geometries/npcs/present/female-scientist/female-scientist.drc',
+		bones: '/messenger/geometries/npcs/present/female-scientist/female-scientist-bones.drc',
+		idle: '/messenger/geometries/npcs/present/female-scientist/female-scientist-idle.drc'
+	},
+	{
+		name: 'male-scientist',
+		model: '/messenger/geometries/npcs/present/male-scientist/male-scientist.drc',
+		bones: '/messenger/geometries/npcs/present/male-scientist/male-scientist-bones.drc',
+		idle: '/messenger/geometries/npcs/present/male-scientist/male-scientist-idle.drc'
+	},
+	{
+		name: 'threekid',
+		model: '/messenger/geometries/npcs/present/threekid/threekid.drc',
+		bones: '/messenger/geometries/npcs/present/threekid/threekid-bones.drc',
+		idle: '/messenger/geometries/npcs/present/threekid/threekid-idle.drc'
 	}
 ];

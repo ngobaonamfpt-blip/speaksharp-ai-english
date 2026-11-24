@@ -573,8 +573,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       squash: 1,
       forward: startFwd.clone(),
       camForward: startFwd.clone(),
-      camDist: 1.48,
-      camElev: 0.58,
+      camDist: 1.42,
+      camElev: 0.56,
       dragging: false,
       lastX: 0,
       lastY: 0,
@@ -795,6 +795,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       camera
     );
     let waterDepthCaptured = false;
+    let updateWorldDetails: ((elapsed: number) => void) | null = null;
     const startedAt = performance.now();
     let cancelled = false;
 
@@ -893,9 +894,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           });
           runtime.terrainChunks = chunks;
 
-          // Scatter anime grass tufts, wildflowers, benches, postboxes, street lamps & vending machines
+          // Scatter living animated world details: swaying grass/flowers, banners, lanterns, butterflies, wind streaks, petals & chimney smoke
           const chunkMeshes = chunks.map((c) => c.mesh);
-          const worldDetails = createWorldDetails(toonGradient, (dir) => {
+          const worldDetailsBundle = createWorldDetails(toonGradient, (dir) => {
             const origin = dir.clone().multiplyScalar(16);
             const inward = dir.clone().negate();
             raycaster.set(origin, inward);
@@ -909,8 +910,19 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               .normalize();
             return { point: hit.point.clone(), normal, radius: hit.point.length() };
           });
+          updateWorldDetails = worldDetailsBundle.update;
+          const worldDetails = worldDetailsBundle.group;
+          const vfxNoShadow = new Set(['AnimeWindStreaks', 'ChimneySmoke', 'AnimeButterflies']);
           worldDetails.traverse((o) => {
-            if ((o as Mesh).isMesh) o.castShadow = true;
+            if ((o as Mesh).isMesh) {
+              const parentName = o.parent?.name ?? '';
+              const grandParentName = o.parent?.parent?.name ?? '';
+              const mMat = (o as Mesh).material;
+              const isTransp = !Array.isArray(mMat) && Boolean(mMat?.transparent);
+              if (!vfxNoShadow.has(parentName) && !vfxNoShadow.has(grandParentName) && !isTransp) {
+                o.castShadow = true;
+              }
+            }
           });
           scene.add(worldDetails);
 
@@ -959,6 +971,40 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               scene.add(rh);
 
               stopNodes.push({ stop, npc, ring, surfR });
+            })
+          );
+
+          // Spawn 8 extra living rigged & animated Abeto ambient NPCs & wildlife around town & hills!
+          const ambientNpcSpecs: Array<{ model: string; dir: Vector3; height: number; yaw: number }> = [
+            { model: 'factory-worker-a', dir: new Vector3(0.24, 0.89, 0.39), height: 0.31, yaw: 0.9 },
+            { model: 'fox', dir: new Vector3(0.06, 0.92, 0.38), height: 0.075, yaw: -0.6 },
+            { model: 'young-lady', dir: new Vector3(0.28, 0.85, 0.44), height: 0.30, yaw: 2.1 },
+            { model: 'oldwoman', dir: new Vector3(-0.08, 0.89, 0.45), height: 0.28, yaw: 1.4 },
+            { model: 'owl', dir: new Vector3(-0.48, 0.76, 0.44), height: 0.11, yaw: 0.4 },
+            { model: 'threekid', dir: new Vector3(0.65, 0.28, -0.70), height: 0.27, yaw: -1.1 },
+            { model: 'female-scientist', dir: new Vector3(-0.40, -0.72, 0.56), height: 0.31, yaw: 2.6 },
+            { model: 'male-scientist', dir: new Vector3(0.24, -0.86, -0.45), height: 0.31, yaw: 0.5 },
+          ];
+          await Promise.all(
+            ambientNpcSpecs.map(async (spec) => {
+              try {
+                const spot = findStreetSpot(spec.dir.clone().normalize(), 0.2);
+                const { group: ambNpc, mixer } = await loadRealPlanetNpc(
+                  spec.model,
+                  spec.height,
+                  npcAtlasMat
+                );
+                if (cancelled) return;
+                ambNpc.position.copy(spot.dir).multiplyScalar(spot.r);
+                const baseQ = new Quaternion().setFromUnitVectors(UP, spot.dir);
+                const yawQ = new Quaternion().setFromAxisAngle(UP, spec.yaw);
+                ambNpc.quaternion.copy(baseQ).multiply(yawQ);
+                ambNpc.add(createSoftDropShadow(spec.height * 0.48));
+                scene.add(ambNpc);
+                if (mixer) runtime.npcMixers.push(mixer);
+              } catch {
+                // Skip if optional ambient rig fails
+              }
             })
           );
 
@@ -1030,6 +1076,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
       if (atmosphere) atmosphere.cloudRing.rotation.y += 0.001;
       if (birdsRig) birdsRig.update(elapsed);
+      if (updateWorldDetails) updateWorldDetails(elapsed);
       if (dustRig) dustRig.update();
       if (rippleRig) rippleRig.update();
 
@@ -1138,7 +1185,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             .addScaledVector(fixedSide, 6.2);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
-          if (runtime.materials) setMessengerLight(runtime.materials, sun.position);
         }
 
         // Subtle contact AO shadow under feet (real 3D shadow handles the full silhouette!)
