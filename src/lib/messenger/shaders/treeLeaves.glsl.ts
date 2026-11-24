@@ -38,17 +38,23 @@ varying vec3 vWorldPosition;
 varying float vRand;
 
 void main() {
-	// Solid fluffy anime canopy (no checker pattern): flat 3-tone cel shading
+	// Fluffy anime canopy matching reference: 3-tone emerald cel shading + hand-inked leaf stipple dots
 	vec3 tint = mix(uColor1, uColor2, vRand);
 	tint = mix(tint, uColor3, step(0.6, vRand));
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
 	float shade = dot(normalize(vNormal), lightDir);
-	vec3 lit = tint * 1.12 + vec3(0.03, 0.05, 0.0);
-	vec3 mid = tint * 0.86;
-	vec3 dark = tint * vec3(0.52, 0.62, 0.70);
-	vec3 color = mix(dark, mid, smoothstep(-0.05, 0.02, shade));
-	color = mix(color, lit, smoothstep(0.42, 0.48, shade));
+	vec3 lit = tint * 1.14 + vec3(0.02, 0.05, 0.0);
+	vec3 mid = tint * 0.85;
+	vec3 dark = tint * vec3(0.48, 0.60, 0.66);
+	vec3 color = mix(dark, mid, smoothstep(-0.08, 0.02, shade));
+	color = mix(color, lit, smoothstep(0.38, 0.46, shade));
+
+	// Hand-drawn organic dark-green leaf stipple clusters inside the foliage
+	vec2 cell = floor(vWorldPosition.xy * 11.0 + vWorldPosition.z * 7.0);
+	float dotRand = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+	float stipple = step(0.84, dotRand);
+	color = mix(color, dark * 0.78, stipple * 0.7);
 
 	gl_FragColor = vec4(color, 1.0);
 }

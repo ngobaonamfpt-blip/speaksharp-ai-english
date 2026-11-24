@@ -68,41 +68,51 @@ vec4 triplanar(sampler2D tex, vec3 normal, vec3 pos, float scale) {
 }
 
 void main() {
-	float surfaceId = vSurfaceId;
 	vec3 worldNormal = normalize(vNormal);
-	vec4 triplanarNoise = triplanar(tNoise, wNormal, wPos * 0.07, 1.0);
-	float height = length(wPos);
-	float grassMask = 0.0;
+	vec3 radialUp = normalize(wPos);
+	float upness = dot(normalize(wNormal), radialUp);
+	vec4 triplanarNoise = triplanar(tNoise, wNormal, wPos * 0.08, 1.0);
+	float worldR = length(vWorldPosition);
 
-	if (vElementId == 1) {
-		grassMask = step(
-			0.15,
-			max(0.0, -triplanarNoise.r * 1.5 + dot(wNormal, normalize(wPos)))
-				- triplanarNoise.g * 0.35 + 0.1 - triplanarNoise.b * 0.05
-		);
+	vec3 baseAtlas = texture2D(tColors, vUv).rgb;
+	vec3 baseHsv = rgb2hsv(baseAtlas);
 
-		float n1 = sin(height * 0.025 + (wNormal.x + wNormal.y + wNormal.z) * 0.05 + (wPos.x + wPos.y + wPos.z) * 1.5);
-		float striations = texture2D(tNoise, vec2(n1 * 0.01, height * 0.07 - n1 * 0.02)).g;
-		striations = step(0.47, striations + triplanarNoise.r * 0.2 + triplanarNoise.g * 0.05);
-		surfaceId += striations * (1.0 - grassMask) * step(0.25, triplanarNoise.r);
+	// Detect natural hillside ground (elementId==1 OR warm beige/tan upward-facing terrain)
+	bool isTanHill = (baseAtlas.r > 0.56 && baseAtlas.g > 0.52 && baseAtlas.b > 0.36
+		&& (baseAtlas.r - baseAtlas.b) > 0.03 && baseHsv.y < 0.32 && upness > 0.52);
+	bool isTerrain = (vElementId == 1) || isTanHill;
+
+	vec3 color = baseAtlas;
+	if (isTerrain) {
+		float edgeNoise = (triplanarNoise.r - 0.5) * 0.55 + (triplanarNoise.g - 0.5) * 0.25;
+		// Lush flat anime meadow green on hilltops & gentle slopes
+		float grassMask = step(0.42, upness + edgeNoise * 0.35);
+		// Painterly scalloped sandy dirt bank right along the water shoreline (worldR ~ 6.4-6.7)
+		float shoreBank = 1.0 - step(6.62, worldR + edgeNoise * 0.32);
+		// Small sandy dirt specks right beside the water bank
+		float dirtSpeck = step(0.76, triplanarNoise.r) * (1.0 - step(6.95, worldR));
+
+		vec3 grassLit = vec3(0.32, 0.65, 0.41);   // #52a669 vibrant anime meadow green
+		vec3 grassVar = vec3(0.28, 0.59, 0.38);   // subtle painterly meadow patch
+		vec3 sandBank = vec3(0.74, 0.65, 0.49);   // #bda67d warm sandy riverbank
+		vec3 cliffEarth = vec3(0.66, 0.61, 0.52); // warm cel-shaded rock cliff
+
+		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
+		color = mix(cliffEarth, meadow, grassMask);
+		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
 	}
 
-	vec2 colorUV = vUv;
-	if (grassMask > 0.5) colorUV = vec2(0.10, 0.96);
-
-	vec3 color = texture2D(tColors, colorUV).rgb;
+	// Crisp 2-step anime cel shading with cool teal-tinted shadows
 	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r -= 0.015;
-	colorShadow.b *= 0.62;
+	colorShadow.r += 0.03; // shift shadow slightly cooler toward teal/blue
+	colorShadow.y = min(1.0, colorShadow.y * 1.12);
+	colorShadow.z *= 0.68;
 	colorShadow = hsv2rgb(colorShadow);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
 	float shade = max(dot(worldNormal, lightDir), 0.0);
-	float shadowCut = smoothstep(0.18, 0.44, shade);
+	float shadowCut = smoothstep(0.24, 0.32, shade);
 	color = mix(colorShadow, color, shadowCut);
-
-	float terrainDetail = texture2D(tNoiseTerrain, wPos.xz * 0.12).r;
-	color *= 0.95 + terrainDetail * 0.05;
 
 	gl_FragColor = vec4(color, 1.0);
 }

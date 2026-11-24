@@ -27,6 +27,7 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
+import { createWorldDetails } from '../lib/messenger/worldDetails';
 
 // Patch Three.js once with BVH accelerated raycasting (~500-1000x faster walking & wall-slide!)
 (BufferGeometry.prototype as unknown as Record<string, unknown>).computeBoundsTree = computeBoundsTree;
@@ -686,6 +687,24 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             }
           });
           runtime.terrainChunks = chunks;
+
+          // Scatter anime grass tufts, wildflowers, benches, postboxes, street lamps & vending machines
+          const chunkMeshes = chunks.map((c) => c.mesh);
+          const worldDetails = createWorldDetails(toonGradient, (dir) => {
+            const origin = dir.clone().multiplyScalar(16);
+            const inward = dir.clone().negate();
+            raycaster.set(origin, inward);
+            raycaster.far = 16;
+            const hits = raycaster.intersectObjects(chunkMeshes, false);
+            const hit = hits[0];
+            if (!hit || !hit.face) return null;
+            const normal = hit.face.normal
+              .clone()
+              .transformDirection(hit.object.matrixWorld)
+              .normalize();
+            return { point: hit.point.clone(), normal, radius: hit.point.length() };
+          });
+          scene.add(worldDetails);
 
           const spawnSpot = findStreetSpot(pState.posDir, 0.24);
           pState.posDir.copy(spawnSpot.dir);
