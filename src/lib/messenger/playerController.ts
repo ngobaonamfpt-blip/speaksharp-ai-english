@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { inkDisplayOutput } from './animeInkPass';
+import { buildSculptedAnimeCourier, updateAnimeFaceBlink } from './animeCourierMesh';
 
 export type TimeOfDay = 'day' | 'sunset' | 'night';
 
@@ -394,11 +395,11 @@ export type TopStyle = 'coat' | 'tee';
 export type EmoteAction = 'wave' | 'spin' | 'cheer' | null;
 
 /**
- * High-Detail Sculpted Anime Courier Character modeled closely on Messenger by Abeto:
- *  - Layered shaggy anime hair (5 jagged bangs + flipped nape tufts) & sculpted anime jawline/nose/blinking eyes
- *  - 2 Swappable Tops: Flared A-line button-up coat OR Sporty Messenger tee w/ gold trim
- *  - 5 Swappable Hairstyles/Headgear + 5-slot color customization (hair, top, pants, shoes, bag)
- *  - Emote physical animations (wave, spin-jump, cheer) & natural eye-blinking
+ * High-Detail Sculpted Anime Mesh Courier Character modeled closely on Messenger by Abeto:
+ *  - Continuous lofted anatomical anime meshes (head, coat, sleeves, hands, culottes, chunky sneakers)
+ *  - Swept tapered 3D anime hair strands & high-res hand-inked blinking anime face texture
+ *  - True Inverted-Hull (BackSide) charcoal ink outlines + crisp 2-tone Studio Anime cel-shading
+ *  - 2 Swappable Tops, 5 Swappable Hairstyles/Headgear, 5-slot color customization & 3D emotes
  */
 export function buildChibiCourier(
 	toonGradient: THREE.DataTexture,
@@ -413,417 +414,7 @@ export function buildChibiCourier(
 		topStyle?: TopStyle;
 	}
 ): THREE.Group {
-	const root = new THREE.Group();
-	const bodyRoot = new THREE.Group();
-	bodyRoot.name = 'bodyRoot';
-	bodyRoot.scale.setScalar(0.132); // True street-level anime teen height matching Abeto NPCs
-	root.add(bodyRoot);
-
-	const toon = (c: number) => new THREE.MeshToonMaterial({ color: c, gradientMap: toonGradient });
-	const skinM = toon(0xeccac0);
-	const shirtM = toon(opts.shirtColor);
-	const hairM = toon(opts.hatColor);
-	const bagM = toon(opts.bagColor);
-	const strapM = toon(0x1f252c);
-	const pantsM = toon(opts.pantsColor ?? 0x26313d);
-	const sockM = toon(0xf2eee4);
-	const shoeM = toon(opts.shoeColor ?? 0x1c2128);
-	const creamM = toon(0xf5f1e6);
-	const goldM = toon(0xf5bd33);
-	const strawM = toon(0xe0cfa2);
-	const ribbonM = toon(0x74b589);
-	const darkInkM = new THREE.MeshBasicMaterial({ color: 0x161c22 });
-
-	// 1. Wide-Leg Cropped Shorts + Slim Calves + Cream Crew Socks + Chunky High-Top Sneakers w/ White Stripes
-	([-0.138, 0.138] as const).forEach((lx, i) => {
-		const leg = new THREE.Group();
-		leg.name = i === 0 ? 'leftLeg' : 'rightLeg';
-		leg.position.set(lx, 1.06, 0);
-
-		const pant = new THREE.Mesh(new THREE.CylinderGeometry(0.125, 0.165, 0.60, 12), pantsM);
-		pant.name = 'pantsMesh';
-		pant.scale.set(1.0, 1.0, 0.92);
-		pant.position.y = -0.28;
-		leg.add(pant);
-
-		const shin = new THREE.Group();
-		shin.name = i === 0 ? 'leftShin' : 'rightShin';
-		shin.position.y = -0.55;
-		leg.add(shin);
-
-		const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.056, 0.21, 6, 10), skinM);
-		calf.position.y = -0.12;
-		shin.add(calf);
-
-		const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.064, 0.062, 0.13, 10), sockM);
-		sock.position.y = -0.26;
-		shin.add(sock);
-
-		const collarTop = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.088, 0.13, 10), shoeM);
-		collarTop.name = 'shoeMesh';
-		collarTop.position.set(0, -0.35, 0.01);
-		const foot = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.13, 6, 10), shoeM);
-		foot.name = 'shoeMesh';
-		foot.rotation.x = Math.PI / 2;
-		foot.scale.set(0.96, 1.15, 0.82);
-		foot.position.set(0, -0.42, 0.055);
-		const sole = new THREE.Mesh(new THREE.BoxGeometry(0.165, 0.038, 0.27), darkInkM);
-		sole.position.set(0, -0.475, 0.055);
-
-		// Two crisp white diagonal sneaker stripes (front laces + outer side)
-		const stripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.018, 0.02), creamM);
-		stripe1.position.set(0, -0.39, 0.15);
-		const stripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.018, 0.02), creamM);
-		stripe2.position.set(0, -0.425, 0.162);
-		const sideX = i === 0 ? -0.082 : 0.082;
-		const sideStripe1 = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.065, 0.022), creamM);
-		sideStripe1.position.set(sideX, -0.415, 0.05);
-		sideStripe1.rotation.x = 0.35;
-		const sideStripe2 = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.065, 0.022), creamM);
-		sideStripe2.position.set(sideX, -0.415, 0.005);
-		sideStripe2.rotation.x = 0.35;
-
-		shin.add(collarTop, foot, sole, stripe1, stripe2, sideStripe1, sideStripe2);
-		bodyRoot.add(leg);
-	});
-
-	// 2. Iconic Flared A-Line Red Messenger Coat + Cream Folded Collar + Pocket Flaps + Buttons
-	const torsoGroup = new THREE.Group();
-	torsoGroup.name = 'torsoGroup';
-	torsoGroup.position.y = 1.48;
-	bodyRoot.add(torsoGroup);
-
-	// Flared A-line coat body (narrower at shoulders, gently flared at bottom hem)
-	const coat = new THREE.Mesh(new THREE.CylinderGeometry(0.225, 0.335, 0.82, 16), shirtM);
-	coat.name = 'shirtMesh';
-	coat.scale.set(1.06, 1.0, 0.72);
-	torsoGroup.add(coat);
-
-	// Bottom hem cream stripe (slightly inset above very bottom edge like reference!)
-	const hemStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.326, 0.333, 0.036, 16), creamM);
-	hemStripe.scale.set(1.07, 1.0, 0.73);
-	hemStripe.position.y = -0.36;
-	torsoGroup.add(hemStripe);
-
-	// Small V-split wedge at bottom front showing dark pants underneath
-	const vSplit = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.24, 3), pantsM);
-	vSplit.position.set(0, -0.31, 0.215);
-	vSplit.rotation.y = Math.PI;
-	torsoGroup.add(vSplit);
-
-	// Coat detail group (hidden when TopStyle === 'tee')
-	const coatDetails = new THREE.Group();
-	coatDetails.name = 'top-coat-details';
-	torsoGroup.add(coatDetails);
-
-	// Oversized Cream-White Folded Shirt Collar (Left & Right lapels + back fold + thin red trim!)
-	const backCollar = new THREE.Mesh(new THREE.CylinderGeometry(0.185, 0.215, 0.13, 12, 1, false, Math.PI * 0.55, Math.PI * 0.9), creamM);
-	backCollar.position.set(0, 0.395, -0.02);
-	coatDetails.add(backCollar);
-
-	([-1, 1] as const).forEach((side) => {
-		const lapel = new THREE.Group();
-		lapel.position.set(side * 0.105, 0.37, 0.135);
-		lapel.rotation.set(0.35, side * -0.32, side * 0.28);
-		const flap = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.14, 0.032), creamM);
-		const redTrim = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.018, 0.036), shirtM);
-		redTrim.name = 'shirtMesh';
-		redTrim.position.y = -0.042;
-		lapel.add(flap, redTrim);
-		coatDetails.add(lapel);
-	});
-
-	// Two Pointed Cream Chest Pocket Flaps with tiny red buttons (iconic Messenger jacket!)
-	([-0.145, 0.145] as const).forEach((px) => {
-		const pocket = new THREE.Group();
-		pocket.position.set(px, 0.13, 0.195);
-		pocket.rotation.y = px < 0 ? -0.22 : 0.22;
-		const pTop = new THREE.Mesh(new THREE.BoxGeometry(0.135, 0.055, 0.024), creamM);
-		const pTip = new THREE.Mesh(new THREE.ConeGeometry(0.068, 0.055, 4), creamM);
-		pTip.rotation.z = Math.PI;
-		pTip.rotation.y = Math.PI / 4;
-		pTip.scale.set(1.0, 1.0, 0.3);
-		pTip.position.y = -0.05;
-		const pBtn = new THREE.Mesh(new THREE.CylinderGeometry(0.017, 0.017, 0.028, 8), shirtM);
-		pBtn.name = 'shirtMesh';
-		pBtn.rotation.x = Math.PI / 2;
-		pBtn.position.set(0, -0.015, 0.008);
-		pocket.add(pTop, pTip, pBtn);
-		coatDetails.add(pocket);
-	});
-
-	// 4 Cream Coat Buttons neatly down the front placket
-	([0.23, 0.06, -0.09, -0.22] as const).forEach((by, bi) => {
-		const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.022, 8), creamM);
-		btn.rotation.x = Math.PI / 2;
-		btn.position.set(bi === 3 ? -0.04 : 0.0, by, 0.205 + (0.23 - by) * 0.06);
-		coatDetails.add(btn);
-	});
-
-	// Sporty Tee trim group (gold neckline + athletic chest stripe like final_step_59.png!)
-	const teeDetails = new THREE.Group();
-	teeDetails.name = 'top-tee-details';
-	const teeRing = new THREE.Mesh(new THREE.TorusGeometry(0.155, 0.032, 8, 16), goldM);
-	teeRing.rotation.x = Math.PI / 2;
-	teeRing.position.y = 0.39;
-	const teeStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.275, 0.285, 0.055, 16), goldM);
-	teeStripe.scale.set(1.06, 1.0, 0.73);
-	teeStripe.position.y = 0.06;
-	teeDetails.add(teeRing, teeStripe);
-	teeDetails.visible = false;
-	torsoGroup.add(teeDetails);
-
-	// Rounded shoulder caps for natural anime silhouette
-	([-0.23, 0.23] as const).forEach((sx) => {
-		const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.108, 10, 8), shirtM);
-		shoulder.name = sx < 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
-		shoulder.position.set(sx, 0.34, 0);
-		torsoGroup.add(shoulder);
-	});
-
-	// Slender Neck
-	const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.072, 0.082, 0.17, 10), skinM);
-	neck.position.y = 0.46;
-	torsoGroup.add(neck);
-
-	// Diagonal Matte Charcoal Crossbody Strap (drapes over right shoulder to left hip!)
-	const strapFront = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.84, 0.028), strapM);
-	strapFront.name = 'bagStrap';
-	strapFront.position.set(0.01, 0.06, 0.215);
-	strapFront.rotation.z = -0.56;
-	const strapBack = new THREE.Mesh(new THREE.BoxGeometry(0.062, 0.84, 0.028), strapM);
-	strapBack.name = 'bagStrap';
-	strapBack.position.set(0.01, 0.06, -0.215);
-	strapBack.rotation.z = -0.56;
-	const strapShoulder = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.04, 0.44), strapM);
-	strapShoulder.position.set(0.20, 0.39, 0);
-	strapShoulder.rotation.z = -0.25;
-	torsoGroup.add(strapFront, strapBack, strapShoulder);
-
-	// Compact Matte Charcoal Messenger Pouch on left hip with crisp white accent stripe
-	const bagGroup = new THREE.Group();
-	bagGroup.position.set(-0.27, -0.14, 0.06);
-	bagGroup.rotation.set(0.08, 0.28, 0.18);
-	torsoGroup.add(bagGroup);
-
-	const bagMesh = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.24, 0.24), bagM);
-	bagMesh.name = 'bagMesh';
-	const bagTop = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.24, 10), bagM);
-	bagTop.name = 'bagMesh';
-	bagTop.rotation.x = Math.PI / 2;
-	bagTop.position.y = 0.12;
-	const bagAccent = new THREE.Mesh(new THREE.BoxGeometry(0.158, 0.022, 0.246), creamM);
-	bagAccent.position.y = -0.075;
-	bagGroup.add(bagMesh, bagTop, bagAccent);
-
-	const letter = new THREE.Mesh(new THREE.BoxGeometry(0.032, 0.14, 0.20), creamM);
-	letter.name = 'carriedLetter';
-	letter.position.set(0.02, 0.21, 0.0);
-	letter.rotation.x = 0.18;
-	letter.visible = false;
-	bagGroup.add(letter);
-
-	// 3. Flared 3/4 Anime Jacket Sleeves + Cream Cuff Stripes + Sculpted Hands w/ Thumbs
-	([-0.275, 0.275] as const).forEach((ax, i) => {
-		const arm = new THREE.Group();
-		arm.name = i === 0 ? 'leftArm' : 'rightArm';
-		arm.position.set(ax, 0.33, 0);
-		arm.rotation.z = i === 0 ? 0.19 : -0.19;
-
-		const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.115, 0.50, 10), shirtM);
-		sleeve.name = i === 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
-		sleeve.position.y = -0.24;
-		const cuffStripe = new THREE.Mesh(new THREE.CylinderGeometry(0.112, 0.116, 0.034, 10), creamM);
-		cuffStripe.position.y = -0.43;
-		const wrist = new THREE.Mesh(new THREE.CapsuleGeometry(0.046, 0.11, 6, 8), skinM);
-		wrist.position.y = -0.54;
-		const palm = new THREE.Mesh(new THREE.BoxGeometry(0.072, 0.11, 0.055), skinM);
-		palm.position.y = -0.63;
-		const thumb = new THREE.Mesh(new THREE.CapsuleGeometry(0.018, 0.045, 4, 6), skinM);
-		thumb.position.set(i === 0 ? 0.04 : -0.04, -0.62, 0.028);
-		thumb.rotation.z = i === 0 ? -0.45 : 0.45;
-
-		arm.add(sleeve, cuffStripe, wrist, palm, thumb);
-		torsoGroup.add(arm);
-	});
-
-	// 4. Sculpted Anime Head (Tapered Jawline + 3D Nose + Cool Almond Eyes + Shaggy Layered Hair!)
-	const headGroup = new THREE.Group();
-	headGroup.name = 'headGroup';
-	headGroup.position.y = 0.79;
-	torsoGroup.add(headGroup);
-
-	// Upper cranium + tapered anime jawline/chin
-	const cranium = new THREE.Mesh(new THREE.SphereGeometry(0.265, 18, 14), skinM);
-	cranium.scale.set(0.96, 1.0, 0.94);
-	cranium.position.y = 0.03;
-	const jaw = new THREE.Mesh(new THREE.ConeGeometry(0.225, 0.24, 14), skinM);
-	jaw.rotation.x = Math.PI;
-	jaw.scale.set(0.96, 1.0, 0.88);
-	jaw.position.set(0, -0.145, 0.015);
-	headGroup.add(cranium, jaw);
-
-	// Subtle sculpted 3D anime nose
-	const nose = new THREE.Mesh(new THREE.ConeGeometry(0.026, 0.075, 4), skinM);
-	nose.rotation.x = Math.PI / 2 - 0.35;
-	nose.position.set(0, -0.035, 0.258);
-	headGroup.add(nose);
-
-	// Cute Anime Ears
-	([-0.255, 0.255] as const).forEach((ex) => {
-		const ear = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 8), skinM);
-		ear.scale.set(0.5, 1.15, 0.75);
-		ear.position.set(ex, -0.03, -0.01);
-		headGroup.add(ear);
-	});
-
-	// Cool, Crisp Blinkable Anime Eyes + Bold Eyebrows
-	const eyeBlinkGroup = new THREE.Group();
-	eyeBlinkGroup.name = 'eyeBlinkGroup';
-	eyeBlinkGroup.position.set(0, -0.005, 0);
-	headGroup.add(eyeBlinkGroup);
-
-	const whiteEyeM = new THREE.MeshBasicMaterial({ color: 0xffffff });
-	([-0.092, 0.092] as const).forEach((ex) => {
-		const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.044, 10, 8), whiteEyeM);
-		sclera.scale.set(1.15, 0.72, 0.32);
-		sclera.position.set(ex, 0, 0.238);
-
-		const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.032, 10, 8), darkInkM);
-		pupil.scale.set(1.05, 0.88, 0.42);
-		pupil.position.set(ex, -0.001, 0.252);
-
-		const lash = new THREE.Mesh(new THREE.BoxGeometry(0.095, 0.018, 0.022), darkInkM);
-		lash.position.set(ex, 0.027, 0.256);
-		lash.rotation.z = ex < 0 ? -0.1 : 0.1;
-
-		const brow = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.026, 0.022), darkInkM);
-		brow.position.set(ex, 0.068, 0.252);
-		brow.rotation.z = ex < 0 ? -0.14 : 0.14;
-
-		eyeBlinkGroup.add(sclera, pupil, lash);
-		headGroup.add(brow);
-	});
-
-	// Calm neat anime mouth line (matches reference e4dca0c6!)
-	const mouth = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.013, 0.018), darkInkM);
-	mouth.position.set(0, -0.125, 0.232);
-	headGroup.add(mouth);
-
-	// Shaggy Layered Anime Hair (5 jagged bangs + rounded crown + flipped nape tufts!)
-	const hairCrown = new THREE.Mesh(
-		new THREE.SphereGeometry(0.298, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.52),
-		hairM
-	);
-	hairCrown.name = 'hatMeshDome';
-	hairCrown.scale.set(1.03, 1.04, 1.04);
-	hairCrown.position.set(0, 0.065, -0.025);
-	hairCrown.rotation.x = -0.32;
-	headGroup.add(hairCrown);
-
-	// Full back hair strictly behind skull (z <= 0)
-	const backHair = new THREE.Mesh(new THREE.SphereGeometry(0.295, 16, 12), hairM);
-	backHair.name = 'hatMeshBtn';
-	backHair.scale.set(1.03, 1.05, 0.72);
-	backHair.position.set(0, -0.01, -0.11);
-	headGroup.add(backHair);
-
-	// 5 Jagged Layered Anime Front Bangs resting cleanly ABOVE eyebrows
-	([-0.17, -0.09, 0.0, 0.09, 0.17] as const).forEach((fx, idx) => {
-		const bang = new THREE.Mesh(new THREE.ConeGeometry(0.064, 0.155 + (idx % 2) * 0.03, 5), hairM);
-		bang.name = 'hatMeshDome';
-		bang.rotation.x = Math.PI - 0.16;
-		bang.rotation.z = (idx - 2) * -0.16;
-		bang.position.set(fx, 0.175, 0.215 - Math.abs(fx) * 0.35);
-		headGroup.add(bang);
-	});
-
-	// Flipped-out Shaggy Nape Hair Tufts (gives that iconic Messenger silhouette from behind!)
-	([-0.22, -0.12, 0.0, 0.12, 0.22] as const).forEach((tx, idx) => {
-		const tuft = new THREE.Mesh(new THREE.ConeGeometry(0.078, 0.18, 5), hairM);
-		tuft.name = 'hatMeshBtn';
-		tuft.rotation.x = Math.PI + 0.55;
-		tuft.rotation.z = (idx - 2) * 0.25;
-		tuft.position.set(tx, -0.15, -0.22 + Math.abs(tx) * 0.28);
-		headGroup.add(tuft);
-	});
-
-	// Style A: Shaggy Messenger Bob (side locks framing ears)
-	const styleBob = new THREE.Group();
-	styleBob.name = 'style-bob';
-	([-0.245, 0.245] as const).forEach((sx) => {
-		const lock = new THREE.Mesh(new THREE.ConeGeometry(0.072, 0.24, 5), hairM);
-		lock.rotation.x = Math.PI;
-		lock.rotation.z = sx < 0 ? -0.22 : 0.22;
-		lock.position.set(sx, -0.08, -0.04);
-		styleBob.add(lock);
-	});
-	headGroup.add(styleBob);
-
-	// Style B: Twin Anime Hair Buns with Yellow Ties
-	const styleBuns = new THREE.Group();
-	styleBuns.name = 'style-buns';
-	([-0.25, 0.25] as const).forEach((bx) => {
-		const bun = new THREE.Mesh(new THREE.SphereGeometry(0.135, 12, 10), hairM);
-		bun.position.set(bx, 0.24, -0.06);
-		const tie = new THREE.Mesh(new THREE.TorusGeometry(0.10, 0.024, 6, 12), goldM);
-		tie.position.set(bx * 0.88, 0.20, -0.05);
-		tie.rotation.y = bx < 0 ? 0.7 : -0.7;
-		styleBuns.add(bun, tie);
-	});
-	styleBuns.visible = false;
-	headGroup.add(styleBuns);
-
-	// Style C: Stylish Mailman Cap
-	const styleCap = new THREE.Group();
-	styleCap.name = 'style-cap';
-	const capTop = new THREE.Mesh(
-		new THREE.SphereGeometry(0.32, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.48),
-		shirtM
-	);
-	capTop.position.set(0, 0.11, -0.01);
-	const brim = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 8), shirtM);
-	brim.name = 'hatMeshVisor';
-	brim.scale.set(1.06, 0.12, 0.86);
-	brim.position.set(0, 0.18, 0.23);
-	brim.rotation.x = 0.08;
-	const badge = new THREE.Mesh(new THREE.SphereGeometry(0.04, 8, 8), goldM);
-	badge.position.set(0, 0.25, 0.31);
-	styleCap.add(capTop, brim, badge);
-	styleCap.visible = false;
-	headGroup.add(styleCap);
-
-	// Style D: Cozy Retro Headphones
-	const styleHeadphones = new THREE.Group();
-	styleHeadphones.name = 'style-headphones';
-	const band = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.03, 8, 20, Math.PI), creamM);
-	band.position.y = 0.08;
-	([-0.315, 0.315] as const).forEach((hx) => {
-		const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.095, 0.095, 0.07, 12), goldM);
-		cup.rotation.z = Math.PI / 2;
-		cup.position.set(hx, 0.01, 0);
-		styleHeadphones.add(cup);
-	});
-	styleHeadphones.add(band);
-	styleHeadphones.visible = false;
-	headGroup.add(styleHeadphones);
-
-	// Style E: Explorer Straw Hat w/ Sage Ribbon (inspired by Scout!)
-	const styleStraw = new THREE.Group();
-	styleStraw.name = 'style-strawhat';
-	const strawBrim = new THREE.Mesh(new THREE.CylinderGeometry(0.50, 0.52, 0.035, 18), strawM);
-	strawBrim.position.set(0, 0.22, -0.01);
-	const strawCrown = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.31, 0.22, 16), strawM);
-	strawCrown.position.set(0, 0.33, -0.01);
-	const strawBand = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.315, 0.06, 16), ribbonM);
-	strawBand.position.set(0, 0.255, -0.01);
-	styleStraw.add(strawBrim, strawCrown, strawBand);
-	styleStraw.visible = false;
-	headGroup.add(styleStraw);
-
-	setCourierHairStyle(root, opts.hairStyle ?? 'bob');
-	setCourierTopStyle(root, opts.topStyle ?? 'coat');
-	return root;
+	return buildSculptedAnimeCourier(toonGradient, opts);
 }
 
 export function setCourierHairStyle(grp: THREE.Group, style: HairStyle): void {
@@ -882,9 +473,11 @@ export function animateChibi(
 	const invSq = 1 / Math.sqrt(squash);
 
 	// Natural periodic eye blink (~0.14s blink every 3.8s)
+	const blinkCycle = (t + phase * 0.7) % 3.8;
+	const isBlinking = blinkCycle > 3.66;
+	updateAnimeFaceBlink(grp, isBlinking);
 	if (eyes) {
-		const blinkCycle = (t + phase * 0.7) % 3.8;
-		const blinkScale = blinkCycle > 3.66 ? Math.max(0.08, Math.abs(Math.cos((blinkCycle - 3.66) * Math.PI / 0.14))) : 1;
+		const blinkScale = isBlinking ? Math.max(0.08, Math.abs(Math.cos((blinkCycle - 3.66) * Math.PI / 0.14))) : 1;
 		eyes.scale.y = blinkScale;
 	}
 
@@ -927,11 +520,11 @@ export function animateChibi(
 		if (rs) rs.rotation.x = 0.65;
 		if (la) {
 			la.rotation.x = -0.3;
-			la.rotation.z = gliding ? 1.15 : 0.55;
+			la.rotation.z = gliding ? -1.15 : -0.55;
 		}
 		if (ra) {
 			ra.rotation.x = -0.3;
-			ra.rotation.z = gliding ? -1.15 : -0.55;
+			ra.rotation.z = gliding ? 1.15 : 0.55;
 		}
 	} else if (moving) {
 		const sw = Math.sin(t * freq + phase);
@@ -942,11 +535,11 @@ export function animateChibi(
 		if (rs) rs.rotation.x = Math.max(0, sw) * (sprinting ? 0.95 : 0.55);
 		if (la) {
 			la.rotation.x = -sw * amp * 0.85;
-			la.rotation.z = 0.18;
+			la.rotation.z = -0.2;
 		}
 		if (ra) {
 			ra.rotation.x = sw * amp * 0.85;
-			ra.rotation.z = -0.18;
+			ra.rotation.z = 0.2;
 		}
 	} else {
 		if (ll) ll.rotation.x *= 0.8;
@@ -956,24 +549,24 @@ export function animateChibi(
 		if (emoteAction === 'wave' && ra) {
 			// Raise right arm & wave cheerfully!
 			ra.rotation.x = -0.35;
-			ra.rotation.z = -2.45 + Math.sin(t * 16) * 0.38;
+			ra.rotation.z = 2.45 + Math.sin(t * 16) * 0.38;
 			if (la) {
 				la.rotation.x *= 0.8;
-				la.rotation.z = 0.2;
+				la.rotation.z = -0.2;
 			}
 		} else if (emoteAction === 'cheer' && la && ra) {
 			la.rotation.x = -0.25;
 			ra.rotation.x = -0.25;
-			la.rotation.z = 2.35 + Math.sin(t * 14) * 0.25;
-			ra.rotation.z = -2.35 - Math.sin(t * 14) * 0.25;
+			la.rotation.z = -2.35 - Math.sin(t * 14) * 0.25;
+			ra.rotation.z = 2.35 + Math.sin(t * 14) * 0.25;
 		} else {
 			if (la) {
 				la.rotation.x *= 0.8;
-				la.rotation.z = 0.18 + breath * 0.03;
+				la.rotation.z = -0.2 - breath * 0.025;
 			}
 			if (ra) {
 				ra.rotation.x *= 0.8;
-				ra.rotation.z = -0.18 - breath * 0.03;
+				ra.rotation.z = 0.2 + breath * 0.025;
 			}
 		}
 	}

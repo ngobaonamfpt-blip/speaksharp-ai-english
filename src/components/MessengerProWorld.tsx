@@ -501,7 +501,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       topStyle: liveOutfitRef.current.top,
     });
     player.traverse((o) => {
-      if ((o as Mesh).isMesh) o.castShadow = true;
+      if ((o as Mesh).isMesh && !o.name.endsWith('_outline')) o.castShadow = true;
     });
 
     const playerShadowHolder = new Group();
