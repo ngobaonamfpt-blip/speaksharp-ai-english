@@ -1088,3 +1088,48 @@ export function createSoaringBirdsRig(scene: THREE.Scene) {
 
 	return { group, update };
 }
+
+/** Crisp Expanding White Water-Ripple Rings when stepping into coastal shallows (like Abeto!) */
+export function createWaterRippleRig(scene: THREE.Scene) {
+	const up = new THREE.Vector3(0, 1, 0);
+	const geo = new THREE.RingGeometry(0.06, 0.088, 22);
+	geo.rotateX(-Math.PI / 2);
+	const pool: Array<{ mesh: THREE.Mesh; life: number }> = [];
+	for (let i = 0; i < 10; i++) {
+		const m = new THREE.Mesh(
+			geo,
+			new THREE.MeshBasicMaterial({
+				color: 0xf6fcf9,
+				transparent: true,
+				opacity: 0.85,
+				side: THREE.DoubleSide,
+				depthWrite: false
+			})
+		);
+		m.visible = false;
+		scene.add(m);
+		pool.push({ mesh: m, life: 0 });
+	}
+	let cursor = 0;
+
+	const spawn = (origin: THREE.Vector3, upDir: THREE.Vector3) => {
+		const r = pool[cursor++ % pool.length];
+		r.mesh.position.copy(origin).addScaledVector(upDir, 0.025);
+		r.mesh.quaternion.setFromUnitVectors(up, upDir);
+		r.mesh.scale.setScalar(0.65);
+		r.mesh.visible = true;
+		r.life = 1;
+	};
+
+	const update = () => {
+		for (const r of pool) {
+			if (r.life <= 0) continue;
+			r.life -= 0.028;
+			r.mesh.scale.multiplyScalar(1.045);
+			(r.mesh.material as THREE.MeshBasicMaterial).opacity = Math.max(0, r.life * 0.82);
+			if (r.life <= 0) r.mesh.visible = false;
+		}
+	};
+
+	return { spawn, update };
+}

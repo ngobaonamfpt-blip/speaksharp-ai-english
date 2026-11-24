@@ -68,6 +68,7 @@ import {
   createSoaringBirdsRig,
   createSoftDropShadow,
   createToonGradient,
+  createWaterRippleRig,
   PLANET_QUEST_STOPS,
   setCourierHairStyle,
   setCourierTopStyle,
@@ -190,8 +191,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
   // Minimalist Abeto-style drawers (all closed by default -> >90% pure 3D viewport!)
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const [checklistBadge, setChecklistBadge] = useState(false);
   const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [emoteDrawerOpen, setEmoteDrawerOpen] = useState(false);
+  const [lastEmote, setLastEmote] = useState('👋');
+  const [zoneBanner, setZoneBanner] = useState('');
 
   const savedOutfit = useRef(loadSavedOutfit()).current;
   const [hatColor, setHatColor] = useState(savedOutfit.hat ?? '#34424d');
@@ -366,6 +370,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const toonGradient = createToonGradient();
     const atmosphere = mode !== 'npcs' ? createAtmosphereRig(scene, toonGradient) : null;
     const dustRig = mode === 'gameplay' ? createDustPuffRig(scene) : null;
+    const rippleRig = mode === 'gameplay' ? createWaterRippleRig(scene) : null;
     const birdsRig = mode !== 'npcs' ? createSoaringBirdsRig(scene) : null;
     const audio = new CozyLoFiAudio();
     audio.setMuted(liveMutedRef.current);
@@ -650,6 +655,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
 
       setCompletedStops((prev) => (prev.includes(stopId) ? prev : [...prev, stopId]));
+      setChecklistBadge(true);
       onEarnXpRef.current(xp, label);
       triggerEmoteRef.current?.('✨');
     };
@@ -1006,6 +1012,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       if (atmosphere) atmosphere.cloudRing.rotation.y += 0.001;
       if (birdsRig) birdsRig.update(elapsed);
       if (dustRig) dustRig.update();
+      if (rippleRig) rippleRig.update();
 
       if (mode === 'gameplay' && livePlayModeRef.current && runtime.ready) {
         controls.enabled = false;
@@ -1061,7 +1068,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           }
           if (frameCount % (sprinting ? 11 : 16) === 0 && pState.jumpH < 0.03) {
             audio.playStep();
-            if (sprinting) dustRig?.spawn(player.position, pState.posDir, 1, 0.012);
+            if (pState.groundR < 6.72) {
+              rippleRig?.spawn(player.position, pState.posDir);
+            } else if (sprinting) {
+              dustRig?.spawn(player.position, pState.posDir, 1, 0.012);
+            }
           }
         } else {
           pState.forward.addScaledVector(pState.posDir, -pState.forward.dot(pState.posDir)).normalize();
@@ -1187,6 +1198,10 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             currentNearby = closest;
             setNearbyStop(closest);
             setNearbyIsTarget(closest?.id === activeTarget.id);
+            if (closest) {
+              setZoneBanner(closest.landmark.toUpperCase());
+              window.setTimeout(() => setZoneBanner(''), 2600);
+            }
           }
         }
 
@@ -1211,11 +1226,17 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             .multiplyScalar(pState.groundR + 0.2)
             .addScaledVector(pState.forward, 0.12);
         } else {
-          // Grounded over-the-shoulder street-level camera (like messenger.abeto.co!)
+          // Grounded over-the-shoulder street-level camera + dynamic sprint pull-back & FOV!
+          const sprintExtra = moving && sprinting ? 0.24 : 0;
+          const targetFov = moving && sprinting ? 50 : 46;
+          if (Math.abs(camera.fov - targetFov) > 0.05) {
+            camera.fov += (targetFov - camera.fov) * 0.1;
+            camera.updateProjectionMatrix();
+          }
           camDesired
             .copy(pState.posDir)
             .multiplyScalar(pState.groundR + pState.camElev + pState.jumpH * 0.3)
-            .addScaledVector(pState.camForward, -pState.camDist);
+            .addScaledVector(pState.camForward, -(pState.camDist + sprintExtra));
           camLook
             .copy(pState.posDir)
             .multiplyScalar(pState.groundR + 0.23 + pState.jumpH * 0.2)
@@ -1512,24 +1533,67 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         <span style={{ color: '#15803d' }}>{questInfo.fps} FPS</span>
       </div>
 
-      {/* TOP-RIGHT ABETO-STYLE CHECKLIST BUTTON */}
-      <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 18 }}>
-        <button
-          title="Danh sách nhiệm vụ giao tiếp tiếng Anh (Checklist)"
-          onClick={() => {
-            setChecklistOpen((v) => !v);
-            setWardrobeOpen(false);
-            setEmoteDrawerOpen(false);
-          }}
+      {/* ZONE ENTRY NAMEPLATE (Abeto-style minimal district banner) */}
+      {zoneBanner && !activeDialog && (
+        <div
           style={{
-            ...PAPER_BTN_STYLE,
-            background: checklistOpen ? '#f5bd33' : '#fffdf7',
-            transform: checklistOpen ? 'rotate(-3deg)' : 'rotate(2deg)',
+            position: 'absolute',
+            top: 56,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 17,
+            background: 'rgba(255, 253, 247, 0.94)',
+            border: '2.5px solid #1d2a33',
+            boxShadow: '3px 3px 0 #1d2a33',
+            borderRadius: 10,
+            padding: '4px 14px',
+            fontSize: 12,
+            fontWeight: 900,
+            letterSpacing: '0.1em',
+            color: '#1d2a33',
+            pointerEvents: 'none',
           }}
         >
-          📋
-        </button>
-      </div>
+          📍 {zoneBanner}
+        </div>
+      )}
+
+      {/* TOP-RIGHT ABETO-STYLE CHECKLIST BUTTON (hidden in cinematic dialogue) */}
+      {!activeDialog && (
+        <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 18 }}>
+          <button
+            title="Danh sách nhiệm vụ giao tiếp tiếng Anh (Checklist)"
+            onClick={() => {
+              setChecklistOpen((v) => !v);
+              setChecklistBadge(false);
+              setWardrobeOpen(false);
+              setEmoteDrawerOpen(false);
+            }}
+            style={{
+              ...PAPER_BTN_STYLE,
+              position: 'relative',
+              background: checklistOpen ? '#f5bd33' : '#fffdf7',
+              transform: checklistOpen ? 'rotate(-3deg)' : 'rotate(2deg)',
+            }}
+          >
+            📋
+            {checklistBadge && (
+              <span
+                style={{
+                  position: 'absolute',
+                  top: -5,
+                  right: -5,
+                  width: 13,
+                  height: 13,
+                  borderRadius: '50%',
+                  background: '#ef4444',
+                  border: '2px solid #fffdf7',
+                }}
+              />
+            )}
+          </button>
+        </div>
+      )}
 
       {/* TILTED HANDWRITTEN-STYLE CHECKLIST PAPER CARD */}
       {checklistOpen && (
@@ -1661,7 +1725,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         </div>
       )}
 
-      {/* BOTTOM-RIGHT ABETO-STYLE VERTICAL PAPER-CARD TOOLBAR */}
+      {/* BOTTOM-RIGHT ABETO-STYLE VERTICAL PAPER-CARD TOOLBAR (auto-hides during dialogue!) */}
+      {!activeDialog && (
       <div
         style={{
           position: 'absolute',
@@ -1716,7 +1781,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             transform: 'rotate(-1.5deg)',
           }}
         >
-          😊
+          {lastEmote}
         </button>
 
         <button
@@ -1749,6 +1814,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           🧭
         </button>
       </div>
+      )}
 
       {/* ABETO-STYLE 2x4 EMOTE DRAWER */}
       {emoteDrawerOpen && (
@@ -1772,6 +1838,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             <button
               key={e}
               onClick={() => {
+                setLastEmote(e);
                 triggerEmoteRef.current?.(e);
                 setEmoteDrawerOpen(false);
               }}
