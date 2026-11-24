@@ -115,3 +115,50 @@ export async function createNpcGalleryGroup(renderer: WebGLRenderer): Promise<Np
 
 	return { group: stage, npcMaterial, npcMeshes, mixers };
 }
+
+/**
+ * Load a single real rigged & animated Abeto NPC scaled to street height (feet grounded at y = 0).
+ * Used to populate the Gameplay planet with authentic animated townsfolk!
+ */
+export async function loadRealPlanetNpc(
+	npcName: string,
+	targetHeight = 0.29,
+	material: ShaderMaterial
+): Promise<{ group: Group; mixer: AnimationMixer | null }> {
+	const entry = npcGalleryEntries.find((e) => e.name === npcName) ?? npcGalleryEntries[0];
+	const wrapper = new Group();
+	wrapper.name = `PlanetNpc-${entry.name}`;
+	const model = await loadDracoGeometry(entry.model);
+	model.computeBoundingBox();
+	const bounds = model.boundingBox ?? new Box3();
+	const size = bounds.getSize(new Vector3());
+	const scale = targetHeight / Math.max(size.y, 0.001);
+
+	let mixer: AnimationMixer | null = null;
+	try {
+		const [bones, idle] = await Promise.all([
+			loadDracoGeometry(entry.bones),
+			loadDracoGeometry(entry.idle)
+		]);
+		const mesh = createSkin(model, bones, material);
+		mesh.scale.setScalar(scale);
+		mesh.position.y = -bounds.min.y * scale;
+		mesh.castShadow = true;
+		wrapper.add(mesh);
+
+		const clip = createSkinAnimation(`${entry.name}-idle`, idle);
+		if (clip.duration > 0) {
+			mixer = new AnimationMixer(mesh);
+			mixer.clipAction(clip).play();
+		}
+	} catch {
+		model.computeVertexNormals();
+		const mesh = new Mesh(model, material);
+		mesh.scale.setScalar(scale);
+		mesh.position.y = -bounds.min.y * scale;
+		mesh.castShadow = true;
+		wrapper.add(mesh);
+	}
+
+	return { group: wrapper, mixer };
+}

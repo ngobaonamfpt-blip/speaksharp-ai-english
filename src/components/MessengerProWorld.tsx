@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   AmbientLight,
+  BasicShadowMap,
   Box3,
   BoxGeometry,
   BufferGeometry,
@@ -17,6 +18,7 @@ import {
   Raycaster,
   RingGeometry,
   Scene,
+  TextureLoader,
   Vector3,
   WebGLRenderer,
   type AnimationMixer,
@@ -28,13 +30,15 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
 import { createWorldDetails } from '../lib/messenger/worldDetails';
-
-// Patch Three.js once with BVH accelerated raycasting (~500-1000x faster walking & wall-slide!)
-(BufferGeometry.prototype as unknown as Record<string, unknown>).computeBoundsTree = computeBoundsTree;
-(BufferGeometry.prototype as unknown as Record<string, unknown>).disposeBoundsTree = disposeBoundsTree;
-Mesh.prototype.raycast = acceleratedRaycast;
-import type { SceneMode } from '../lib/messenger/introAssets';
 import {
+  ENGLISH_NPC_QUESTS,
+  speakEnglish,
+  type EnglishNpcQuest,
+  type EnglishReplyChoice,
+} from '../lib/messenger/englishQuests';
+import { introTexturePaths, type SceneMode } from '../lib/messenger/introAssets';
+import {
+  createMessengerMaterials,
   setMessengerLight,
   updateMessengerMaterials,
   type MessengerMaterialSet,
@@ -66,6 +70,11 @@ import {
   type TimeOfDay,
 } from '../lib/messenger/playerController';
 
+// Patch Three.js once with BVH accelerated raycasting (~1000x faster walking & wall-slide!)
+(BufferGeometry.prototype as unknown as Record<string, unknown>).computeBoundsTree = computeBoundsTree;
+(BufferGeometry.prototype as unknown as Record<string, unknown>).disposeBoundsTree = disposeBoundsTree;
+Mesh.prototype.raycast = acceleratedRaycast;
+
 interface MessengerProWorldProps {
   userName?: string;
   onEarnXp: (xp: number, reason: string) => void;
@@ -83,14 +92,14 @@ const SCENE_PRESETS: Record<
   }
 > = {
   intro: {
-    background: '#78cbf8',
+    background: '#5cc7bd',
     camera: [0, 6, 20],
     minDist: 8,
     maxDist: 40,
     autoRotate: true,
   },
   gameplay: {
-    background: '#78cbf8',
+    background: '#5cc7bd',
     camera: [0, 7, 20],
     minDist: 4,
     maxDist: 38,
@@ -108,15 +117,20 @@ const SCENE_PRESETS: Record<
 const HAT_SWATCHES = ['#232a2f', '#2563eb', '#16a34a', '#b91c1c', '#7c3aed', '#f59e0b'];
 const SHIRT_SWATCHES = ['#c93b3b', '#2563eb', '#0d9488', '#ea580c', '#ec4899', '#1e293b'];
 const BAG_SWATCHES = ['#8a5430', '#451a03', '#15803d', '#1d4ed8', '#be123c', '#334155'];
-const EMOTES = ['👋', '❤️', '✨', '😊', '📦'];
-const STOP_COLORS = [0x2563eb, 0x16a34a, 0x7c3aed, 0xe11d48, 0x0d9488];
+const EMOTES = ['👋', '❤️', '✨', '😊', '📦', '☕', '🎵', '🔥'];
 
-const ENGLISH_TIPS: Record<string, string> = {
-  'town-post': '💡 Phrase: "Could you deliver this parcel?" (Bạn giao giúp bưu kiện này nhé?)',
-  'cliff-lookout': '💡 Phrase: "Right on schedule!" (Đúng lịch trình rồi!)',
-  'waterfall-cove': '💡 Phrase: "What a refreshing breeze!" (Cơn gió thật mát mẻ!)',
-  'harbor-town': '💡 Phrase: "Fresh out of the oven!" (Vừa mới ra lò nóng hổi!)',
-  'south-observatory': '💡 Phrase: "Mission accomplished!" (Nhiệm vụ hoàn thành xuất sắc!)',
+const PAPER_BTN_STYLE: React.CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: 11,
+  background: '#fffdf7',
+  border: '2.5px solid #1d2a33',
+  boxShadow: '3px 3px 0 #1d2a33',
+  fontSize: 19,
+  cursor: 'pointer',
+  display: 'grid',
+  placeItems: 'center',
+  transition: 'transform 0.1s ease',
 };
 
 export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
@@ -129,8 +143,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [playMode, setPlayMode] = useState(true);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [soundMuted, setSoundMuted] = useState(false);
-  const [wardrobeOpen, setWardrobeOpen] = useState(false);
   const [outlineFx, setOutlineFx] = useState(true);
+
+  // Minimalist Abeto-style drawers (all closed by default -> >90% pure 3D viewport!)
+  const [checklistOpen, setChecklistOpen] = useState(false);
+  const [wardrobeOpen, setWardrobeOpen] = useState(false);
+  const [emoteDrawerOpen, setEmoteDrawerOpen] = useState(false);
 
   const [hatColor, setHatColor] = useState('#232a2f');
   const [shirtColor, setShirtColor] = useState('#c93b3b');
@@ -145,20 +163,31 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     phase: 'pickup' as 'pickup' | 'deliver',
     stopName: 'Postmaster Ben',
     landmark: 'Town Post Office',
-    distM: 12,
+    distM: 4,
     delivered: 0,
     fps: 60,
   });
+  const [completedStops, setCompletedStops] = useState<string[]>([]);
   const [nearbyStop, setNearbyStop] = useState<QuestStop | null>(null);
   const [nearbyIsTarget, setNearbyIsTarget] = useState(false);
-  const [dialog, setDialog] = useState<{ title: string; text: string; tip?: string } | null>(null);
+
+  // Interactive English Dialogue State
+  const [activeDialog, setActiveDialog] = useState<{
+    stop: QuestStop;
+    quest: EnglishNpcQuest;
+    showVi: boolean;
+    feedback: string | null;
+    completedNow: boolean;
+  } | null>(null);
   const [toast, setToast] = useState('');
 
-  // Live non-reactive refs so WebGL scene never tears down on UI state toggles
+  // Live non-reactive refs so WebGL scene NEVER tears down on UI state toggles
   const livePlayModeRef = useRef(playMode);
   const liveTimeRef = useRef(timeOfDay);
   const liveMutedRef = useRef(soundMuted);
   const liveOutlineFxRef = useRef(outlineFx);
+  const liveWardrobeRef = useRef(wardrobeOpen);
+  const liveDialogOpenRef = useRef(Boolean(activeDialog));
   const liveOutfitRef = useRef({ hat: hatColor, shirt: shirtColor, bag: bagColor });
   const onEarnXpRef = useRef(onEarnXp);
 
@@ -166,6 +195,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const applyOutfitRef = useRef<((h: string, s: string, b: string) => void) | null>(null);
   const triggerEmoteRef = useRef<((e: string) => void) | null>(null);
   const triggerInteractRef = useRef<(() => void) | null>(null);
+  const completeQuestRef = useRef<((stopId: string, xp: number, label: string) => void) | null>(null);
   const recenterRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<CozyLoFiAudio | null>(null);
   const toastTimerRef = useRef<number | null>(null);
@@ -173,25 +203,26 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   useEffect(() => {
     onEarnXpRef.current = onEarnXp;
   }, [onEarnXp]);
-
   useEffect(() => {
     livePlayModeRef.current = playMode;
   }, [playMode]);
-
   useEffect(() => {
     liveTimeRef.current = timeOfDay;
     applyTimeRef.current?.(timeOfDay);
   }, [timeOfDay]);
-
   useEffect(() => {
     liveMutedRef.current = soundMuted;
     audioRef.current?.setMuted(soundMuted);
   }, [soundMuted]);
-
   useEffect(() => {
     liveOutlineFxRef.current = outlineFx;
   }, [outlineFx]);
-
+  useEffect(() => {
+    liveWardrobeRef.current = wardrobeOpen;
+  }, [wardrobeOpen]);
+  useEffect(() => {
+    liveDialogOpenRef.current = Boolean(activeDialog);
+  }, [activeDialog]);
   useEffect(() => {
     liveOutfitRef.current = { hat: hatColor, shirt: shirtColor, bag: bagColor };
     applyOutfitRef.current?.(hatColor, shirtColor, bagColor);
@@ -211,7 +242,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const scene = new Scene();
     scene.background = new Color(preset.background);
 
-    const camera = new PerspectiveCamera(44, 1, 0.1, 400);
+    const camera = new PerspectiveCamera(46, 1, 0.08, 400);
     camera.position.set(...preset.camera);
 
     const renderer = new WebGLRenderer({
@@ -219,10 +250,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       alpha: false,
       powerPreference: 'high-performance',
     });
-    // Native 1.0 pixel ratio in Fast mode for silky 60-144 FPS with zero GPU lag
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
     renderer.setSize(host.clientWidth, host.clientHeight);
-    renderer.shadowMap.enabled = mode === 'npcs';
+    // Crisp hard-edged cel shadow map around player & NPCs
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = BasicShadowMap;
     host.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -231,15 +263,23 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     controls.maxDistance = preset.maxDist;
     controls.target.set(0, mode === 'npcs' ? 1.2 : 0, 0);
 
-    const ambient = new AmbientLight(0xffffff, mode === 'npcs' ? 0.45 : 0.82);
+    const ambient = new AmbientLight(0xffffff, mode === 'npcs' ? 0.45 : 0.85);
     scene.add(ambient);
+
     const sun = new DirectionalLight(0xfff1dc, mode === 'npcs' ? 1.8 : 1.55);
     sun.position.set(14, 20, 10);
-    if (mode === 'npcs') {
-      sun.castShadow = true;
-      sun.shadow.mapSize.set(1024, 1024);
-    }
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(1024, 1024);
+    sun.shadow.camera.near = 1;
+    sun.shadow.camera.far = 48;
+    const frustum = mode === 'npcs' ? 10 : 5.5;
+    sun.shadow.camera.left = -frustum;
+    sun.shadow.camera.right = frustum;
+    sun.shadow.camera.top = frustum;
+    sun.shadow.camera.bottom = -frustum;
+    sun.shadow.bias = -0.0006;
     scene.add(sun);
+    scene.add(sun.target);
 
     const toonGradient = createToonGradient();
     const atmosphere = mode !== 'npcs' ? createAtmosphereRig(scene, toonGradient) : null;
@@ -293,7 +333,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       return null;
     };
 
-    // Fast 5-point street finder (5 raycasts instead of 49 -> zero loading screen freeze!)
     const findStreetSpot = (centerDir: Vector3, searchRad = 0.2): { dir: Vector3; r: number } => {
       const t1 = new Vector3(1, 0, 0).cross(centerDir);
       if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(centerDir);
@@ -348,13 +387,17 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       bagColor: new Color(liveOutfitRef.current.bag).getHex(),
       scarfColor: 0xf5bd33,
     });
+    player.traverse((o) => {
+      if ((o as Mesh).isMesh) o.castShadow = true;
+    });
+
     const playerShadowHolder = new Group();
     const playerShadowDisc = createSoftDropShadow(0.14);
     playerShadowHolder.add(playerShadowDisc);
 
     const compassGroup = new Group();
     const arrowCone = new Mesh(
-      new ConeGeometry(0.038, 0.11, 8),
+      new ConeGeometry(0.036, 0.105, 8),
       new MeshBasicMaterial({ color: 0xf5bd33 })
     );
     arrowCone.rotation.x = Math.PI / 2;
@@ -368,7 +411,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     const confettiPool: Array<{ mesh: Mesh; life: number; vel: Vector3; normal: Vector3 }> = [];
     const confColors = [0xf5bd33, 0xef4444, 0x38bdf8, 0x4ade80, 0xf472b6, 0xa855f7];
-    const confGeo = new BoxGeometry(0.11, 0.11, 0.03);
+    const confGeo = new BoxGeometry(0.1, 0.1, 0.025);
     for (let i = 0; i < 36; i++) {
       const m = new Mesh(
         confGeo,
@@ -380,7 +423,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     }
 
     const spawnConfetti = (dir: Vector3, r: number) => {
-      const origin = dir.clone().multiplyScalar(r + 0.5);
+      const origin = dir.clone().multiplyScalar(r + 0.45);
       const t1 = new Vector3(1, 0, 0).cross(dir);
       if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(dir);
       t1.normalize();
@@ -406,18 +449,19 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     let deliveredCount = 0;
     let currentNearby: QuestStop | null = null;
 
+    // Street-level over-the-shoulder camera tuning (closer & lower like messenger.abeto.co!)
     const startDir = new Vector3(0.22, 0.86, 0.46).normalize();
     const startFwd = new Vector3(-0.35, -0.32, 0.88).normalize();
     const pState = {
       posDir: startDir.clone(),
-      groundR: 8.6,
+      groundR: 8.2,
       jumpH: 0,
       jumpVel: 0,
       squash: 1,
       forward: startFwd.clone(),
       camForward: startFwd.clone(),
-      camDist: 1.95,
-      camElev: 0.82,
+      camDist: 1.42,
+      camElev: 0.56,
       dragging: false,
       lastX: 0,
       lastY: 0,
@@ -459,8 +503,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     recenterRef.current = () => {
       if (mode === 'gameplay' && livePlayModeRef.current) {
         pState.camForward.copy(pState.forward);
-        pState.camDist = 1.95;
-        pState.camElev = 0.82;
+        pState.camDist = 1.42;
+        pState.camElev = 0.56;
       } else {
         camera.position.set(...preset.camera);
         controls.target.set(0, mode === 'npcs' ? 1.2 : 0, 0);
@@ -478,49 +522,50 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     };
     if (atmosphere) atmosphere.applyTime(liveTimeRef.current, sun, ambient);
 
-    triggerInteractRef.current = () => {
-      if (!currentNearby) return;
+    completeQuestRef.current = (stopId: string, xp: number, label: string) => {
       audio.init();
-      const activeTarget = localStops[targetIdx];
-      if (questPhase === 'pickup' && currentNearby.id === 'town-post') {
-        audio.playDeliver();
+      audio.playDeliver();
+      const node = stopNodes.find((s) => s.stop.id === stopId);
+      if (node) spawnConfetti(node.stop.dir, node.surfR);
+
+      if (stopId === 'town-post' && questPhase === 'pickup') {
         questPhase = 'deliver';
         targetIdx = nextDeliverIdx;
         const letter = player.getObjectByName('carriedLetter');
         if (letter) letter.visible = true;
-        setDialog({
-          title: `${currentNearby.name} · ${currentNearby.landmark}`,
-          text: currentNearby.pickupLine,
-          tip: ENGLISH_TIPS[currentNearby.id],
-        });
-        showToast(`📦 Đã nhận thư cho ${localStops[targetIdx].name}!`);
-        triggerEmoteRef.current?.('📦');
-      } else if (questPhase === 'deliver' && currentNearby.id === activeTarget.id) {
-        audio.playDeliver();
-        const node = stopNodes.find((s) => s.stop.id === currentNearby!.id);
-        if (node) spawnConfetti(node.stop.dir, node.surfR);
+        showToast(`📦 Đã nhận thư! Hãy giao cho ${localStops[targetIdx].name} (+${xp} XP)`);
+      } else if (questPhase === 'deliver' && localStops[targetIdx]?.id === stopId) {
         deliveredCount++;
         nextDeliverIdx = nextDeliverIdx >= localStops.length - 1 ? 1 : nextDeliverIdx + 1;
         questPhase = 'pickup';
         targetIdx = 0;
         const letter = player.getObjectByName('carriedLetter');
         if (letter) letter.visible = false;
-        setDialog({
-          title: `${currentNearby.name} · ${currentNearby.landmark}`,
-          text: currentNearby.deliverLine,
-          tip: ENGLISH_TIPS[currentNearby.id],
-        });
-        showToast(`🎉 Giao thư thành công cho ${currentNearby.name}! +25 XP`);
-        onEarnXpRef.current(25, `Giao thư cho ${currentNearby.name}`);
-        triggerEmoteRef.current?.('✨');
+        showToast(`🎉 Giao thư thành công! +${xp} XP`);
       } else {
-        audio.playEmote();
-        setDialog({
-          title: `${currentNearby.name} · ${currentNearby.landmark}`,
-          text: currentNearby.deliverLine || currentNearby.pickupLine,
-          tip: ENGLISH_TIPS[currentNearby.id],
-        });
+        showToast(`✨ Hội thoại tiếng Anh tuyệt vời! +${xp} XP`);
       }
+
+      setCompletedStops((prev) => (prev.includes(stopId) ? prev : [...prev, stopId]));
+      onEarnXpRef.current(xp, label);
+      triggerEmoteRef.current?.('✨');
+    };
+
+    triggerInteractRef.current = () => {
+      if (!currentNearby) return;
+      audio.init();
+      const quest = ENGLISH_NPC_QUESTS[currentNearby.id] ?? ENGLISH_NPC_QUESTS['town-post'];
+      setWardrobeOpen(false);
+      setChecklistOpen(false);
+      setEmoteDrawerOpen(false);
+      setActiveDialog({
+        stop: currentNearby,
+        quest,
+        showVi: false,
+        feedback: null,
+        completedNow: false,
+      });
+      speakEnglish(quest.promptEn);
     };
 
     const codes: Record<string, boolean> = {};
@@ -528,9 +573,16 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const onKeyDown = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      audio.init();
       if (PREVENT.has(e.code)) e.preventDefault();
       codes[e.code] = true;
-      if (e.code === 'KeyE') triggerInteractRef.current?.();
+      if (e.code === 'KeyE' && !liveDialogOpenRef.current) triggerInteractRef.current?.();
+      if (e.code === 'Escape') {
+        setActiveDialog(null);
+        setWardrobeOpen(false);
+        setChecklistOpen(false);
+        setEmoteDrawerOpen(false);
+      }
       if (e.code === 'Digit1') triggerEmoteRef.current?.('👋');
       if (e.code === 'Digit2') triggerEmoteRef.current?.('❤️');
       if (e.code === 'Digit3') triggerEmoteRef.current?.('✨');
@@ -560,7 +612,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     const onPtrDown = (e: PointerEvent) => {
       audio.init();
-      if (mode === 'gameplay' && livePlayModeRef.current) {
+      if (mode === 'gameplay' && livePlayModeRef.current && !liveWardrobeRef.current && !liveDialogOpenRef.current) {
         try {
           dom.setPointerCapture(e.pointerId);
         } catch {
@@ -580,7 +632,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       const dx = e.clientX - pState.lastX;
       const dy = e.clientY - pState.lastY;
       pState.camForward.applyAxisAngle(pState.posDir, -dx * 0.007).normalize();
-      pState.camElev = Math.max(0.45, Math.min(3.4, pState.camElev + dy * 0.009));
+      pState.camElev = Math.max(0.32, Math.min(3.0, pState.camElev + dy * 0.009));
       pState.lastX = e.clientX;
       pState.lastY = e.clientY;
     };
@@ -593,9 +645,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
     };
     const onWheel = (e: WheelEvent) => {
-      if (mode === 'gameplay' && livePlayModeRef.current) {
+      if (mode === 'gameplay' && livePlayModeRef.current && !liveWardrobeRef.current) {
         e.preventDefault();
-        pState.camDist = Math.max(1.05, Math.min(7.5, pState.camDist + e.deltaY * 0.003));
+        pState.camDist = Math.max(0.85, Math.min(6.5, pState.camDist + e.deltaY * 0.0028));
       }
     };
 
@@ -647,10 +699,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       setStatus('loading');
       try {
         if (mode === 'gameplay') {
-          const [{ createGameplaySceneGroup }, { createMessengerComposer }] = await Promise.all([
-            import('../lib/messenger/createGameplayScene'),
-            import('../lib/messenger/postProcessing'),
-          ]);
+          const [{ createGameplaySceneGroup }, { createMessengerComposer }, { loadRealPlanetNpc }] =
+            await Promise.all([
+              import('../lib/messenger/createGameplayScene'),
+              import('../lib/messenger/postProcessing'),
+              import('../lib/messenger/createNpcGallery'),
+            ]);
           const bundle = await createGameplaySceneGroup(renderer);
           if (cancelled) return;
           runtime.sceneGroup = bundle.group;
@@ -676,8 +730,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             if ((obj as Mesh).isMesh) {
               const m = obj as Mesh;
               m.castShadow = false;
-              m.receiveShadow = false;
-              // Build BVH tree on each chunk (0.02ms per raycast instead of 30ms!)
+              m.receiveShadow = true;
               const geo = m.geometry as BufferGeometry & { computeBoundsTree?: () => void };
               if (geo.computeBoundsTree && !(geo as unknown as { boundsTree?: unknown }).boundsTree) {
                 geo.computeBoundsTree();
@@ -704,6 +757,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               .normalize();
             return { point: hit.point.clone(), normal, radius: hit.point.length() };
           });
+          worldDetails.traverse((o) => {
+            if ((o as Mesh).isMesh) o.castShadow = true;
+          });
           scene.add(worldDetails);
 
           const spawnSpot = findStreetSpot(pState.posDir, 0.24);
@@ -711,40 +767,50 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           pState.groundR = spawnSpot.r;
           scene.add(player, playerShadowHolder, compassGroup);
 
-          localStops.forEach((stop, idx) => {
-            const streetSpot = findStreetSpot(stop.dir, 0.22);
-            stop.dir.copy(streetSpot.dir);
-            const surfR = streetSpot.r;
-            const npc = buildChibiCourier(toonGradient, {
-              hatColor: STOP_COLORS[idx % STOP_COLORS.length],
-              shirtColor: STOP_COLORS[(idx + 2) % STOP_COLORS.length],
-              bagColor: 0x7c4522,
-            });
-            npc.position.copy(stop.dir).multiplyScalar(surfR);
-            npc.quaternion.setFromUnitVectors(UP, stop.dir);
-            npc.add(createSoftDropShadow(0.14));
-            scene.add(npc);
+          // Spawn REAL rigged & animated Abeto NPC models at all 5 Quest Stops!
+          const atlasTex = await new TextureLoader().loadAsync(introTexturePaths.atlas);
+          const npcAtlasMat = createMessengerMaterials(atlasTex, atlasTex, sun.position).atlas;
 
-            const ring = new Mesh(
-              new RingGeometry(0.18, 0.25, 22),
-              new MeshBasicMaterial({
-                color: 0xf5bd33,
-                transparent: true,
-                opacity: 0.7,
-                side: DoubleSide,
-                depthWrite: false,
-              })
-            );
-            ring.rotation.x = -Math.PI / 2;
-            const rh = new Group();
-            rh.add(ring);
-            rh.position.copy(stop.dir).multiplyScalar(surfR + 0.08);
-            rh.quaternion.setFromUnitVectors(UP, stop.dir);
-            scene.add(rh);
+          await Promise.all(
+            localStops.map(async (stop) => {
+              const streetSpot = findStreetSpot(stop.dir, 0.22);
+              stop.dir.copy(streetSpot.dir);
+              const surfR = streetSpot.r;
+              const quest = ENGLISH_NPC_QUESTS[stop.id];
+              const { group: npc, mixer } = await loadRealPlanetNpc(
+                quest?.npcModel ?? 'office-worker',
+                0.31,
+                npcAtlasMat
+              );
+              if (cancelled) return;
+              npc.position.copy(stop.dir).multiplyScalar(surfR);
+              npc.quaternion.setFromUnitVectors(UP, stop.dir);
+              npc.add(createSoftDropShadow(0.15));
+              scene.add(npc);
+              if (mixer) runtime.npcMixers.push(mixer);
 
-            stopNodes.push({ stop, npc, ring, surfR });
-          });
+              const ring = new Mesh(
+                new RingGeometry(0.17, 0.23, 22),
+                new MeshBasicMaterial({
+                  color: 0xf5bd33,
+                  transparent: true,
+                  opacity: 0.75,
+                  side: DoubleSide,
+                  depthWrite: false,
+                })
+              );
+              ring.rotation.x = -Math.PI / 2;
+              const rh = new Group();
+              rh.add(ring);
+              rh.position.copy(stop.dir).multiplyScalar(surfR + 0.04);
+              rh.quaternion.setFromUnitVectors(UP, stop.dir);
+              scene.add(rh);
 
+              stopNodes.push({ stop, npc, ring, surfR });
+            })
+          );
+
+          if (cancelled) return;
           runtime.composer = createMessengerComposer(renderer, scene, camera, bundle.lut);
           runtime.composer.resize(host.clientWidth, host.clientHeight);
         } else if (mode === 'npcs') {
@@ -764,7 +830,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           setMessengerLight(runtime.materials, sun.position);
           scene.add(bundle.group);
         }
-        // Patch built-in materials (chibi, clouds, rings) so their sRGB output matches AnimeInkPass
+
         scene.traverse((obj) => {
           const mat = (obj as Mesh).material as Material | Material[] | undefined;
           if (!mat) return;
@@ -789,6 +855,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const tmpQ = new Quaternion();
     const camDesired = new Vector3();
     const camLook = new Vector3();
+    const sunDirOffset = new Vector3(10, 14, 7);
 
     let fpsFrames = 0;
     let lastFpsT = performance.now();
@@ -826,10 +893,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
         let inFwd = 0;
         let inRight = 0;
-        if (codes['KeyW'] || codes['ArrowUp']) inFwd += 1;
-        if (codes['KeyS'] || codes['ArrowDown']) inFwd -= 1;
-        if (codes['KeyD'] || codes['ArrowRight']) inRight += 1;
-        if (codes['KeyA'] || codes['ArrowLeft']) inRight -= 1;
+        if (!liveDialogOpenRef.current && !liveWardrobeRef.current) {
+          if (codes['KeyW'] || codes['ArrowUp']) inFwd += 1;
+          if (codes['KeyS'] || codes['ArrowDown']) inFwd -= 1;
+          if (codes['KeyD'] || codes['ArrowRight']) inRight += 1;
+          if (codes['KeyA'] || codes['ArrowLeft']) inRight -= 1;
+        }
 
         const moving = inFwd !== 0 || inRight !== 0;
         const sprinting = Boolean(codes['ShiftLeft'] || codes['ShiftRight']);
@@ -856,7 +925,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             sampleTerrainRadius(pState.posDir, 6.8);
           const diff = sampled - pState.groundR;
           if (diff < -0.12 && pState.jumpH <= 0.01) {
-            // Walked off a cliff/rooftop/ledge -> convert drop into smooth gravity fall!
             pState.jumpH += pState.groundR - sampled;
             pState.groundR = sampled;
           } else if (diff <= 0.24 || pState.jumpH + pState.groundR >= sampled - 0.08) {
@@ -869,7 +937,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           pState.forward.addScaledVector(pState.posDir, -pState.forward.dot(pState.posDir)).normalize();
         }
 
-        const jumpHeld = Boolean(codes['Space']);
+        const jumpHeld = !liveDialogOpenRef.current && !liveWardrobeRef.current && Boolean(codes['Space']);
         if (jumpHeld && pState.jumpH <= 0.008 && pState.jumpVel <= 0) {
           pState.jumpVel = 0.068;
           pState.squash = 1.26;
@@ -894,6 +962,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         tmpQ.setFromRotationMatrix(tmpMat);
         player.quaternion.slerp(tmpQ, 0.35);
 
+        // Keep tight shadow frustum centered right on the player for crisp street shadows
+        if (frameCount % 3 === 0) {
+          sun.target.position.copy(player.position);
+          sun.position.copy(player.position).add(sunDirOffset);
+          sun.target.updateMatrixWorld();
+        }
+
         playerShadowHolder.position.copy(pState.posDir).multiplyScalar(pState.groundR + 0.03);
         playerShadowHolder.quaternion.setFromUnitVectors(UP, pState.posDir);
         playerShadowDisc.scale.setScalar(Math.max(0.45, 1 - pState.jumpH * 0.35));
@@ -917,7 +992,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             ? 0.55 + Math.sin(elapsed * 5) * 0.3
             : 0.2;
           node.ring.scale.setScalar(isTarget ? 1 + Math.sin(elapsed * 4) * 0.15 : 0.85);
-          animateChibi(node.npc, { t: elapsed, phase: idx * 1.5, moving: false });
         });
 
         const arcDist = pState.posDir.angleTo(activeTarget.dir) * 28;
@@ -934,12 +1008,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
         const toTarget = activeTarget.dir.clone().sub(pState.posDir);
         toTarget.addScaledVector(pState.posDir, -toTarget.dot(pState.posDir));
-        if (toTarget.lengthSq() > 0.001 && arcDist > 3.5) {
+        if (toTarget.lengthSq() > 0.001 && arcDist > 3.5 && !liveWardrobeRef.current && !liveDialogOpenRef.current) {
           toTarget.normalize();
           compassGroup.visible = true;
           compassGroup.position
             .copy(pState.posDir)
-            .multiplyScalar(pState.groundR + pState.jumpH + 0.37 + Math.sin(elapsed * 5) * 0.025);
+            .multiplyScalar(pState.groundR + pState.jumpH + 0.36 + Math.sin(elapsed * 5) * 0.025);
           tmpRight.crossVectors(pState.posDir, toTarget).normalize();
           tmpMat.makeBasis(tmpRight, pState.posDir, toTarget);
           compassGroup.quaternion.setFromRotationMatrix(tmpMat);
@@ -952,7 +1026,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           let minD = 999;
           for (const n of stopNodes) {
             const d = pState.posDir.angleTo(n.stop.dir) * 28;
-            if (d < 4.5 && d < minD) {
+            if (d < 4.8 && d < minD) {
               minD = d;
               closest = n.stop;
             }
@@ -964,16 +1038,39 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           }
         }
 
-        camDesired
-          .copy(pState.posDir)
-          .multiplyScalar(pState.groundR + pState.camElev + pState.jumpH * 0.3)
-          .addScaledVector(pState.camForward, -pState.camDist);
+        // === CINEMATIC 3-MODE CAMERA (Wardrobe Front / Dialogue 3/4 / Over-the-Shoulder Walk) ===
+        if (liveWardrobeRef.current) {
+          // Swoop directly in front of the courier so user can inspect outfits live!
+          camDesired
+            .copy(pState.posDir)
+            .multiplyScalar(pState.groundR + 0.28)
+            .addScaledVector(pState.forward, 0.85);
+          camLook.copy(pState.posDir).multiplyScalar(pState.groundR + 0.19);
+        } else if (liveDialogOpenRef.current) {
+          // Cinematic 3/4 close-up framing during English NPC conversations
+          tmpRight.crossVectors(pState.forward, pState.posDir).normalize();
+          camDesired
+            .copy(pState.posDir)
+            .multiplyScalar(pState.groundR + 0.42)
+            .addScaledVector(pState.forward, 0.52)
+            .addScaledVector(tmpRight, 0.62);
+          camLook
+            .copy(pState.posDir)
+            .multiplyScalar(pState.groundR + 0.2)
+            .addScaledVector(pState.forward, 0.12);
+        } else {
+          // Grounded over-the-shoulder street-level camera (like messenger.abeto.co!)
+          camDesired
+            .copy(pState.posDir)
+            .multiplyScalar(pState.groundR + pState.camElev + pState.jumpH * 0.3)
+            .addScaledVector(pState.camForward, -pState.camDist);
+          camLook
+            .copy(pState.posDir)
+            .multiplyScalar(pState.groundR + 0.23 + pState.jumpH * 0.2)
+            .addScaledVector(pState.camForward, 0.42);
+        }
         camera.position.lerp(camDesired, 0.12);
         camera.up.lerp(pState.posDir, 0.12).normalize();
-        camLook
-          .copy(pState.posDir)
-          .multiplyScalar(pState.groundR + 0.24 + pState.jumpH * 0.2)
-          .addScaledVector(pState.camForward, 0.35);
         camera.lookAt(camLook);
       } else {
         controls.enabled = true;
@@ -1035,7 +1132,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
 
       if (mode === 'gameplay' && runtime.gameplayWater && runtime.gameplayWaterMaterial) {
-        // Capture the water shoreline depth once after the planet has loaded (and after resizes)
         if (runtime.ready && !waterDepthCaptured) {
           waterDepthCaptured = true;
           runtime.gameplayWater.visible = false;
@@ -1055,7 +1151,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
       if (atmosphere) atmosphere.skyMat.uniforms.uTime.value = elapsed;
 
-      // 🎨 Anime Ink mode (default): hand-drawn outlines + flat cel grading, like Messenger by Abeto
       if (liveOutlineFxRef.current && mode !== 'npcs') {
         inkDisplayOutput.value = 1;
         animeInk.render(renderer, scene, camera, elapsed);
@@ -1100,16 +1195,35 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     setTimeOfDay(next);
     showToast(
       next === 'day'
-        ? '☀️ Ban ngày nắng ấm'
+        ? '☀️ Ban ngày xanh ngọc'
         : next === 'sunset'
         ? '🌅 Hoàng hôn pastel'
         : '🌙 Đêm sao dịu nhẹ'
     );
   };
 
+  const handleReplyChoice = (choice: EnglishReplyChoice) => {
+    if (!activeDialog) return;
+    speakEnglish(choice.npcFeedback);
+    if (choice.quality === 'retry') {
+      setActiveDialog({ ...activeDialog, feedback: choice.npcFeedback });
+      return;
+    }
+    completeQuestRef.current?.(
+      activeDialog.stop.id,
+      choice.xp,
+      `Hội thoại tiếng Anh cùng ${activeDialog.stop.name}`
+    );
+    setActiveDialog({
+      ...activeDialog,
+      feedback: choice.npcFeedback,
+      completedNow: true,
+    });
+  };
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none' }}>
-      {/* WebGL Canvas Host */}
+      {/* WebGL Canvas Host (>90% unobstructed viewport!) */}
       <div
         ref={hostRef}
         style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', cursor: 'grab' }}
@@ -1124,17 +1238,17 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             top: '50%',
             transform: 'translate(-50%, -50%)',
             padding: '10px 18px',
-            borderRadius: 999,
-            border: '2.5px solid #232a2f',
-            boxShadow: '0 4px 0 #232a2f',
-            background: 'rgba(255, 253, 247, 0.96)',
-            color: status === 'error' ? '#b91c1c' : '#232a2f',
+            borderRadius: 14,
+            border: '2.5px solid #1d2a33',
+            boxShadow: '4px 4px 0 #1d2a33',
+            background: '#fffdf7',
+            color: status === 'error' ? '#b91c1c' : '#1d2a33',
             fontWeight: 800,
             fontSize: 14,
             zIndex: 20,
           }}
         >
-          {status === 'loading' ? `Đang tải thế giới 3D (${mode})…` : 'Không tải được tài nguyên 3D.'}
+          {status === 'loading' ? `✉️ Đang tải thế giới 3D (${mode})…` : 'Không tải được tài nguyên 3D.'}
         </div>
       )}
 
@@ -1148,8 +1262,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             top: em.y,
             transform: 'translate(-50%, -100%)',
             background: '#fffdf7',
-            border: '2.5px solid #232a2f',
-            boxShadow: '0 4px 0 #232a2f',
+            border: '2.5px solid #1d2a33',
+            boxShadow: '3px 3px 0 #1d2a33',
             borderRadius: 999,
             padding: '4px 11px',
             fontSize: 20,
@@ -1161,213 +1275,349 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         </div>
       ))}
 
-      {/* TOP-LEFT QUEST & MODE CARD */}
+      {/* ULTRA-MINIMAL TOP-LEFT STATUS PILL (leaves >90% screen open like Abeto!) */}
       <div
         style={{
           position: 'absolute',
           top: 14,
           left: 14,
           zIndex: 16,
-          width: 'min(308px, calc(100vw - 90px))',
-          background: 'rgba(255, 253, 247, 0.95)',
-          border: '2.5px solid #232a2f',
-          boxShadow: '0 4px 0 #232a2f',
-          borderRadius: 18,
-          padding: '12px 14px',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          background: 'rgba(255, 253, 247, 0.94)',
+          border: '2.5px solid #1d2a33',
+          boxShadow: '3px 3px 0 #1d2a33',
+          borderRadius: 12,
+          padding: '5px 11px',
+          fontSize: 12,
+          fontWeight: 900,
+          color: '#1d2a33',
+          cursor: 'pointer',
         }}
+        onClick={() => setChecklistOpen((v) => !v)}
+        title="Nhấn để mở danh sách nhiệm vụ tiếng Anh"
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontSize: 11, fontWeight: 900, letterSpacing: '0.07em', color: '#c93b3b' }}>
-            📮 SPEAKSHARP 3D
-          </span>
-          <span
-            style={{
-              background: '#fef3c7',
-              border: '1.8px solid #232a2f',
-              borderRadius: 999,
-              padding: '2px 9px',
-              fontSize: 11,
-              fontWeight: 900,
-              color: '#232a2f',
-            }}
-          >
-            📦 {questInfo.delivered}/4 · {questInfo.fps} FPS
-          </span>
-        </div>
-
-        <div style={{ fontSize: 14.5, fontWeight: 900, color: '#232a2f', marginTop: 4, lineHeight: 1.25 }}>
-          {mode === 'gameplay' && playMode
-            ? questInfo.phase === 'pickup'
-              ? 'Nhận thư tại Town Post Office'
-              : `Giao thư cho ${questInfo.stopName}`
-            : mode === 'intro'
-            ? 'Toàn cảnh hành tinh Intro'
-            : mode === 'npcs'
-            ? 'Phòng trưng bày NPCs'
-            : 'Chế độ xoay tự do (Free Orbit)'}
-        </div>
-        <div style={{ fontSize: 12, fontWeight: 700, color: '#5b6770', marginTop: 2 }}>
-          {mode === 'gameplay' && playMode
-            ? `${questInfo.landmark} · cách ${questInfo.distM}m`
-            : 'Kéo chuột để xoay · Cuộn để phóng to/nhỏ'}
-        </div>
-
-        <div style={{ display: 'flex', gap: 6, marginTop: 9 }}>
-          {(['intro', 'gameplay', 'npcs'] as SceneMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setDialog(null);
-              }}
-              style={{
-                flex: 1,
-                border: '2px solid #232a2f',
-                background: mode === m ? '#f5bd33' : '#fff',
-                color: '#232a2f',
-                fontWeight: 800,
-                fontSize: 12,
-                padding: '5px 8px',
-                borderRadius: 10,
-                cursor: 'pointer',
-              }}
-            >
-              {m === 'intro' ? 'Intro' : m === 'gameplay' ? 'Gameplay' : 'NPCs'}
-            </button>
-          ))}
-        </div>
-
-        {mode === 'gameplay' && (
-          <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
-            <button
-              onClick={() => setPlayMode(true)}
-              style={{
-                flex: 1,
-                border: '2px solid #232a2f',
-                background: playMode ? '#f5bd33' : '#fff',
-                color: '#232a2f',
-                fontWeight: 800,
-                fontSize: 12,
-                padding: '5px 8px',
-                borderRadius: 10,
-                cursor: 'pointer',
-              }}
-            >
-              🚶 Đi dạo (Play)
-            </button>
-            <button
-              onClick={() => setPlayMode(false)}
-              style={{
-                flex: 1,
-                border: '2px solid #232a2f',
-                background: !playMode ? '#f5bd33' : '#fff',
-                color: '#232a2f',
-                fontWeight: 800,
-                fontSize: 12,
-                padding: '5px 8px',
-                borderRadius: 10,
-                cursor: 'pointer',
-              }}
-            >
-              🌐 Xoay tự do
-            </button>
-          </div>
-        )}
+        <span>📮 {completedStops.length}/5</span>
+        <span style={{ color: '#64748b' }}>·</span>
+        <span>{questInfo.landmark} ({questInfo.distM}m)</span>
+        <span style={{ color: '#64748b' }}>·</span>
+        <span style={{ color: '#15803d' }}>{questInfo.fps} FPS</span>
       </div>
 
-      {/* TOP-RIGHT ACTION BUTTONS */}
+      {/* TOP-RIGHT ABETO-STYLE CHECKLIST BUTTON */}
+      <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 18 }}>
+        <button
+          title="Danh sách nhiệm vụ giao tiếp tiếng Anh (Checklist)"
+          onClick={() => {
+            setChecklistOpen((v) => !v);
+            setWardrobeOpen(false);
+            setEmoteDrawerOpen(false);
+          }}
+          style={{
+            ...PAPER_BTN_STYLE,
+            background: checklistOpen ? '#f5bd33' : '#fffdf7',
+            transform: checklistOpen ? 'rotate(-3deg)' : 'rotate(2deg)',
+          }}
+        >
+          📋
+        </button>
+      </div>
+
+      {/* TILTED HANDWRITTEN-STYLE CHECKLIST PAPER CARD */}
+      {checklistOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 66,
+            right: 16,
+            zIndex: 20,
+            width: 'min(300px, calc(100vw - 32px))',
+            background: '#fffdf7',
+            border: '2.5px solid #1d2a33',
+            boxShadow: '5px 5px 0 #1d2a33',
+            borderRadius: 14,
+            padding: '13px 15px',
+            transform: 'rotate(-1deg)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#1d2a33', letterSpacing: '0.04em' }}>
+              📝 ENGLISH CHECKLIST ({completedStops.length}/5)
+            </span>
+            <button
+              onClick={() => setChecklistOpen(false)}
+              style={{
+                border: '2px solid #1d2a33',
+                background: '#ef4444',
+                color: '#fff',
+                width: 24,
+                height: 24,
+                borderRadius: 7,
+                fontWeight: 900,
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 10 }}>
+            {Object.values(ENGLISH_NPC_QUESTS).map((q) => {
+              const done = completedStops.includes(q.stopId);
+              return (
+                <div
+                  key={q.stopId}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    fontSize: 12,
+                    fontWeight: 800,
+                    color: done ? '#15803d' : '#1d2a33',
+                    textDecoration: done ? 'line-through' : 'none',
+                    padding: '4px 7px',
+                    borderRadius: 8,
+                    background: done ? '#dcfce7' : '#f8fafc',
+                    border: '1.5px solid #cbd5e1',
+                  }}
+                >
+                  <span>{done ? '✅' : '⬜'}</span>
+                  <span style={{ flex: 1 }}>{q.checklistTitle}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', gap: 5, marginBottom: 6 }}>
+            {(['intro', 'gameplay', 'npcs'] as SceneMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => {
+                  setMode(m);
+                  setActiveDialog(null);
+                }}
+                style={{
+                  flex: 1,
+                  border: '2px solid #1d2a33',
+                  background: mode === m ? '#f5bd33' : '#fff',
+                  color: '#1d2a33',
+                  fontWeight: 800,
+                  fontSize: 11.5,
+                  padding: '4px 6px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                {m === 'intro' ? 'Intro' : m === 'gameplay' ? 'Gameplay' : 'NPCs'}
+              </button>
+            ))}
+          </div>
+
+          {mode === 'gameplay' && (
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button
+                onClick={() => setPlayMode(true)}
+                style={{
+                  flex: 1,
+                  border: '2px solid #1d2a33',
+                  background: playMode ? '#f5bd33' : '#fff',
+                  color: '#1d2a33',
+                  fontWeight: 800,
+                  fontSize: 11.5,
+                  padding: '4px 6px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                🚶 Đi dạo
+              </button>
+              <button
+                onClick={() => setPlayMode(false)}
+                style={{
+                  flex: 1,
+                  border: '2px solid #1d2a33',
+                  background: !playMode ? '#f5bd33' : '#fff',
+                  color: '#1d2a33',
+                  fontWeight: 800,
+                  fontSize: 11.5,
+                  padding: '4px 6px',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                }}
+              >
+                🌐 Xoay tự do
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* BOTTOM-RIGHT ABETO-STYLE VERTICAL PAPER-CARD TOOLBAR */}
       <div
         style={{
           position: 'absolute',
-          top: 14,
+          bottom: 16,
           right: 14,
-          zIndex: 16,
+          zIndex: 18,
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
         }}
       >
-        {[
-          {
-            label: soundMuted ? '🔇' : '🎵',
-            title: soundMuted ? 'Bật nhạc nền (Kevin Colombin - Messenger OST)' : 'Tắt nhạc nền',
-            onClick: () => {
-              setSoundMuted((v) => {
-                const next = !v;
-                if (!next) {
-                  audioRef.current?.init();
-                }
-                return next;
-              });
-            },
-          },
-          {
-            label: '👕',
-            title: 'Đổi trang phục Chibi',
-            onClick: () => setWardrobeOpen((v) => !v),
-          },
-          {
-            label: timeOfDay === 'day' ? '☀️' : timeOfDay === 'sunset' ? '🌅' : '🌙',
-            title: 'Đổi thời gian (Ngày/Hoàng hôn/Đêm)',
-            onClick: cycleTime,
-          },
-          {
-            label: outlineFx ? '🎨' : '⚡',
-            title: outlineFx ? 'Phong cách Anime Ink (nhấn để chuyển Mượt)' : 'Chế độ Mượt 165 FPS (nhấn để bật Anime Ink)',
-            onClick: () => {
-              setOutlineFx((v) => {
-                const next = !v;
-                showToast(next ? '🎨 Đã bật phong cách Anime Ink vẽ tay' : '⚡ Đã bật chế độ Mượt (FPS tối đa)');
-                return next;
-              });
-            },
-          },
-          {
-            label: '🧭',
-            title: 'Đặt lại góc camera',
-            onClick: () => recenterRef.current?.(),
-          },
-        ].map((btn) => (
-          <button
-            key={btn.title}
-            title={btn.title}
-            onClick={btn.onClick}
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 13,
-              background: 'rgba(255, 253, 247, 0.96)',
-              border: '2.5px solid #232a2f',
-              boxShadow: '0 4px 0 #232a2f',
-              fontSize: 18,
-              cursor: 'pointer',
-              display: 'grid',
-              placeItems: 'center',
-            }}
-          >
-            {btn.label}
-          </button>
-        ))}
+        <button
+          title={soundMuted ? 'Bật nhạc nền (Kevin Colombin OST)' : 'Tắt nhạc nền'}
+          onClick={() => {
+            setSoundMuted((v) => {
+              const next = !v;
+              if (!next) audioRef.current?.init();
+              return next;
+            });
+          }}
+          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(-2deg)' }}
+        >
+          {soundMuted ? '🔇' : '🎵'}
+        </button>
+
+        <button
+          title="Tủ đồ Chibi (Camera tự xoay cận mặt)"
+          onClick={() => {
+            setWardrobeOpen((v) => !v);
+            setChecklistOpen(false);
+            setEmoteDrawerOpen(false);
+            setActiveDialog(null);
+          }}
+          style={{
+            ...PAPER_BTN_STYLE,
+            background: wardrobeOpen ? '#f5bd33' : '#fffdf7',
+            transform: 'rotate(2deg)',
+          }}
+        >
+          👕
+        </button>
+
+        <button
+          title="Biểu cảm Emotes (Phím 1–5)"
+          onClick={() => {
+            setEmoteDrawerOpen((v) => !v);
+            setWardrobeOpen(false);
+          }}
+          style={{
+            ...PAPER_BTN_STYLE,
+            background: emoteDrawerOpen ? '#f5bd33' : '#fffdf7',
+            transform: 'rotate(-1.5deg)',
+          }}
+        >
+          😊
+        </button>
+
+        <button
+          title={outlineFx ? 'Phong cách Anime Ink (nhấn để chuyển Mượt)' : 'Chế độ Mượt 165 FPS'}
+          onClick={() => {
+            setOutlineFx((v) => {
+              const next = !v;
+              showToast(next ? '🎨 Đã bật Anime Ink vẽ tay' : '⚡ Đã bật chế độ Mượt 165 FPS');
+              return next;
+            });
+          }}
+          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(1.5deg)' }}
+        >
+          {outlineFx ? '🎨' : '⚡'}
+        </button>
+
+        <button
+          title="Đổi thời gian (Ngày/Hoàng hôn/Đêm)"
+          onClick={cycleTime}
+          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(-1deg)' }}
+        >
+          {timeOfDay === 'day' ? '☀️' : timeOfDay === 'sunset' ? '🌅' : '🌙'}
+        </button>
+
+        <button
+          title="Đặt lại góc camera"
+          onClick={() => recenterRef.current?.()}
+          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(1deg)' }}
+        >
+          🧭
+        </button>
       </div>
 
-      {/* WARDROBE POPOVER */}
+      {/* ABETO-STYLE 2x4 EMOTE DRAWER */}
+      {emoteDrawerOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 120,
+            right: 68,
+            zIndex: 20,
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 38px)',
+            gap: 6,
+            background: '#fffdf7',
+            border: '2.5px solid #1d2a33',
+            boxShadow: '4px 4px 0 #1d2a33',
+            borderRadius: 14,
+            padding: 8,
+          }}
+        >
+          {EMOTES.map((e) => (
+            <button
+              key={e}
+              onClick={() => {
+                triggerEmoteRef.current?.(e);
+                setEmoteDrawerOpen(false);
+              }}
+              style={{
+                width: 38,
+                height: 38,
+                borderRadius: 9,
+                border: '2px solid #1d2a33',
+                background: '#fff',
+                fontSize: 19,
+                cursor: 'pointer',
+              }}
+            >
+              {e}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* WARDROBE POPOVER (camera automatically swoops to face the courier!) */}
       {wardrobeOpen && (
         <div
           style={{
             position: 'absolute',
-            top: 64,
-            right: 66,
-            zIndex: 18,
-            width: 220,
-            background: 'rgba(255, 253, 247, 0.97)',
-            border: '2.5px solid #232a2f',
-            boxShadow: '0 4px 0 #232a2f',
+            bottom: 84,
+            right: 68,
+            zIndex: 20,
+            width: 224,
+            background: '#fffdf7',
+            border: '2.5px solid #1d2a33',
+            boxShadow: '5px 5px 0 #1d2a33',
             borderRadius: 16,
-            padding: 12,
+            padding: 13,
           }}
         >
-          <div style={{ fontSize: 13, fontWeight: 900, marginBottom: 8, color: '#232a2f' }}>
-            👕 Trang phục Chibi
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#1d2a33' }}>👕 Tủ đồ Courier</span>
+            <button
+              onClick={() => setWardrobeOpen(false)}
+              style={{
+                border: '2px solid #1d2a33',
+                background: '#ef4444',
+                color: '#fff',
+                width: 24,
+                height: 24,
+                borderRadius: 7,
+                fontWeight: 900,
+                cursor: 'pointer',
+                fontSize: 12,
+              }}
+            >
+              ✕
+            </button>
           </div>
           {[
             { label: 'Màu mũ', list: HAT_SWATCHES, val: hatColor, set: setHatColor },
@@ -1388,7 +1638,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                       height: 24,
                       borderRadius: '50%',
                       background: c,
-                      border: '2px solid #232a2f',
+                      border: '2px solid #1d2a33',
                       cursor: 'pointer',
                       outline: row.val === c ? '2.5px solid #f5bd33' : 'none',
                       outlineOffset: 1,
@@ -1410,7 +1660,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 25,
-            background: '#232a2f',
+            background: '#1d2a33',
             color: '#fffdf7',
             borderRadius: 999,
             padding: '7px 16px',
@@ -1424,34 +1674,34 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         </div>
       )}
 
-      {/* INTERACT [E] PILL */}
-      {mode === 'gameplay' && playMode && nearbyStop && !dialog && (
+      {/* SUBTLE INTERACT [E] PILL */}
+      {mode === 'gameplay' && playMode && nearbyStop && !activeDialog && !wardrobeOpen && (
         <button
           onClick={() => triggerInteractRef.current?.()}
           style={{
             position: 'absolute',
-            bottom: 102,
+            bottom: 24,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 18,
             display: 'inline-flex',
             alignItems: 'center',
             gap: 8,
-            background: '#232a2f',
+            background: '#1d2a33',
             color: '#fffdf7',
             border: '2.5px solid #fffdf7',
             borderRadius: 999,
-            padding: '7px 16px',
+            padding: '8px 18px',
             fontSize: 13,
             fontWeight: 800,
             cursor: 'pointer',
-            boxShadow: '0 6px 18px rgba(0,0,0,0.28)',
+            boxShadow: '4px 4px 0 rgba(29,42,51,0.45)',
           }}
         >
           <span
             style={{
               background: '#f5bd33',
-              color: '#232a2f',
+              color: '#1d2a33',
               borderRadius: 6,
               padding: '1px 7px',
               fontWeight: 900,
@@ -1461,145 +1711,158 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           </span>
           <span>
             {nearbyIsTarget
-              ? questInfo.phase === 'pickup'
-                ? `Nhận thư từ ${nearbyStop.name}`
-                : `Giao thư cho ${nearbyStop.name}`
-              : `Trò chuyện tiếng Anh với ${nearbyStop.name}`}
+              ? `Nói chuyện tiếng Anh với ${nearbyStop.name}`
+              : `Gặp gỡ ${nearbyStop.name}`}
           </span>
         </button>
       )}
 
-      {/* COZY ENGLISH DIALOG CARD */}
-      {dialog && (
+      {/* INTERACTIVE ABETO-STYLE ENGLISH CONVERSATION QUEST DIALOG */}
+      {activeDialog && (
         <div
           style={{
             position: 'absolute',
-            bottom: 102,
+            bottom: 58,
             left: '50%',
             transform: 'translateX(-50%)',
-            zIndex: 22,
-            width: 'min(440px, calc(100vw - 32px))',
-            background: 'rgba(255, 253, 247, 0.98)',
-            border: '2.5px solid #232a2f',
-            boxShadow: '0 5px 0 #232a2f',
-            borderRadius: 18,
+            zIndex: 24,
+            width: 'min(520px, calc(100vw - 96px))',
+            background: '#fffdf7',
+            border: '3px solid #1d2a33',
+            boxShadow: '6px 6px 0 #1d2a33',
+            borderRadius: 16,
             padding: '14px 16px',
           }}
         >
-          <div style={{ fontSize: 12, fontWeight: 900, color: '#c93b3b', marginBottom: 4 }}>
-            {dialog.title}
-          </div>
-          <div style={{ fontSize: 14, fontWeight: 700, color: '#232a2f', lineHeight: 1.45 }}>
-            “{dialog.text}”
-          </div>
-          {dialog.tip && (
-            <div
+          {/* Blue Abeto-style Nameplate */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+            <span
               style={{
-                marginTop: 8,
-                padding: '6px 10px',
-                borderRadius: 10,
-                background: '#fef3c7',
-                border: '1.5px solid #f5bd33',
-                fontSize: 12,
-                fontWeight: 700,
-                color: '#78350f',
+                background: '#2c7a8c',
+                color: '#fffdf7',
+                border: '2px solid #1d2a33',
+                borderRadius: 8,
+                padding: '2px 10px',
+                fontSize: 11.5,
+                fontWeight: 900,
+                letterSpacing: '0.04em',
               }}
             >
-              {dialog.tip}
+              {activeDialog.quest.npcRole.toUpperCase()}
+            </span>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button
+                onClick={() => speakEnglish(activeDialog.feedback ?? activeDialog.quest.promptEn)}
+                style={{
+                  border: '2px solid #1d2a33',
+                  background: '#e0f2fe',
+                  color: '#1d2a33',
+                  borderRadius: 8,
+                  padding: '2px 8px',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                🔊 Nghe lại
+              </button>
+              <button
+                onClick={() => setActiveDialog((d) => (d ? { ...d, showVi: !d.showVi } : null))}
+                style={{
+                  border: '2px solid #1d2a33',
+                  background: '#fef3c7',
+                  color: '#1d2a33',
+                  borderRadius: 8,
+                  padding: '2px 8px',
+                  fontSize: 11,
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                }}
+              >
+                {activeDialog.showVi ? 'Ẩn dịch' : '🇻🇳 Gợi ý'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 14.5, fontWeight: 800, color: '#1d2a33', lineHeight: 1.4 }}>
+            “{activeDialog.feedback ?? activeDialog.quest.promptEn}”
+          </div>
+
+          {activeDialog.showVi && !activeDialog.feedback && (
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#475569', marginTop: 4 }}>
+              {activeDialog.quest.promptVi} · <strong style={{ color: '#b45309' }}>{activeDialog.quest.keyPhrase}</strong>
             </div>
           )}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 10 }}>
-            {onEnterDebateArena && (
-              <button
-                onClick={onEnterDebateArena}
-                style={{
-                  border: '2px solid #232a2f',
-                  background: '#fff',
-                  color: '#232a2f',
-                  borderRadius: 10,
-                  padding: '5px 12px',
-                  fontWeight: 800,
-                  fontSize: 12,
-                  cursor: 'pointer',
-                }}
-              >
-                🎤 Vào Phòng Luyện Nói
-              </button>
-            )}
-            <button
-              onClick={() => setDialog(null)}
-              style={{
-                border: '2px solid #232a2f',
-                background: '#f5bd33',
-                color: '#232a2f',
-                borderRadius: 10,
-                padding: '5px 14px',
-                fontWeight: 900,
-                fontSize: 12,
-                cursor: 'pointer',
-              }}
-            >
-              Tiếp tục đi dạo →
-            </button>
-          </div>
-        </div>
-      )}
 
-      {/* BOTTOM EMOTE BAR + CONTROLS HINT */}
-      {mode === 'gameplay' && playMode && (
-        <>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 40,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              zIndex: 16,
-              display: 'inline-flex',
-              gap: 6,
-              background: 'rgba(255, 253, 247, 0.95)',
-              border: '2.5px solid #232a2f',
-              boxShadow: '0 4px 0 #232a2f',
-              borderRadius: 999,
-              padding: '5px 10px',
-            }}
-          >
-            {EMOTES.map((e, i) => (
+          {!activeDialog.completedNow ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+              {activeDialog.quest.choices.map((choice, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => handleReplyChoice(choice)}
+                  style={{
+                    textAlign: 'left',
+                    border: '2px solid #1d2a33',
+                    background: '#fff',
+                    color: '#1d2a33',
+                    borderRadius: 10,
+                    padding: '7px 11px',
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                    cursor: 'pointer',
+                    boxShadow: '2px 2px 0 #1d2a33',
+                  }}
+                >
+                  <div>
+                    <span style={{ color: '#c93b3b', marginRight: 6 }}>{String.fromCharCode(65 + idx)}.</span>
+                    {choice.text}
+                  </div>
+                  {activeDialog.showVi && (
+                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 2, fontWeight: 600 }}>
+                      {choice.viHint}
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+              {onEnterDebateArena && (
+                <button
+                  onClick={onEnterDebateArena}
+                  style={{
+                    border: '2px solid #1d2a33',
+                    background: '#fff',
+                    color: '#1d2a33',
+                    borderRadius: 10,
+                    padding: '6px 12px',
+                    fontWeight: 800,
+                    fontSize: 12,
+                    cursor: 'pointer',
+                  }}
+                >
+                  🎤 Luyện Nói AI
+                </button>
+              )}
               <button
-                key={e}
-                title={`Biểu cảm ${e} (Phím ${i + 1})`}
-                onClick={() => triggerEmoteRef.current?.(e)}
+                onClick={() => setActiveDialog(null)}
                 style={{
-                  border: 'none',
-                  background: 'transparent',
-                  fontSize: 19,
+                  border: '2px solid #1d2a33',
+                  background: '#f5bd33',
+                  color: '#1d2a33',
+                  borderRadius: 10,
+                  padding: '6px 15px',
+                  fontWeight: 900,
+                  fontSize: 12.5,
                   cursor: 'pointer',
-                  padding: '2px 5px',
+                  boxShadow: '2px 2px 0 #1d2a33',
                 }}
               >
-                {e}
+                Tiếp tục hành trình ▶
               </button>
-            ))}
-          </div>
-          <div
-            style={{
-              position: 'absolute',
-              bottom: 14,
-              right: 14,
-              zIndex: 15,
-              background: 'rgba(35, 42, 47, 0.85)',
-              color: '#fffdf7',
-              fontSize: 11,
-              fontWeight: 700,
-              padding: '5px 12px',
-              borderRadius: 999,
-              whiteSpace: 'nowrap',
-              pointerEvents: 'none',
-            }}
-          >
-            WASD: Đi · Space: Nhảy/Lướt · Shift: Chạy · E: Giao thư (+25 XP)
-          </div>
-        </>
+            </div>
+          )}
+        </div>
       )}
     </div>
   );
