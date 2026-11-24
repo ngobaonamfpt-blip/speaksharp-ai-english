@@ -131,44 +131,47 @@ export const World3D: React.FC<World3DProps> = ({
         </div>
       )}
 
-      {/* Bottom-Left World Switcher & Fullscreen Controls */}
+      {/* Bottom-Left Abeto-Style Paper-Card Controls */}
       <div
         style={{
           position: 'absolute',
-          bottom: 14,
+          bottom: 16,
           left: 14,
           display: 'inline-flex',
-          gap: 6,
+          gap: 8,
           flexWrap: 'wrap',
           zIndex: 30,
         }}
       >
         <button
+          className="abeto-btn"
           onClick={() => setWorldEngine((w) => (w === 'native3d' ? 'multiplayer' : 'native3d'))}
           style={{
-            border: '2px solid #232a2f',
-            background: '#141517',
-            color: '#f5bd33',
-            padding: '6px 11px',
+            border: '2px solid #243038',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
+            color: '#243038',
+            padding: '7px 13px',
             borderRadius: 12,
             fontSize: 12,
             fontWeight: 800,
             fontFamily: 'inherit',
             cursor: 'pointer',
-            boxShadow: '0 3px 0 #232a2f',
+            boxShadow: '3px 4px 0 rgba(36, 48, 56, 0.28)',
+            transition: 'all 0.14s ease',
           }}
         >
-          {worldEngine === 'native3d' ? '🌍 Hành tinh Messenger 3D' : '🌐 Phòng Multiplayer (PeerJS)'}
+          {worldEngine === 'native3d' ? '🌍 Messenger 3D' : '🌐 Multiplayer (PeerJS)'}
         </button>
 
         <button
+          className="abeto-btn"
           onClick={toggleFullscreen}
           title={isFullscreen ? 'Thoát toàn màn hình' : 'Toàn màn hình'}
           style={{
-            border: '2px solid #232a2f',
-            background: 'rgba(255, 253, 247, 0.94)',
-            color: '#232a2f',
-            padding: '6px 10px',
+            border: '2px solid #243038',
+            background: 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
+            color: '#465a67',
+            padding: '7px 12px',
             borderRadius: 12,
             fontSize: 12,
             fontWeight: 800,
@@ -177,10 +180,11 @@ export const World3D: React.FC<World3DProps> = ({
             display: 'inline-flex',
             alignItems: 'center',
             gap: 5,
-            boxShadow: '0 3px 0 #232a2f',
+            boxShadow: '3px 4px 0 rgba(36, 48, 56, 0.28)',
+            transition: 'all 0.14s ease',
           }}
         >
-          {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          {isFullscreen ? <Minimize2 size={14} strokeWidth={2.4} /> : <Maximize2 size={14} strokeWidth={2.4} />}
           <span>{isFullscreen ? 'Thu nhỏ' : 'Toàn màn hình'}</span>
         </button>
 

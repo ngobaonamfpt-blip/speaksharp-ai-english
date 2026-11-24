@@ -1,5 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  ClipboardList,
+  Compass,
+  Mic,
+  Moon,
+  Music,
+  Palette,
+  Shirt,
+  Smile,
+  Sun,
+  Sunrise,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from 'lucide-react';
+import {
   AmbientLight,
   Box3,
   BoxGeometry,
@@ -164,17 +180,17 @@ function loadSavedQuests(): string[] {
 }
 
 const PAPER_BTN_STYLE: React.CSSProperties = {
-  width: 44,
-  height: 44,
-  borderRadius: 11,
-  background: '#fffdf7',
-  border: '2.5px solid #1d2a33',
-  boxShadow: '3px 3px 0 #1d2a33',
-  fontSize: 19,
+  width: 46,
+  height: 46,
+  borderRadius: 12,
+  background: 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
+  border: '2px solid #243038',
+  boxShadow: '3px 4px 0 rgba(36, 48, 56, 0.28), 0 0 0 1px rgba(255,255,255,0.6) inset',
+  color: '#465a67',
   cursor: 'pointer',
   display: 'grid',
   placeItems: 'center',
-  transition: 'transform 0.1s ease',
+  transition: 'transform 0.14s cubic-bezier(.22,1,.36,1), box-shadow 0.14s ease, background 0.14s ease',
 };
 
 export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
@@ -352,18 +368,21 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const ambient = new AmbientLight(0xffffff, mode === 'npcs' ? 0.45 : 0.85);
     scene.add(ambient);
 
-    const sun = new DirectionalLight(0xfff1dc, mode === 'npcs' ? 1.8 : 1.55);
+    const sun = new DirectionalLight(0xfff4e2, mode === 'npcs' ? 1.8 : 1.55);
     sun.position.set(14, 20, 10);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(1024, 1024);
+    // High-res 2048px soft shadow map + normalBias eliminates all self-shadow acne on curved terrain!
+    sun.shadow.mapSize.set(2048, 2048);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 48;
-    const frustum = mode === 'npcs' ? 10 : 5.5;
+    sun.shadow.camera.far = 38;
+    const frustum = mode === 'npcs' ? 10 : 4.2;
     sun.shadow.camera.left = -frustum;
     sun.shadow.camera.right = frustum;
     sun.shadow.camera.top = frustum;
     sun.shadow.camera.bottom = -frustum;
-    sun.shadow.bias = -0.0006;
+    sun.shadow.bias = -0.00015;
+    sun.shadow.normalBias = 0.042;
+    sun.shadow.radius = 2.6;
     scene.add(sun);
     scene.add(sun.target);
 
@@ -838,12 +857,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           // Cool sky-tinted translucent ShadowMaterial overlay so custom ShaderMaterial terrain
           // receives REAL 3D silhouette shadows from player, buildings, cliffs & trees!
           const groundShadowMat = new ShadowMaterial({
-            color: 0x1d4050,
-            opacity: 0.34,
+            color: 0x204456,
+            opacity: 0.28,
             depthWrite: false,
             polygonOffset: true,
-            polygonOffsetFactor: -1,
-            polygonOffsetUnits: -1,
+            polygonOffsetFactor: -1.5,
+            polygonOffsetUnits: -2,
           });
           const shadowReceivers: Mesh[] = [];
           terrainObj.traverse((obj) => {
@@ -1105,22 +1124,27 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         tmpQ.setFromRotationMatrix(tmpMat);
         player.quaternion.slerp(tmpQ, 0.35);
 
-        // Keep follow directional sun ~55 deg above player's local horizon so 3D shadows
-        // always project cleanly across streets, cliffs & grass anywhere on the sphere!
+        // World-locked directional sun ~55 deg above player's local horizon (NEVER rotates with camera!)
         if (frameCount % 2 === 0) {
           sun.target.position.copy(player.position);
+          // Fixed world-space tangent axis so building & character shadows stay physically rock-solid!
+          const fixedSide = new Vector3(0.75, 0.25, 0.61);
+          fixedSide.addScaledVector(pState.posDir, -fixedSide.dot(pState.posDir));
+          if (fixedSide.lengthSq() < 0.01) fixedSide.set(1, 0, 0).cross(pState.posDir);
+          fixedSide.normalize();
           sunDirOffset
             .copy(pState.posDir)
-            .multiplyScalar(9.5)
-            .addScaledVector(tmpRight, 5.2)
-            .addScaledVector(pState.camForward, 3.8);
+            .multiplyScalar(10.5)
+            .addScaledVector(fixedSide, 6.2);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
         }
 
-        playerShadowHolder.position.copy(pState.posDir).multiplyScalar(pState.groundR + 0.03);
+        // Subtle contact AO shadow under feet (real 3D shadow handles the full silhouette!)
+        playerShadowHolder.position.copy(pState.posDir).multiplyScalar(pState.groundR + 0.022);
         playerShadowHolder.quaternion.setFromUnitVectors(UP, pState.posDir);
-        playerShadowDisc.scale.setScalar(Math.max(0.45, 1 - pState.jumpH * 0.35));
+        (playerShadowDisc.material as MeshBasicMaterial).opacity = Math.max(0.08, 0.26 - pState.jumpH * 0.2);
+        playerShadowDisc.scale.setScalar(Math.max(0.42, 0.88 - pState.jumpH * 0.35));
 
         let emoteAction: EmoteAction = null;
         let emoteProgress = 0;
@@ -1451,6 +1475,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', userSelect: 'none' }}>
+      <style>{`
+        .abeto-btn:hover { transform: translateY(-2px) scale(1.04) !important; box-shadow: 4px 6px 0 rgba(36, 48, 56, 0.32), 0 0 0 1px rgba(255,255,255,0.75) inset !important; background: #ffffff !important; }
+        .abeto-btn:active { transform: translate(2px, 2px) scale(0.97) !important; box-shadow: 1px 1px 0 rgba(36, 48, 56, 0.25) !important; }
+        .abeto-choice:hover { background: #fef9e7 !important; transform: translateX(3px); }
+        @keyframes abetoPop { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        .abeto-card { animation: abetoPop 0.18s cubic-bezier(.22,1,.36,1); }
+      `}</style>
       {/* WebGL Canvas Host (>90% unobstructed viewport!) */}
       <div
         ref={hostRef}
@@ -1558,10 +1589,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         </div>
       )}
 
-      {/* TOP-RIGHT ABETO-STYLE CHECKLIST BUTTON (hidden in cinematic dialogue) */}
+      {/* TOP-RIGHT ABETO-STYLE CHECKLIST PAPER CARD BUTTON */}
       {!activeDialog && (
         <div style={{ position: 'absolute', top: 14, right: 14, zIndex: 18 }}>
           <button
+            className="abeto-btn"
             title="Danh sách nhiệm vụ giao tiếp tiếng Anh (Checklist)"
             onClick={() => {
               setChecklistOpen((v) => !v);
@@ -1572,11 +1604,14 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             style={{
               ...PAPER_BTN_STYLE,
               position: 'relative',
-              background: checklistOpen ? '#f5bd33' : '#fffdf7',
-              transform: checklistOpen ? 'rotate(-3deg)' : 'rotate(2deg)',
+              background: checklistOpen
+                ? 'linear-gradient(180deg, #fde08d 0%, #f5bd33 100%)'
+                : PAPER_BTN_STYLE.background,
+              color: checklistOpen ? '#1f2933' : '#465a67',
+              transform: checklistOpen ? 'rotate(-2deg)' : 'rotate(2deg)',
             }}
           >
-            📋
+            <ClipboardList size={21} strokeWidth={2.3} />
             {checklistBadge && (
               <span
                 style={{
@@ -1627,10 +1662,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                 borderRadius: 7,
                 fontWeight: 900,
                 cursor: 'pointer',
-                fontSize: 12,
+                display: 'grid',
+                placeItems: 'center',
               }}
             >
-              ✕
+              <X size={14} strokeWidth={3} />
             </button>
           </div>
 
@@ -1735,10 +1771,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           zIndex: 18,
           display: 'flex',
           flexDirection: 'column',
-          gap: 8,
+          gap: 9,
         }}
       >
         <button
+          className="abeto-btn"
           title={soundMuted ? 'Bật nhạc nền (Kevin Colombin OST)' : 'Tắt nhạc nền'}
           onClick={() => {
             setSoundMuted((v) => {
@@ -1747,13 +1784,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               return next;
             });
           }}
-          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(-2deg)' }}
+          style={{
+            ...PAPER_BTN_STYLE,
+            color: soundMuted ? '#94a3b8' : '#465a67',
+            transform: 'rotate(-1.8deg)',
+          }}
         >
-          {soundMuted ? '🔇' : '🎵'}
+          {soundMuted ? <VolumeX size={20} strokeWidth={2.3} /> : <Music size={20} strokeWidth={2.3} />}
         </button>
 
         <button
-          title="Tủ đồ Chibi (Camera tự xoay cận mặt)"
+          className="abeto-btn"
+          title="Tủ đồ Courier (Camera tự xoay cận mặt)"
           onClick={() => {
             setWardrobeOpen((v) => !v);
             setChecklistOpen(false);
@@ -1762,14 +1804,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           }}
           style={{
             ...PAPER_BTN_STYLE,
-            background: wardrobeOpen ? '#f5bd33' : '#fffdf7',
-            transform: 'rotate(2deg)',
+            background: wardrobeOpen
+              ? 'linear-gradient(180deg, #fde08d 0%, #f5bd33 100%)'
+              : PAPER_BTN_STYLE.background,
+            color: wardrobeOpen ? '#1f2933' : '#465a67',
+            transform: 'rotate(1.8deg)',
           }}
         >
-          👕
+          <Shirt size={20} strokeWidth={2.3} />
         </button>
 
         <button
+          className="abeto-btn"
           title="Biểu cảm Emotes (Phím 1–5)"
           onClick={() => {
             setEmoteDrawerOpen((v) => !v);
@@ -1777,14 +1823,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           }}
           style={{
             ...PAPER_BTN_STYLE,
-            background: emoteDrawerOpen ? '#f5bd33' : '#fffdf7',
-            transform: 'rotate(-1.5deg)',
+            background: emoteDrawerOpen
+              ? 'linear-gradient(180deg, #fde08d 0%, #f5bd33 100%)'
+              : PAPER_BTN_STYLE.background,
+            color: emoteDrawerOpen ? '#1f2933' : '#465a67',
+            transform: 'rotate(-1.2deg)',
           }}
         >
-          {lastEmote}
+          {lastEmote === '👋' ? <Smile size={20} strokeWidth={2.3} /> : <span style={{ fontSize: 19 }}>{lastEmote}</span>}
         </button>
 
         <button
+          className="abeto-btn"
           title={outlineFx ? 'Phong cách Anime Ink (nhấn để chuyển Mượt)' : 'Chế độ Mượt 165 FPS'}
           onClick={() => {
             setOutlineFx((v) => {
@@ -1793,25 +1843,37 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               return next;
             });
           }}
-          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(1.5deg)' }}
+          style={{
+            ...PAPER_BTN_STYLE,
+            color: outlineFx ? '#357482' : '#d97706',
+            transform: 'rotate(1.4deg)',
+          }}
         >
-          {outlineFx ? '🎨' : '⚡'}
+          {outlineFx ? <Palette size={20} strokeWidth={2.3} /> : <Zap size={20} strokeWidth={2.3} />}
         </button>
 
         <button
+          className="abeto-btn"
           title="Đổi thời gian (Ngày/Hoàng hôn/Đêm)"
           onClick={cycleTime}
           style={{ ...PAPER_BTN_STYLE, transform: 'rotate(-1deg)' }}
         >
-          {timeOfDay === 'day' ? '☀️' : timeOfDay === 'sunset' ? '🌅' : '🌙'}
+          {timeOfDay === 'day' ? (
+            <Sun size={20} strokeWidth={2.3} />
+          ) : timeOfDay === 'sunset' ? (
+            <Sunrise size={20} strokeWidth={2.3} />
+          ) : (
+            <Moon size={20} strokeWidth={2.3} />
+          )}
         </button>
 
         <button
+          className="abeto-btn"
           title="Đặt lại góc camera"
           onClick={() => recenterRef.current?.()}
-          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(1deg)' }}
+          style={{ ...PAPER_BTN_STYLE, transform: 'rotate(1.2deg)' }}
         >
-          🧭
+          <Compass size={20} strokeWidth={2.3} />
         </button>
       </div>
       )}
@@ -1889,10 +1951,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                 borderRadius: 7,
                 fontWeight: 900,
                 cursor: 'pointer',
-                fontSize: 12,
+                display: 'grid',
+                placeItems: 'center',
               }}
             >
-              ✕
+              <X size={14} strokeWidth={3} />
             </button>
           </div>
           <div style={{ marginBottom: 9 }}>
@@ -2095,19 +2158,23 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             </span>
             <div style={{ display: 'flex', gap: 6 }}>
               <button
+                className="abeto-btn"
                 onClick={() => speakEnglish(activeDialog.feedback ?? activeDialog.quest.promptEn)}
                 style={{
-                  border: '2px solid #1d2a33',
-                  background: '#e0f2fe',
-                  color: '#1d2a33',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                  border: '2px solid #243038',
+                  background: '#e6f5f7',
+                  color: '#243038',
                   borderRadius: 8,
-                  padding: '2px 8px',
-                  fontSize: 11,
+                  padding: '3px 9px',
+                  fontSize: 11.5,
                   fontWeight: 800,
                   cursor: 'pointer',
                 }}
               >
-                🔊 Nghe lại
+                <Volume2 size={13} strokeWidth={2.5} /> Nghe lại
               </button>
               <button
                 onClick={() => setActiveDialog((d) => (d ? { ...d, showVi: !d.showVi } : null))}
@@ -2140,24 +2207,27 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           {!activeDialog.completedNow ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
               <button
+                className="abeto-choice"
                 onClick={handleVoiceReply}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  gap: 8,
-                  border: '2px solid #1d2a33',
-                  background: listeningMic ? '#ef4444' : '#dcfce7',
-                  color: listeningMic ? '#fff' : '#14532d',
+                  gap: 7,
+                  border: '2px solid #243038',
+                  background: listeningMic ? '#ef4444' : '#e4f6ea',
+                  color: listeningMic ? '#fff' : '#1b4d32',
                   borderRadius: 10,
-                  padding: '7px 11px',
+                  padding: '8px 12px',
                   fontSize: 12.5,
                   fontWeight: 900,
                   cursor: 'pointer',
-                  boxShadow: '2px 2px 0 #1d2a33',
+                  boxShadow: '2px 3px 0 rgba(36, 48, 56, 0.22)',
+                  transition: 'all 0.12s ease',
                 }}
               >
-                <span>{listeningMic ? '🔴 Đang nghe tiếng Anh của bạn...' : '🎤 Nói tiếng Anh trả lời trực tiếp (+40 XP)'}</span>
+                <Mic size={15} strokeWidth={2.5} />
+                <span>{listeningMic ? 'Đang nghe tiếng Anh của bạn...' : 'Nói tiếng Anh trả lời trực tiếp (+40 XP)'}</span>
               </button>
               {voiceTranscript && (
                 <div style={{ fontSize: 11.5, fontWeight: 700, color: '#2563eb', textAlign: 'center' }}>
