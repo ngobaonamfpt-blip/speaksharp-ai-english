@@ -1,0 +1,2994 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Messenger — Cozy 3D Miniature Planet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
+    html, body {
+      width: 100%; height: 100%; overflow: hidden;
+      background: #6dc9c4;
+      font-family: 'Nunito', system-ui, -apple-system, sans-serif;
+      color: #232a2f;
+      touch-action: none;
+    }
+    #canvas-wrap {
+      position: fixed; inset: 0; width: 100%; height: 100%;
+    }
+    canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    canvas:active { cursor: grabbing; }
+
+    /* Illustrated Anime-Card UI Style (inspired by Abeto Messenger) */
+    .ink-card {
+      background: rgba(255, 253, 247, 0.96);
+      border: 2.5px solid #232a2f;
+      box-shadow: 0 4px 0 #232a2f;
+      border-radius: 16px;
+    }
+    .ink-btn {
+      background: #fffdf7;
+      border: 2.5px solid #232a2f;
+      box-shadow: 0 3px 0 #232a2f;
+      border-radius: 14px;
+      color: #232a2f;
+      font-family: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.08s ease, box-shadow 0.08s ease, background 0.15s ease;
+    }
+    .ink-btn:hover { background: #fef3c7; }
+    .ink-btn:active { transform: translateY(2px); box-shadow: 0 1px 0 #232a2f; }
+    .ink-btn.active { background: #f5bd33; }
+
+    /* Top-Left Quest HUD */
+    #quest-hud {
+      position: fixed; top: 16px; left: 16px; z-index: 20;
+      padding: 12px 16px; max-width: 320px;
+      pointer-events: auto;
+    }
+    .quest-eyebrow {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.06em;
+      color: #c93b3b; margin-bottom: 4px;
+    }
+    .quest-badge {
+      background: #fef3c7; border: 1.5px solid #232a2f; color: #232a2f;
+      padding: 1px 8px; border-radius: 999px; font-size: 11px;
+    }
+    #quest-title { font-size: 15px; font-weight: 900; line-height: 1.25; }
+    #quest-sub { font-size: 12.5px; font-weight: 700; color: #52606d; margin-top: 2px; }
+
+    /* Right-Side Vertical Illustrated Square Buttons (Abeto Messenger signature!) */
+    #right-controls {
+      position: fixed; top: 16px; right: 16px; z-index: 20;
+      display: flex; flex-direction: column; gap: 10px;
+    }
+    .sq-btn { width: 46px; height: 46px; font-size: 20px; }
+
+    /* Outfit & Multiplayer Popover Panels */
+    #outfit-panel, #mp-panel {
+      position: fixed; top: 16px; right: 74px; z-index: 25;
+      width: 268px; padding: 14px 16px;
+      display: none; flex-direction: column; gap: 11px;
+    }
+    #outfit-panel.open, #mp-panel.open { display: flex; }
+    .mp-status {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 800; color: #15803d;
+      background: #dcfce7; border: 1.5px solid #232a2f;
+      padding: 4px 10px; border-radius: 999px; width: fit-content;
+    }
+    .mp-input {
+      width: 100%; padding: 7px 10px; border-radius: 10px;
+      border: 2px solid #232a2f; background: #ffffff;
+      font-family: inherit; font-size: 13px; font-weight: 700;
+      color: #232a2f; outline: none; user-select: text; -webkit-user-select: text;
+    }
+    .mp-row { display: flex; gap: 6px; align-items: center; }
+    .mp-mini-btn {
+      padding: 7px 11px; font-size: 12px; border-radius: 10px; white-space: nowrap;
+    }
+    .mp-dot {
+      position: absolute; top: -4px; right: -4px;
+      min-width: 18px; height: 18px; padding: 0 4px;
+      border-radius: 999px; background: #22c55e; color: #fff;
+      border: 2px solid #232a2f; font-size: 10px; font-weight: 900;
+      display: grid; place-items: center;
+    }
+    .outfit-row-label { font-size: 12px; font-weight: 900; margin-bottom: 6px; color: #232a2f; }
+    .swatch-row { display: flex; gap: 7px; flex-wrap: wrap; }
+    .swatch {
+      width: 26px; height: 26px; border-radius: 50%;
+      border: 2.5px solid #232a2f; cursor: pointer;
+      transition: transform 0.12s ease;
+    }
+    .swatch:hover { transform: scale(1.14); }
+    .swatch.selected { box-shadow: 0 0 0 3px #f5bd33; transform: scale(1.12); }
+
+    /* Bottom-Center Emoji Bar + Hints */
+    #bottom-hud {
+      position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%);
+      z-index: 20; display: flex; flex-direction: column; align-items: center; gap: 8px;
+      pointer-events: none;
+    }
+    #emoji-bar {
+      pointer-events: auto;
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 999px;
+    }
+    .emoji-btn {
+      width: 40px; height: 40px; border-radius: 50%;
+      border: 2px solid transparent; background: transparent;
+      font-size: 21px; cursor: pointer;
+      display: grid; place-items: center;
+      transition: transform 0.12s ease, background 0.12s ease, border-color 0.12s ease;
+    }
+    .emoji-btn:hover { background: #fef3c7; border-color: #232a2f; transform: translateY(-2px); }
+    .emoji-btn:active { transform: scale(0.92); }
+    #controls-hint {
+      background: rgba(35, 42, 47, 0.82); color: #fffdf7;
+      padding: 5px 14px; border-radius: 999px;
+      font-size: 11.5px; font-weight: 700; white-space: nowrap;
+    }
+
+    /* Interact Prompt Pill */
+    #interact-pill {
+      position: fixed; bottom: 114px; left: 50%; transform: translateX(-50%);
+      z-index: 22; padding: 10px 18px; font-size: 14px; gap: 10px;
+      display: none; background: #232a2f; color: #fffdf7;
+      border: 2.5px solid #fffdf7; box-shadow: 0 6px 20px rgba(0,0,0,0.28);
+      border-radius: 999px; cursor: pointer; font-family: inherit; font-weight: 800;
+      align-items: center;
+    }
+    #interact-pill.show { display: inline-flex; }
+    .key-cap {
+      background: #f5bd33; color: #232a2f; padding: 2px 8px;
+      border-radius: 7px; font-size: 12px; font-weight: 900;
+    }
+
+    /* Cozy NPC Speech Dialog */
+    #dialog-box {
+      position: fixed; bottom: 108px; left: 50%; transform: translateX(-50%);
+      z-index: 30; width: min(460px, calc(100vw - 32px));
+      padding: 16px 20px; display: none; flex-direction: column; gap: 10px;
+    }
+    #dialog-box.open { display: flex; }
+    #dialog-name { font-size: 15px; font-weight: 900; color: #c93b3b; }
+    #dialog-text { font-size: 14.5px; font-weight: 700; line-height: 1.45; color: #232a2f; }
+    #dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+    /* Toast */
+    #toast {
+      position: fixed; top: 18px; left: 50%; transform: translateX(-50%) translateY(-20px);
+      z-index: 35; background: #232a2f; color: #f5bd33;
+      padding: 10px 20px; border-radius: 999px; border: 2px solid #f5bd33;
+      font-size: 13.5px; font-weight: 800; opacity: 0; pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+    }
+    #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+    /* Floating 3D-Projected Emoji Speech Bubbles */
+    #emote-layer {
+      position: fixed; inset: 0; pointer-events: none; z-index: 15; overflow: hidden;
+    }
+    .float-bubble {
+      position: absolute; transform: translate(-50%, -100%);
+      background: #fffdf7; border: 2.5px solid #232a2f;
+      box-shadow: 0 4px 0 #232a2f; border-radius: 999px;
+      padding: 5px 12px; font-size: 20px; font-weight: 800;
+      display: inline-flex; align-items: center; gap: 5px;
+      will-change: transform, left, top;
+    }
+    .float-bubble span.who { font-size: 11px; color: #52606d; }
+
+    /* Welcome / Audio Start Splash */
+    #start-overlay {
+      position: fixed; inset: 0; z-index: 50;
+      background: rgba(109, 201, 196, 0.72);
+      backdrop-filter: blur(8px);
+      display: flex; align-items: center; justify-content: center; padding: 20px;
+    }
+    #start-card {
+      max-width: 420px; width: 100%; padding: 28px 26px; text-align: center;
+    }
+    #start-card h1 { font-size: 28px; font-weight: 900; margin-bottom: 6px; }
+    #start-card p { font-size: 14px; font-weight: 700; color: #52606d; line-height: 1.5; margin-bottom: 20px; }
+    #play-btn {
+      padding: 13px 32px; font-size: 16px; background: #f5bd33; width: 100%;
+    }
+
+    /* Mobile Touch Controls */
+    #mobile-joy-zone {
+      position: fixed; bottom: 22px; left: 20px; z-index: 24;
+      width: 116px; height: 116px; border-radius: 50%;
+      background: rgba(255, 253, 247, 0.35);
+      border: 2.5px solid rgba(35, 42, 47, 0.6);
+      display: none; align-items: center; justify-content: center;
+    }
+    #mobile-joy-knob {
+      width: 48px; height: 48px; border-radius: 50%;
+      background: #fffdf7; border: 2.5px solid #232a2f;
+      box-shadow: 0 3px 0 #232a2f;
+    }
+    #mobile-actions {
+      position: fixed; bottom: 26px; right: 20px; z-index: 24;
+      display: none; flex-direction: column; gap: 10px;
+    }
+    .touch-action-btn {
+      width: 60px; height: 60px; border-radius: 50%; font-size: 13px;
+    }
+    @media (pointer: coarse), (max-width: 768px) {
+      #mobile-joy-zone { display: flex; }
+      #mobile-actions { display: flex; }
+      #controls-hint { display: none; }
+      #bottom-hud { bottom: 14px; }
+      #quest-hud { max-width: 230px; padding: 10px 12px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-wrap"></div>
+  <div id="emote-layer"></div>
+
+  <!-- Top-Left Delivery Quest Card -->
+  <div id="quest-hud" class="ink-card">
+    <div class="quest-eyebrow">
+      <span>📬 MESSENGER</span>
+      <span class="quest-badge" id="stats-badge">📦 0/5 · 60 FPS</span>
+    </div>
+    <div id="quest-title">Pick up mail at the Post Office</div>
+    <div id="quest-sub">Follow the golden arrow · 0m away</div>
+  </div>
+
+  <!-- Right-Side Illustrated Square Icon Buttons -->
+  <div id="right-controls">
+    <button id="btn-mp" class="ink-btn sq-btn" style="position:relative;" title="Real-Time Multiplayer (PeerJS)">
+      🌐<span class="mp-dot" id="mp-count-dot">1</span>
+    </button>
+    <button id="btn-audio" class="ink-btn sq-btn" title="Toggle Lo-Fi Music & SFX">🎵</button>
+    <button id="btn-outfit" class="ink-btn sq-btn" title="Customize Outfit">👕</button>
+    <button id="btn-time" class="ink-btn sq-btn" title="Day / Sunset / Night">☀️</button>
+    <button id="btn-recenter" class="ink-btn sq-btn" title="Recenter Camera">🧭</button>
+  </div>
+
+  <!-- Real-Time Multiplayer Panel (PeerJS WebRTC + Local Multi-Tab Auto-Sync) -->
+  <div id="mp-panel" class="ink-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;">
+      <span style="font-size:14px;font-weight:900;">🌐 Live Multiplayer</span>
+      <span class="mp-status" id="mp-status-pill">● Ready</span>
+    </div>
+    <div>
+      <div class="outfit-row-label">Your Name</div>
+      <input id="mp-name-input" class="mp-input" maxlength="16" value="Courier" />
+    </div>
+    <div>
+      <div class="outfit-row-label">Your Room Code (PeerJS)</div>
+      <div class="mp-row">
+        <input id="mp-my-id" class="mp-input" readonly value="Connecting..." />
+        <button id="btn-copy-id" class="ink-btn mp-mini-btn" title="Copy Room Code">📋</button>
+      </div>
+      <button id="btn-copy-link" class="ink-btn mp-mini-btn" style="width:100%;margin-top:6px;background:#fef3c7;">
+        🔗 Copy Invite Link (?join=...)
+      </button>
+    </div>
+    <div>
+      <div class="outfit-row-label">Join Friend's Room Code</div>
+      <div class="mp-row">
+        <input id="mp-join-input" class="mp-input" placeholder="e.g. PLANET-1234" />
+        <button id="btn-join-peer" class="ink-btn mp-mini-btn" style="background:#f5bd33;">Join</button>
+      </div>
+    </div>
+    <div style="font-size:11.5px;font-weight:700;color:#52606d;line-height:1.35;">
+      💡 Tip: Open this file in 2 browser tabs to auto-sync instantly, or share your Room Code / Invite Link with a friend!
+    </div>
+  </div>
+
+  <!-- Outfit Customizer Panel -->
+  <div id="outfit-panel" class="ink-card">
+    <div>
+      <div class="outfit-row-label">🧢 Hat / Cap Color</div>
+      <div class="swatch-row" id="swatches-hat"></div>
+    </div>
+    <div>
+      <div class="outfit-row-label">🧥 Jacket / Shirt Color</div>
+      <div class="swatch-row" id="swatches-shirt"></div>
+    </div>
+    <div>
+      <div class="outfit-row-label">🎒 Messenger Bag Color</div>
+      <div class="swatch-row" id="swatches-bag"></div>
+    </div>
+  </div>
+
+  <!-- Nearby NPC Interact Pill -->
+  <button id="interact-pill">
+    <span class="key-cap">E</span>
+    <span id="interact-label">Talk to Postmaster Ben</span>
+  </button>
+
+  <!-- Cozy NPC Dialog Box -->
+  <div id="dialog-box" class="ink-card">
+    <div id="dialog-name">Postmaster Ben</div>
+    <div id="dialog-text">Welcome! Ready to deliver parcels across our tiny planet?</div>
+    <div id="dialog-actions">
+      <button id="dialog-ok" class="ink-btn" style="padding: 8px 18px; background: #f5bd33;">Got it! ✨</button>
+    </div>
+  </div>
+
+  <!-- Toast Banner -->
+  <div id="toast">📬 Parcel Delivered!</div>
+
+  <!-- Bottom-Center Emoji Bar + Hints -->
+  <div id="bottom-hud">
+    <div id="emoji-bar" class="ink-card">
+      <button class="emoji-btn" data-emoji="👋" title="Key 1">👋</button>
+      <button class="emoji-btn" data-emoji="❤️" title="Key 2">❤️</button>
+      <button class="emoji-btn" data-emoji="✨" title="Key 3">✨</button>
+      <button class="emoji-btn" data-emoji="😊" title="Key 4">😊</button>
+      <button class="emoji-btn" data-emoji="📦" title="Key 5">📦</button>
+    </div>
+    <div id="controls-hint">WASD: Walk · Space: Jump / Hold to Glide · E: Interact · 1–5: Emojis · Drag: Orbit</div>
+  </div>
+
+  <!-- Mobile Virtual Joystick & Buttons -->
+  <div id="mobile-joy-zone"><div id="mobile-joy-knob"></div></div>
+  <div id="mobile-actions">
+    <button id="btn-touch-act" class="ink-btn touch-action-btn" style="background:#f5bd33;">TALK</button>
+    <button id="btn-touch-jump" class="ink-btn touch-action-btn">JUMP</button>
+  </div>
+
+  <!-- Cozy Welcome Overlay (starts Web Audio cleanly on user gesture) -->
+  <div id="start-overlay">
+    <div id="start-card" class="ink-card">
+      <div style="font-size:44px;margin-bottom:6px;">📬🌍</div>
+      <h1>Little Planet Messenger</h1>
+      <p>
+        Run 360° around a cozy cel-shaded miniature planet. Deliver parcels across the
+        <strong>Small Town</strong>, <strong>Autumn Forest</strong>, and <strong>Windmill Power Plant</strong>,
+        wave to fellow couriers, and unwind to warm lo-fi Rhodes chords.
+      </p>
+      <button id="play-btn" class="ink-btn">Start Delivering ✨</button>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.169.0/build/three.module.js",
+        "three/addons/": "https://unpkg.com/three@0.169.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OutlineEffect } from 'three/addons/effects/OutlineEffect.js';
+
+    // =========================================================================
+    // 1. PROCEDURAL LO-FI AUDIO ENGINE (Web Audio API — Zero External Assets!)
+    // =========================================================================
+    class CozyLoFiAudio {
+      constructor() {
+        this.ctx = null;
+        this.masterGain = null;
+        this.muted = false;
+        this.bgMusic = null;
+        this.musicTimer = null;
+        this.chordIdx = 0;
+        this.vinylNode = null;
+        // Warm Rhodes Lo-Fi progression: Cmaj9 -> Am9 -> Fmaj9 -> G13
+        this.chords = [
+          [261.63, 329.63, 392.00, 493.88, 587.33],
+          [220.00, 261.63, 329.63, 392.00, 493.88],
+          [174.61, 220.00, 261.63, 329.63, 392.00],
+          [196.00, 246.94, 329.63, 349.23, 440.00],
+        ];
+      }
+
+      init() {
+        if (!this.bgMusic) {
+          const a = new Audio('/messenger/audio/music/bgmusic-highq.ogg');
+          a.loop = true;
+          a.volume = this.muted ? 0 : 0.48;
+          this.bgMusic = a;
+          if (!this.muted) a.play().catch(() => {});
+        } else if (!this.muted && this.bgMusic.paused) {
+          this.bgMusic.play().catch(() => {});
+        }
+
+        if (this.ctx) {
+          if (this.ctx.state === 'suspended') this.ctx.resume();
+          return;
+        }
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        this.ctx = new AC();
+        this.masterGain = this.ctx.createGain();
+        this.masterGain.gain.value = this.muted ? 0 : 0.72;
+        this.masterGain.connect(this.ctx.destination);
+      }
+
+      setMuted(m) {
+        this.muted = m;
+        if (this.bgMusic) {
+          this.bgMusic.muted = m;
+          if (m) {
+            this.bgMusic.pause();
+          } else {
+            this.bgMusic.volume = 0.48;
+            this.bgMusic.play().catch(() => {});
+          }
+        }
+        if (this.masterGain && this.ctx) {
+          this.masterGain.gain.setTargetAtTime(m ? 0 : 0.72, this.ctx.currentTime, 0.08);
+        }
+      }
+
+      startVinylWarmth() {
+        if (!this.ctx) return;
+        const len = this.ctx.sampleRate * 3;
+        const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate);
+        const data = buf.getChannelData(0);
+        for (let i = 0; i < len; i++) {
+          const crackle = Math.random() > 0.9994 ? (Math.random() - 0.5) * 0.22 : 0;
+          data[i] = (Math.random() - 0.5) * 0.012 + crackle;
+        }
+        const src = this.ctx.createBufferSource();
+        src.buffer = buf;
+        src.loop = true;
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.value = 1800;
+        const g = this.ctx.createGain();
+        g.gain.value = 0.28;
+        src.connect(filter).connect(g).connect(this.masterGain);
+        src.start();
+        this.vinylNode = src;
+      }
+
+      playChord() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        const notes = this.chords[this.chordIdx % this.chords.length];
+        this.chordIdx++;
+
+        const filter = this.ctx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1150, now);
+        filter.frequency.exponentialRampToValueAtTime(520, now + 3.4);
+        filter.connect(this.masterGain);
+
+        notes.forEach((freq, idx) => {
+          const osc = this.ctx.createOscillator();
+          const sub = this.ctx.createOscillator();
+          const gain = this.ctx.createGain();
+          osc.type = 'sine';
+          sub.type = 'triangle';
+          // Subtle lo-fi tape pitch drift
+          const detune = (Math.random() - 0.5) * 5;
+          osc.frequency.setValueAtTime(freq, now + idx * 0.035);
+          osc.detune.value = detune;
+          sub.frequency.setValueAtTime(freq * 2, now + idx * 0.035);
+          sub.detune.value = detune;
+
+          const subGain = this.ctx.createGain();
+          subGain.gain.value = 0.14;
+
+          gain.gain.setValueAtTime(0.0001, now + idx * 0.035);
+          gain.gain.linearRampToValueAtTime(0.055, now + idx * 0.035 + 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.0008, now + 3.6);
+
+          osc.connect(gain);
+          sub.connect(subGain).connect(gain);
+          gain.connect(filter);
+          osc.start(now + idx * 0.035);
+          sub.start(now + idx * 0.035);
+          osc.stop(now + 3.7);
+          sub.stop(now + 3.7);
+        });
+      }
+
+      playFootstep() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(125 + Math.random() * 30, now);
+        osc.frequency.exponentialRampToValueAtTime(65, now + 0.055);
+        g.gain.setValueAtTime(0.055, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(g).connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.065);
+      }
+
+      playJump() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        const osc = this.ctx.createOscillator();
+        const g = this.ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(540, now + 0.14);
+        g.gain.setValueAtTime(0.13, now);
+        g.gain.exponentialRampToValueAtTime(0.001, now + 0.16);
+        osc.connect(g).connect(this.masterGain);
+        osc.start(now);
+        osc.stop(now + 0.17);
+      }
+
+      playEmote() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        [587.33, 880].forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + i * 0.055);
+          g.gain.setValueAtTime(0.1, now + i * 0.055);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.055 + 0.14);
+          osc.connect(g).connect(this.masterGain);
+          osc.start(now + i * 0.055);
+          osc.stop(now + i * 0.055 + 0.15);
+        });
+      }
+
+      playPickup() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        [440, 554.37, 659.25].forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + i * 0.065);
+          g.gain.setValueAtTime(0.11, now + i * 0.065);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.065 + 0.22);
+          osc.connect(g).connect(this.masterGain);
+          osc.start(now + i * 0.065);
+          osc.stop(now + i * 0.065 + 0.24);
+        });
+      }
+
+      playDeliver() {
+        if (!this.ctx || this.muted) return;
+        const now = this.ctx.currentTime;
+        [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => {
+          const osc = this.ctx.createOscillator();
+          const g = this.ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + i * 0.075);
+          g.gain.setValueAtTime(0.13, now + i * 0.075);
+          g.gain.exponentialRampToValueAtTime(0.001, now + i * 0.075 + 0.35);
+          osc.connect(g).connect(this.masterGain);
+          osc.start(now + i * 0.075);
+          osc.stop(now + i * 0.075 + 0.38);
+        });
+      }
+    }
+
+    const audio = new CozyLoFiAudio();
+
+    // =========================================================================
+    // 2. THREE.JS SCENE, ANIME OUTLINE EFFECT & CEL-SHADING SETUP
+    // =========================================================================
+    const PLANET_RADIUS = 28;
+    const wrap = document.getElementById('canvas-wrap');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x52b6f5);
+    scene.fog = new THREE.FogExp2(0xd8eef8, 0.0022);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.2, 320);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    wrap.appendChild(renderer.domElement);
+
+    // Crisp Manga / Sable Ink Outlines around EVERY cel-shaded mesh!
+    const effect = new OutlineEffect(renderer, {
+      defaultThickness: 0.0062,
+      defaultColor: [0.13, 0.16, 0.19],
+      defaultAlpha: 0.96,
+      defaultKeepAlive: true,
+    });
+
+    // Custom 3-step cel-shading gradient map (deep cool shadow -> soft warm midtone -> bright highlight)
+    const gradData = new Uint8Array([
+      118, 128, 148, 255,
+      198, 206, 210, 255,
+      255, 255, 255, 255,
+    ]);
+    const toonGradient = new THREE.DataTexture(gradData, 3, 1, THREE.RGBAFormat);
+    toonGradient.minFilter = THREE.NearestFilter;
+    toonGradient.magFilter = THREE.NearestFilter;
+    toonGradient.needsUpdate = true;
+
+    // Shared GPU Uniforms (Wind + Rim Light + Dynamic Sky Up-Vector!)
+    const windUniforms = {
+      uWindTime: { value: 0 },
+    };
+
+    // Custom Cel-Shaded MeshToonMaterial with Subtle Warm Rim Lighting (Abeto Messenger look!)
+    function applySubtleRim(mat, rimStrength = 0.24, keySuffix = 'base') {
+      mat.customProgramCacheKey = () => `toon-rim-${keySuffix}-${rimStrength}`;
+      const prevCompile = mat.onBeforeCompile;
+      mat.onBeforeCompile = (shader, rendererRef) => {
+        if (prevCompile) prevCompile(shader, rendererRef);
+        shader.fragmentShader = shader.fragmentShader.replace(
+          '#include <dithering_fragment>',
+          `
+          vec3 rimViewDir = normalize(vViewPosition);
+          float rimFactor = pow(1.0 - clamp(dot(normalize(vNormal), rimViewDir), 0.0, 1.0), 3.0);
+          gl_FragColor.rgb += vec3(1.0, 0.96, 0.86) * rimFactor * ${rimStrength.toFixed(2)};
+          #include <dithering_fragment>
+          `
+        );
+      };
+      return mat;
+    }
+
+    const toonMat = (color, extra = {}) => {
+      const m = new THREE.MeshToonMaterial({ color, gradientMap: toonGradient, ...extra });
+      if (!extra.noRim) applySubtleRim(m, extra.rimStrength ?? 0.22, 'std');
+      return m;
+    };
+
+    // Custom MeshToonMaterial with GPU Vertex-Shader Wind Sway + Subtle Rim Light
+    function createWindToonMaterial(color, { swayStrength = 0.14, isInstancedGrass = false, extra = {} } = {}) {
+      const mat = new THREE.MeshToonMaterial({
+        color,
+        gradientMap: toonGradient,
+        ...extra,
+      });
+      mat.customProgramCacheKey = () =>
+        isInstancedGrass ? `toon-wind-grass-${swayStrength}` : `toon-wind-tree-${swayStrength}`;
+      mat.onBeforeCompile = (shader) => {
+        shader.uniforms.uWindTime = windUniforms.uWindTime;
+        shader.vertexShader = 'uniform float uWindTime;\n' + shader.vertexShader;
+        shader.vertexShader = shader.vertexShader.replace(
+          '#include <begin_vertex>',
+          isInstancedGrass
+            ? `#include <begin_vertex>
+              vec4 grassWorld = modelMatrix * instanceMatrix * vec4(transformed, 1.0);
+              float tipWeight = clamp(transformed.y / 0.72, 0.0, 1.0);
+              float wave = sin(uWindTime * 2.4 + grassWorld.x * 0.45 + grassWorld.z * 0.45 + grassWorld.y * 0.25)
+                         + 0.4 * cos(uWindTime * 3.9 + grassWorld.z * 0.7);
+              transformed.x += wave * ${swayStrength.toFixed(3)} * tipWeight * tipWeight;
+              transformed.z += wave * ${(swayStrength * 0.65).toFixed(3)} * tipWeight * tipWeight;`
+            : `#include <begin_vertex>
+              vec4 treeWorld = modelMatrix * vec4(transformed, 1.0);
+              float hWeight = clamp((transformed.y + 1.2) * 0.45, 0.2, 1.2);
+              float gust = 0.75 + 0.35 * sin(uWindTime * 0.8 + treeWorld.x * 0.15);
+              float wave = sin(uWindTime * 2.0 + treeWorld.x * 0.35 + treeWorld.z * 0.35) * gust;
+              transformed.x += wave * ${swayStrength.toFixed(3)} * hWeight;
+              transformed.z += cos(uWindTime * 1.7 + treeWorld.z * 0.35) * ${(swayStrength * 0.7).toFixed(3)} * hWeight;`
+        );
+        if (!isInstancedGrass) {
+          shader.fragmentShader = shader.fragmentShader.replace(
+            '#include <dithering_fragment>',
+            `
+            vec3 rimViewDir = normalize(vViewPosition);
+            float rimFactor = pow(1.0 - clamp(dot(normalize(vNormal), rimViewDir), 0.0, 1.0), 3.0);
+            gl_FragColor.rgb += vec3(1.0, 0.96, 0.86) * rimFactor * 0.22;
+            #include <dithering_fragment>
+            `
+          );
+        }
+      };
+      return mat;
+    }
+
+    // Procedural Soft Circular Drop-Shadow Texture (radial falloff beneath player, NPCs & bots!)
+    const shadowCanvas = document.createElement('canvas');
+    shadowCanvas.width = 64;
+    shadowCanvas.height = 64;
+    const sctx = shadowCanvas.getContext('2d');
+    const sGrad = sctx.createRadialGradient(32, 32, 4, 32, 32, 30);
+    sGrad.addColorStop(0, 'rgba(22, 34, 38, 0.58)');
+    sGrad.addColorStop(0.55, 'rgba(22, 34, 38, 0.26)');
+    sGrad.addColorStop(1, 'rgba(22, 34, 38, 0.0)');
+    sctx.fillStyle = sGrad;
+    sctx.fillRect(0, 0, 64, 64);
+    const softShadowTex = new THREE.CanvasTexture(shadowCanvas);
+
+    function createSoftDropShadow(radius = 0.78) {
+      const disc = new THREE.Mesh(
+        new THREE.CircleGeometry(radius, 20),
+        new THREE.MeshBasicMaterial({
+          map: softShadowTex,
+          transparent: true,
+          opacity: 0.9,
+          depthWrite: false,
+          polygonOffset: true,
+          polygonOffsetFactor: -2,
+        })
+      );
+      disc.rotation.x = -Math.PI / 2;
+      disc.position.y = 0.05;
+      disc.userData.outlineParameters = { visible: false };
+      return disc;
+    }
+
+    // Warm Vibrant Pastel Sky Dome (soft peach/golden horizon -> bright cerulean blue zenith!)
+    // Uses uLocalUp synced to player's surface normal so the horizon glows warm peach from ANY spot on the 360° planet!
+    const skyMat = new THREE.ShaderMaterial({
+      side: THREE.BackSide,
+      depthWrite: false,
+      fog: false,
+      uniforms: {
+        uLocalUp: { value: new THREE.Vector3(0, 1, 0) },
+        topColor: { value: new THREE.Color(0x2892e8) },      // Bright cerulean zenith
+        midColor: { value: new THREE.Color(0x78cbf8) },      // Airy pastel sky blue
+        horizonColor: { value: new THREE.Color(0xffdcb8) },  // Soft warm peach-gold horizon
+      },
+      vertexShader: `
+        varying vec3 vDir;
+        void main() {
+          vDir = normalize(position);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uLocalUp;
+        uniform vec3 topColor;
+        uniform vec3 midColor;
+        uniform vec3 horizonColor;
+        varying vec3 vDir;
+        void main() {
+          float elev = dot(normalize(vDir), normalize(uLocalUp));
+          vec3 col = mix(horizonColor, midColor, smoothstep(-0.22, 0.08, elev));
+          col = mix(col, topColor, smoothstep(0.06, 0.42, elev));
+          gl_FragColor = vec4(col, 1.0);
+          #include <colorspace_fragment>
+        }
+      `,
+    });
+    const skyDome = new THREE.Mesh(new THREE.SphereGeometry(200, 28, 18), skyMat);
+    skyMat.userData.outlineParameters = { visible: false };
+    scene.add(skyDome);
+
+    // Subtle Space Stars (brighter at night)
+    const starPts = new Float32Array(260 * 3);
+    for (let i = 0; i < 260; i++) {
+      const th = Math.random() * Math.PI * 2;
+      const ph = Math.acos(2 * Math.random() - 1);
+      starPts[i * 3] = 165 * Math.sin(ph) * Math.cos(th);
+      starPts[i * 3 + 1] = 165 * Math.cos(ph);
+      starPts[i * 3 + 2] = 165 * Math.sin(ph) * Math.sin(th);
+    }
+    const starGeo = new THREE.BufferGeometry();
+    starGeo.setAttribute('position', new THREE.BufferAttribute(starPts, 3));
+    const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, transparent: true, opacity: 0.1 });
+    scene.add(new THREE.Points(starGeo, starMat));
+
+    // Warm Sunlight + Soft Shadows + Hemisphere Fill
+    const hemiLight = new THREE.HemisphereLight(0xf2fffb, 0x6f8f85, 0.95);
+    scene.add(hemiLight);
+
+    const sunLight = new THREE.DirectionalLight(0xfff6dc, 1.45);
+    sunLight.position.set(52, 68, 44);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(1536, 1536);
+    sunLight.shadow.camera.near = 10;
+    sunLight.shadow.camera.far = 180;
+    sunLight.shadow.camera.left = -45;
+    sunLight.shadow.camera.right = 45;
+    sunLight.shadow.camera.top = 45;
+    sunLight.shadow.camera.bottom = -45;
+    sunLight.shadow.bias = -0.0008;
+    scene.add(sunLight);
+
+    // Planet biome anchor directions & 3D Perlin/Simplex Noise Sculpted Topography
+    const WATER_RADIUS = PLANET_RADIUS - 0.78;
+    const townCenter = new THREE.Vector3(0, 1, 0.08).normalize();
+    const forestCenter = new THREE.Vector3(0.88, 0.05, 0.45).normalize();
+    const plantCenter = new THREE.Vector3(-0.35, -0.88, -0.32).normalize();
+    const lakeCenter = new THREE.Vector3(0.58, -0.22, -0.78).normalize();
+    const streamPlaneNormal = new THREE.Vector3(0.65, 0.15, 0.74).normalize();
+    const bridge1Dir = new THREE.Vector3(0.74, 0.04, -0.66).normalize();
+    const bridge2Dir = new THREE.Vector3(-0.66, 0.42, 0.62).normalize();
+
+    // Fast deterministic 3D Gradient Perlin Noise + 4-Octave FBM for organic hills, cliffs & valleys
+    const perm = new Uint8Array(512);
+    {
+      const p = new Uint8Array(256);
+      for (let i = 0; i < 256; i++) p[i] = i;
+      let seed = 1337;
+      for (let i = 255; i > 0; i--) {
+        seed = (seed * 16807) % 2147483647;
+        const j = seed % (i + 1);
+        const tmp = p[i]; p[i] = p[j]; p[j] = tmp;
+      }
+      for (let i = 0; i < 512; i++) perm[i] = p[i & 255];
+    }
+    const fade = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+    const lerp = (a, b, t) => a + t * (b - a);
+    function grad3(hash, x, y, z) {
+      const h = hash & 15;
+      const u = h < 8 ? x : y;
+      const v = h < 4 ? y : (h === 12 || h === 14 ? x : z);
+      return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
+    }
+    function noise3D(x, y, z) {
+      const X = Math.floor(x) & 255, Y = Math.floor(y) & 255, Z = Math.floor(z) & 255;
+      x -= Math.floor(x); y -= Math.floor(y); z -= Math.floor(z);
+      const u = fade(x), v = fade(y), w = fade(z);
+      const A = perm[X] + Y, AA = perm[A] + Z, AB = perm[A + 1] + Z;
+      const B = perm[X + 1] + Y, BA = perm[B] + Z, BB = perm[B + 1] + Z;
+      return lerp(
+        lerp(
+          lerp(grad3(perm[AA], x, y, z), grad3(perm[BA], x - 1, y, z), u),
+          lerp(grad3(perm[AB], x, y - 1, z), grad3(perm[BB], x - 1, y - 1, z), u),
+          v
+        ),
+        lerp(
+          lerp(grad3(perm[AA + 1], x, y, z - 1), grad3(perm[BA + 1], x - 1, y, z - 1), u),
+          lerp(grad3(perm[AB + 1], x, y - 1, z - 1), grad3(perm[BB + 1], x - 1, y - 1, z - 1), u),
+          v
+        ),
+        w
+      );
+    }
+    function fbm3D(x, y, z) {
+      let val = 0, amp = 0.55, freq = 1.0;
+      for (let o = 0; o < 4; o++) {
+        val += noise3D(x * freq, y * freq, z * freq) * amp;
+        freq *= 2.05;
+        amp *= 0.48;
+      }
+      return val;
+    }
+    function smoothstep(e0, e1, x) {
+      const t = Math.max(0, Math.min(1, (x - e0) / (e1 - e0)));
+      return t * t * (3 - 2 * t);
+    }
+
+    /** Signed meandering distance to the carved winding riverbed around the planet */
+    function getRiverDist(unitDir) {
+      const meander = noise3D(unitDir.x * 2.4 + 3.1, unitDir.y * 2.4, unitDir.z * 2.4 - 1.7) * 0.16;
+      return Math.abs(unitDir.dot(streamPlaneNormal) + meander);
+    }
+
+    /** Returns true sculpted 3D radial distance from planet center (0,0,0) */
+    function getTerrainRadiusAt(unitDir, includeBridge = false) {
+      let r = PLANET_RADIUS;
+      const dTown = unitDir.distanceTo(townCenter);
+      const dPlant = unitDir.distanceTo(plantCenter);
+      const dLake = unitDir.distanceTo(lakeCenter);
+      const dRiver = getRiverDist(unitDir);
+
+      // 1) Multi-layered 3D Perlin FBM rolling hills & cliffs (flattened gently in town plaza)
+      const townFlatten = smoothstep(0.42, 0.62, dTown);
+      const fbm = fbm3D(unitDir.x * 2.35, unitDir.y * 2.35, unitDir.z * 2.35);
+      // Terraced cliff emphasis for stylized storybook hills
+      const hills = (fbm * 2.8 + Math.sin(fbm * 3.0) * 0.45) * townFlatten;
+      r += hills;
+
+      // 2) Cozy sunken town valley (surrounded by gentle scenic rim)
+      if (dTown < 0.54) {
+        const valley = 1 - smoothstep(0.38, 0.54, dTown);
+        r -= valley * 0.35;
+      }
+
+      // 3) Elevated hillside mesa plateau for the Windmill Power Plant Observatory
+      if (dPlant < 0.52) {
+        const plateau = 1 - smoothstep(0.24, 0.52, dPlant);
+        r += plateau * 2.45;
+      }
+
+      // 4) Carved winding riverbed channel around the planet (drops cleanly below WATER_RADIUS!)
+      const riverMask = smoothstep(0.44, 0.56, dTown); // Keep town square dry
+      if (dRiver < 0.145 && riverMask > 0.01) {
+        const carve = (1 - smoothstep(0.055, 0.145, dRiver)) * riverMask;
+        r = lerp(r, WATER_RADIUS - 1.25, carve);
+      }
+
+      // 5) Cozy sunken turquoise lake basin
+      if (dLake < 0.34) {
+        const lakeCarve = 1 - smoothstep(0.14, 0.34, dLake);
+        r = lerp(r, WATER_RADIUS - 1.55, lakeCarve);
+      }
+
+      // 6) Walkable arched wooden bridges spanning over the riverbed!
+      if (includeBridge) {
+        const dB1 = unitDir.distanceTo(bridge1Dir);
+        const dB2 = unitDir.distanceTo(bridge2Dir);
+        const minB = Math.min(dB1, dB2);
+        if (minB < 0.115) {
+          const arch = Math.cos((minB / 0.115) * (Math.PI * 0.5));
+          const bridgeR = WATER_RADIUS + 0.55 + arch * 0.72;
+          if (bridgeR > r) r = bridgeR;
+        }
+      }
+
+      return r;
+    }
+
+    // Helper to align any object's +Y up-vector to the spherical surface normal at true terrain height
+    const UP = new THREE.Vector3(0, 1, 0);
+    function placeOnSphere(obj, dir, radiusOffset = 0, spin = 0) {
+      const n = dir.clone().normalize();
+      const surfR = getTerrainRadiusAt(n, false);
+      obj.position.copy(n).multiplyScalar(surfR + radiusOffset);
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, n);
+      if (spin !== 0) q.multiply(new THREE.Quaternion().setFromAxisAngle(UP, spin));
+      obj.quaternion.copy(q);
+    }
+
+    // =========================================================================
+    // 3. SCULPTED MINIATURE PLANET WITH 3 ZONES + ANIMATED INNER WATER SPHERE
+    // =========================================================================
+    const planetGroup = new THREE.Group();
+    scene.add(planetGroup);
+
+    const colliders = [];
+
+    // High-detail sculpted sphere (detail=6 -> 20,480 smooth triangles for crisp cliffs, valleys & riverbed!)
+    const sphereGeo = new THREE.IcosahedronGeometry(PLANET_RADIUS, 6);
+    const pAttr = sphereGeo.attributes.position;
+    const vCols = new Float32Array(pAttr.count * 3);
+
+    const cPlaza1 = new THREE.Color(0xedf1e6);
+    const cPlaza2 = new THREE.Color(0xd7e2d5);
+    const cRoad = new THREE.Color(0x64787d);
+    const cTownGrass = new THREE.Color(0x7ec977);
+    const cAutumn1 = new THREE.Color(0xe3b668);
+    const cAutumn2 = new THREE.Color(0xcf8755);
+    const cSandBank = new THREE.Color(0xebd8a4);
+    const cCliffStone = new THREE.Color(0x9ba6a8);
+    const cHillGrass = new THREE.Color(0x6db87e);
+    const cPlateauTop = new THREE.Color(0x88cf84);
+    const tmpV = new THREE.Vector3();
+    const tmpC = new THREE.Color();
+
+    // Winding Dirt & Cobblestone Pathway Arcs connecting Town -> Forest -> Bridges -> Power Plant!
+    const pathRoutes = [
+      [townCenter, new THREE.Vector3(0.45, 0.72, 0.52).normalize()],
+      [new THREE.Vector3(0.45, 0.72, 0.52).normalize(), forestCenter],
+      [forestCenter, bridge1Dir],
+      [bridge1Dir, plantCenter],
+      [townCenter, bridge2Dir],
+      [bridge2Dir, plantCenter],
+    ];
+    function distToGreatArc(p, a, b) {
+      const ab = b.clone().sub(a);
+      const t = Math.max(0, Math.min(1, p.clone().sub(a).dot(ab) / Math.max(ab.lengthSq(), 0.0001)));
+      const closest = a.clone().lerp(b, t).normalize();
+      return p.distanceTo(closest);
+    }
+
+    const cDirtPath = new THREE.Color(0xe5cfa3);
+    const cCobble = new THREE.Color(0xd1c4b2);
+
+    for (let i = 0; i < pAttr.count; i++) {
+      tmpV.fromBufferAttribute(pAttr, i).normalize();
+      const rad = getTerrainRadiusAt(tmpV, false);
+      pAttr.setXYZ(i, tmpV.x * rad, tmpV.y * rad, tmpV.z * rad);
+
+      const dTown = tmpV.distanceTo(townCenter);
+      const dForest = tmpV.distanceTo(forestCenter);
+      const dPlant = tmpV.distanceTo(plantCenter);
+      const onPath = pathRoutes.some(([a, b]) => distToGreatArc(tmpV, a, b) < 0.062);
+
+      // Estimate local slope to tint steep cliff faces with warm stone!
+      const eps = 0.025;
+      const tA = new THREE.Vector3(tmpV.x + eps, tmpV.y, tmpV.z).normalize();
+      const tB = new THREE.Vector3(tmpV.x, tmpV.y + eps, tmpV.z).normalize();
+      const slope = Math.abs(getTerrainRadiusAt(tA, false) - rad) + Math.abs(getTerrainRadiusAt(tB, false) - rad);
+
+      if (dTown < 0.44) {
+        const cx = Math.floor((tmpV.x + 2) * 14);
+        const cz = Math.floor((tmpV.z + 2) * 14);
+        tmpC.copy((cx + cz) % 2 === 0 ? cPlaza1 : cPlaza2);
+      } else if (dTown < 0.51) {
+        tmpC.copy(cRoad);
+      } else if (rad < WATER_RADIUS + 0.28) {
+        // Sandy riverbed & lake shoreline!
+        tmpC.copy(cSandBank);
+      } else if (slope > 0.26) {
+        // Stylized stone cliff walls on plateaus & steep hills!
+        tmpC.copy(cCliffStone);
+      } else if (onPath) {
+        const stoneBit = Math.sin(tmpV.x * 28 + tmpV.z * 28) > 0.35;
+        tmpC.copy(stoneBit ? cCobble : cDirtPath);
+      } else if (dPlant < 0.3) {
+        tmpC.copy(cPlateauTop);
+      } else if (dForest < 0.72) {
+        tmpC.copy(Math.sin(tmpV.x * 7 + tmpV.z * 7) > 0 ? cAutumn1 : cAutumn2);
+      } else if (tmpV.y > 0.1) {
+        tmpC.copy(cTownGrass);
+      } else {
+        tmpC.copy(cHillGrass);
+      }
+      vCols[i * 3] = tmpC.r;
+      vCols[i * 3 + 1] = tmpC.g;
+      vCols[i * 3 + 2] = tmpC.b;
+    }
+    sphereGeo.setAttribute('color', new THREE.BufferAttribute(vCols, 3));
+    sphereGeo.computeVertexNormals();
+
+    const planetMat = toonMat(0xffffff, { vertexColors: true, noRim: true });
+    planetMat.userData.outlineParameters = { visible: false };
+    const planetMesh = new THREE.Mesh(sphereGeo, planetMat);
+    planetMesh.receiveShadow = true;
+    planetGroup.add(planetMesh);
+
+    // 2) Inner Stylized Translucent Turquoise Water Sphere with Animated Ripple Shader!
+    const waterUniforms = {
+      uWaterTime: { value: 0 },
+    };
+    const waterMat = new THREE.ShaderMaterial({
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        uWaterTime: waterUniforms.uWaterTime,
+        uDeepColor: { value: new THREE.Color(0x22b8cf) },
+        uShallowColor: { value: new THREE.Color(0x74e5f0) },
+        uFoamColor: { value: new THREE.Color(0xe6fcfc) },
+      },
+      vertexShader: `
+        uniform float uWaterTime;
+        varying vec3 vNorm;
+        varying vec3 vWorldPos;
+        void main() {
+          vec3 n = normalize(position);
+          float ripple = sin(uWaterTime * 2.2 + n.x * 16.0 + n.z * 14.0) * 0.055
+                       + cos(uWaterTime * 1.7 - n.y * 18.0 + n.x * 12.0) * 0.04;
+          vec3 displaced = position + n * ripple;
+          vNorm = n;
+          vec4 wp = modelMatrix * vec4(displaced, 1.0);
+          vWorldPos = wp.xyz;
+          gl_Position = projectionMatrix * viewMatrix * wp;
+        }
+      `,
+      fragmentShader: `
+        uniform float uWaterTime;
+        uniform vec3 uDeepColor;
+        uniform vec3 uShallowColor;
+        uniform vec3 uFoamColor;
+        varying vec3 vNorm;
+        varying vec3 vWorldPos;
+        void main() {
+          float w1 = sin(vNorm.x * 26.0 + vNorm.z * 22.0 + uWaterTime * 2.0);
+          float w2 = cos(vNorm.y * 24.0 - vNorm.z * 28.0 - uWaterTime * 1.6);
+          float caustic = smoothstep(0.55, 0.92, (w1 * w2) * 0.5 + 0.5);
+          vec3 col = mix(uDeepColor, uShallowColor, 0.45 + 0.35 * w1);
+          col = mix(col, uFoamColor, caustic * 0.55);
+          gl_FragColor = vec4(col, 0.86);
+          #include <colorspace_fragment>
+        }
+      `,
+    });
+    waterMat.userData.outlineParameters = { visible: false };
+    const waterSphere = new THREE.Mesh(new THREE.SphereGeometry(WATER_RADIUS, 48, 32), waterMat);
+    planetGroup.add(waterSphere);
+
+    // --- Architectural Builders (Japanese Anime Storybook Style) ---
+    function enableShadows(grp) {
+      grp.traverse((o) => {
+        if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }
+      });
+    }
+
+    function buildTownHouse(wallColor, roofColor, signColor = null, w = 3.6, h = 2.8, d = 3.0) {
+      const g = new THREE.Group();
+      const walls = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), toonMat(wallColor));
+      walls.position.y = h * 0.5;
+      g.add(walls);
+
+      // Sloped gable roof
+      const roof = new THREE.Mesh(new THREE.ConeGeometry(Math.max(w, d) * 0.82, 1.5, 4), toonMat(roofColor));
+      roof.rotation.y = Math.PI / 4;
+      roof.position.y = h + 0.72;
+      g.add(roof);
+
+      // Door & awning
+      const door = new THREE.Mesh(new THREE.BoxGeometry(0.95, 1.45, 0.14), toonMat(0x5c4b3c));
+      door.position.set(-0.4, 0.75, d * 0.5 + 0.02);
+      g.add(door);
+
+      // Window + shutter
+      const win = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.85, 0.12), toonMat(0x2f3b42));
+      win.position.set(0.65, h * 0.62, d * 0.5 + 0.03);
+      g.add(win);
+
+      // Cute Japanese AC outdoor unit on side/front!
+      const ac = new THREE.Mesh(new THREE.BoxGeometry(0.75, 0.52, 0.34), toonMat(0xf5f5f0));
+      ac.position.set(w * 0.5 + 0.16, h * 0.48, 0.2);
+      const fan = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.06, 12), toonMat(0x374151));
+      fan.rotation.z = Math.PI / 2;
+      fan.position.set(w * 0.5 + 0.34, h * 0.48, 0.2);
+      g.add(ac, fan);
+
+      // Optional bright yellow Japanese shop signboard!
+      if (signColor) {
+        const sign = new THREE.Mesh(new THREE.BoxGeometry(w + 0.25, 0.58, 0.22), toonMat(signColor));
+        sign.position.set(0, h * 0.86, d * 0.5 + 0.14);
+        g.add(sign);
+      }
+
+      // Mint posters on wall
+      const posterMat = toonMat(0x9fe2cf);
+      [-0.8, 0, 0.8].forEach((px) => {
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.55, 0.05), posterMat);
+        p.position.set(px, 1.2, -d * 0.5 - 0.03);
+        g.add(p);
+      });
+
+      enableShadows(g);
+      return g;
+    }
+
+    function buildRedPostbox() {
+      const g = new THREE.Group();
+      const body = new THREE.Mesh(new THREE.BoxGeometry(1.0, 1.45, 0.85), toonMat(0xc73e3a));
+      body.position.y = 0.9;
+      const top = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.0, 10, 1, false, 0, Math.PI), toonMat(0xc73e3a));
+      top.rotation.z = Math.PI / 2;
+      top.position.y = 1.62;
+      const slot = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.1, 0.12), toonMat(0x232a2f));
+      slot.position.set(0, 1.35, 0.43);
+      const leg1 = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.35, 0.7), toonMat(0xc73e3a));
+      leg1.position.set(-0.35, 0.16, 0);
+      const leg2 = leg1.clone();
+      leg2.position.x = 0.35;
+      g.add(body, top, slot, leg1, leg2);
+      enableShadows(g);
+      return g;
+    }
+
+    function buildUtilityPole() {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.13, 0.17, 5.8, 8), toonMat(0x6b7c7a));
+      pole.position.y = 2.8;
+      const bar = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.12, 0.12), toonMat(0x526160));
+      bar.position.y = 5.1;
+      const sign = new THREE.Mesh(new THREE.ConeGeometry(0.55, 0.9, 3), toonMat(0x64748b));
+      sign.rotation.x = Math.PI / 2;
+      sign.position.set(0.45, 3.3, 0.15);
+      g.add(pole, bar, sign);
+      enableShadows(g);
+      return g;
+    }
+
+    function buildWoodenBridge() {
+      const g = new THREE.Group();
+      const wood = toonMat(0xb67d4b);
+      for (let i = -3; i <= 3; i++) {
+        const plank = new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.18, 0.62), wood);
+        plank.position.set(0, 0.25 + (9 - i * i) * 0.045, i * 0.72);
+        g.add(plank);
+      }
+      [-1.32, 1.32].forEach((rx) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.14, 5.2), toonMat(0x8a5a32));
+        rail.position.set(rx, 1.15, 0);
+        g.add(rail);
+        [-2.2, 0, 2.2].forEach((rz) => {
+          const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 1.05, 0.16), toonMat(0x8a5a32));
+          post.position.set(rx, 0.62, rz);
+          g.add(post);
+        });
+      });
+      enableShadows(g);
+      return g;
+    }
+
+    function buildWindmillPowerPlant() {
+      const g = new THREE.Group();
+      // Main quirky observatory / power house
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(1.75, 2.4, 5.6, 10), toonMat(0xf4efe2));
+      base.position.y = 2.7;
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(1.75, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55), toonMat(0x478c9c));
+      dome.position.y = 5.4;
+      // Glowing energy core ring
+      const core = new THREE.Mesh(
+        new THREE.TorusGeometry(1.9, 0.2, 8, 20),
+        new THREE.MeshBasicMaterial({ color: 0x67e8f9 })
+      );
+      core.rotation.x = Math.PI / 2;
+      core.position.y = 4.6;
+      core.userData.outlineParameters = { visible: false };
+      g.add(base, dome, core);
+
+      // Giant spinning turbine blades
+      const blades = new THREE.Group();
+      blades.position.set(0, 4.7, 2.05);
+      const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.5, 10), toonMat(0x334155));
+      hub.rotation.x = Math.PI / 2;
+      blades.add(hub);
+      for (let i = 0; i < 4; i++) {
+        const arm = new THREE.Group();
+        arm.rotation.z = (i * Math.PI) / 2;
+        const spar = new THREE.Mesh(new THREE.BoxGeometry(0.16, 3.7, 0.1), toonMat(0x334155));
+        spar.position.y = 1.85;
+        const sail = new THREE.Mesh(new THREE.BoxGeometry(0.88, 2.7, 0.08), toonMat(0xf5bd33));
+        sail.position.set(0.36, 2.1, 0.05);
+        arm.add(spar, sail);
+        blades.add(arm);
+      }
+      g.add(blades);
+      enableShadows(g);
+      return { group: g, blades };
+    }
+
+    // Multi-cluster fluffy canopy tree with sunlit-top -> shaded-bottom vertex color gradient!
+    const sharedGradientFoliageMat = createWindToonMaterial(0xffffff, {
+      swayStrength: 0.14,
+      extra: { vertexColors: true },
+    });
+
+    function createGradientCanopySphere(radius, topHex, botHex) {
+      const geo = new THREE.SphereGeometry(radius, 12, 10);
+      const pos = geo.attributes.position;
+      const cols = new Float32Array(pos.count * 3);
+      const cTop = new THREE.Color(topHex);
+      const cBot = new THREE.Color(botHex);
+      const cMix = new THREE.Color();
+      for (let i = 0; i < pos.count; i++) {
+        const ny = (pos.getY(i) / radius) * 0.5 + 0.5; // 0 at bottom, 1 at top
+        cMix.copy(cBot).lerp(cTop, Math.pow(Math.max(0, Math.min(1, ny)), 0.85));
+        cols[i * 3] = cMix.r;
+        cols[i * 3 + 1] = cMix.g;
+        cols[i * 3 + 2] = cMix.b;
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+      return geo;
+    }
+
+    const canopyGeoCache = new Map();
+    function getCanopyGeo(radius, topHex, botHex) {
+      const key = `${radius.toFixed(2)}-${topHex}-${botHex}`;
+      if (!canopyGeoCache.has(key)) {
+        canopyGeoCache.set(key, createGradientCanopySphere(radius, topHex, botHex));
+      }
+      return canopyGeoCache.get(key);
+    }
+
+    function buildStylizedTree(topHex, botHex, scale = 1) {
+      const g = new THREE.Group();
+      // Tapered organic trunk + subtle side branch
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.36, 2.2, 8), toonMat(0x7c5333));
+      trunk.position.y = 1.0;
+      const branch = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.14, 0.9, 6), toonMat(0x7c5333));
+      branch.position.set(0.32, 1.65, 0.12);
+      branch.rotation.z = -0.58;
+      g.add(trunk, branch);
+
+      // 5 overlapping soft fluffy canopy spheres with sunlit-top -> shaded-bottom gradient!
+      const puffs = [
+        [0, 2.75, 0, 1.15],
+        [0.72, 2.25, 0.32, 0.86],
+        [-0.68, 2.35, -0.28, 0.82],
+        [0.24, 2.42, -0.64, 0.78],
+        [-0.32, 2.15, 0.62, 0.74],
+      ];
+      puffs.forEach(([px, py, pz, pr]) => {
+        const m = new THREE.Mesh(getCanopyGeo(pr, topHex, botHex), sharedGradientFoliageMat);
+        m.position.set(px, py, pz);
+        m.scale.set(1.06, 0.92, 1.06);
+        g.add(m);
+      });
+
+      g.scale.setScalar(scale);
+      enableShadows(g);
+      return g;
+    }
+
+    // --- Cute Smooth Stylized Chibi Character (A Short Hike / Abeto Messenger Style — ZERO Boxy Shapes!) ---
+    function buildCourierCharacter({ hatColor, shirtColor, bagColor, scarfColor = 0xf5bd33, skinColor = 0xfde2c8, isPlayer = false }) {
+      const root = new THREE.Group();
+      if (!isPlayer) {
+        root.add(createSoftDropShadow(0.8));
+      }
+      const bodyRoot = new THREE.Group();
+      bodyRoot.name = 'bodyRoot';
+      root.add(bodyRoot);
+
+      const skinM = toonMat(skinColor);
+      const shirtM = toonMat(shirtColor);
+      const hatM = toonMat(hatColor);
+      const bagM = toonMat(bagColor);
+      const bagFlapM = toonMat(new THREE.Color(bagColor).multiplyScalar(0.84).getHex());
+      const pantsM = toonMat(0x2d3748);
+      const shoeM = toonMat(0x5c3d2e);
+      const scarfM = toonMat(scarfColor);
+      const brassM = toonMat(0xf5bd33);
+      const whiteM = toonMat(0xfffdf7);
+
+      // 1) Stubby Rounded Legs & Tiny Rounded Shoes (Capsule + Scaled Spheres!)
+      const legGeo = new THREE.CapsuleGeometry(0.115, 0.16, 8, 12);
+      const shoeGeo = new THREE.SphereGeometry(0.145, 14, 10);
+
+      const leftLeg = new THREE.Group();
+      leftLeg.name = 'leftLeg';
+      leftLeg.position.set(-0.18, 0.44, 0);
+      const ll = new THREE.Mesh(legGeo, pantsM);
+      ll.position.y = -0.14;
+      const ls = new THREE.Mesh(shoeGeo, shoeM);
+      ls.scale.set(1.02, 0.7, 1.38);
+      ls.position.set(0, -0.34, 0.06);
+      leftLeg.add(ll, ls);
+      bodyRoot.add(leftLeg);
+
+      const rightLeg = new THREE.Group();
+      rightLeg.name = 'rightLeg';
+      rightLeg.position.set(0.18, 0.44, 0);
+      const rl = new THREE.Mesh(legGeo, pantsM);
+      rl.position.y = -0.14;
+      const rs = new THREE.Mesh(shoeGeo, shoeM);
+      rs.scale.set(1.02, 0.7, 1.38);
+      rs.position.set(0, -0.34, 0.06);
+      rightLeg.add(rl, rs);
+      bodyRoot.add(rightLeg);
+
+      // 2) Chubby Organic Pear-Shaped Chibi Torso
+      const torsoGroup = new THREE.Group();
+      torsoGroup.name = 'torsoGroup';
+      torsoGroup.position.y = 0.82;
+      bodyRoot.add(torsoGroup);
+
+      const torso = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 14), shirtM);
+      torso.name = 'shirtMesh';
+      torso.scale.set(1.04, 1.2, 0.96);
+      torsoGroup.add(torso);
+
+      // Cozy rounded coat hem collar
+      const hem = new THREE.Mesh(new THREE.TorusGeometry(0.33, 0.065, 8, 18), shirtM);
+      hem.name = 'shirtMeshHem';
+      hem.rotation.x = Math.PI / 2;
+      hem.position.y = -0.26;
+      torsoGroup.add(hem);
+
+      // 3) Diagonal Cross-Body Leather Strap + Gleaming Brass Buckle across chest!
+      const strap = new THREE.Mesh(new THREE.TorusGeometry(0.38, 0.042, 8, 22), bagFlapM);
+      strap.name = 'bagStrap';
+      strap.scale.set(1.02, 1.15, 0.98);
+      strap.rotation.y = Math.PI * 0.45;
+      strap.rotation.x = 0.52;
+      strap.position.set(0, 0.04, 0);
+      torsoGroup.add(strap);
+
+      const buckle = new THREE.Mesh(new THREE.TorusGeometry(0.065, 0.022, 8, 12), brassM);
+      buckle.position.set(0.04, 0.08, 0.35);
+      buckle.rotation.z = 0.55;
+      torsoGroup.add(buckle);
+
+      // Rounded Pillow Leather Messenger Satchel + Curved Flap + Brass Clasp + Letter!
+      const bagGroup = new THREE.Group();
+      bagGroup.position.set(-0.39, -0.04, -0.04);
+      bagGroup.rotation.z = 0.16;
+      torsoGroup.add(bagGroup);
+
+      const bagMesh = new THREE.Mesh(new THREE.SphereGeometry(0.23, 14, 12), bagM);
+      bagMesh.name = 'bagMesh';
+      bagMesh.scale.set(0.62, 0.96, 1.22);
+      bagGroup.add(bagMesh);
+
+      const bagFlap = new THREE.Mesh(
+        new THREE.SphereGeometry(0.24, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5),
+        bagFlapM
+      );
+      bagFlap.name = 'bagFlap';
+      bagFlap.scale.set(0.66, 0.72, 1.24);
+      bagFlap.position.y = 0.06;
+      bagGroup.add(bagFlap);
+
+      const clasp = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), brassM);
+      clasp.position.set(-0.14, 0.02, 0);
+      bagGroup.add(clasp);
+
+      const letter = new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.12, 6, 10), whiteM);
+      letter.name = 'carriedLetter';
+      letter.scale.set(0.32, 1.0, 1.25);
+      letter.position.set(-0.02, 0.24, 0.02);
+      letter.rotation.z = 0.22;
+      letter.visible = false;
+      bagGroup.add(letter);
+
+      // 4) Cozy Multi-Segment Articulated Flowing Scarf (3 chained rounded capsule segments!)
+      const scarfRing = new THREE.Mesh(new THREE.TorusGeometry(0.32, 0.105, 10, 18), scarfM);
+      scarfRing.rotation.x = Math.PI / 2;
+      scarfRing.position.y = 0.38;
+      torsoGroup.add(scarfRing);
+
+      const scarfSeg1 = new THREE.Group();
+      scarfSeg1.name = 'scarfSeg1';
+      scarfSeg1.position.set(0.08, 0.36, -0.26);
+      const sMesh1 = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.22, 6, 10), scarfM);
+      sMesh1.rotation.x = Math.PI / 2;
+      sMesh1.scale.set(1.25, 1.0, 0.65);
+      sMesh1.position.z = -0.14;
+      scarfSeg1.add(sMesh1);
+      torsoGroup.add(scarfSeg1);
+
+      const scarfSeg2 = new THREE.Group();
+      scarfSeg2.name = 'scarfSeg2';
+      scarfSeg2.position.set(0, 0, -0.28);
+      const sMesh2 = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.2, 6, 10), scarfM);
+      sMesh2.rotation.x = Math.PI / 2;
+      sMesh2.scale.set(1.2, 1.0, 0.62);
+      sMesh2.position.z = -0.13;
+      scarfSeg2.add(sMesh2);
+      scarfSeg1.add(scarfSeg2);
+
+      const scarfSeg3 = new THREE.Group();
+      scarfSeg3.name = 'scarfSeg3';
+      scarfSeg3.position.set(0, 0, -0.25);
+      const sMesh3 = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.16, 6, 10), scarfM);
+      sMesh3.rotation.x = Math.PI / 2;
+      sMesh3.scale.set(1.15, 1.0, 0.58);
+      sMesh3.position.z = -0.11;
+      scarfSeg3.add(sMesh3);
+      scarfSeg2.add(scarfSeg3);
+
+      // 5) Stubby Rounded Arms & Cute Little Mitten Hands
+      const armGeo = new THREE.CapsuleGeometry(0.095, 0.24, 8, 12);
+      const handGeo = new THREE.SphereGeometry(0.095, 10, 8);
+
+      const leftArm = new THREE.Group();
+      leftArm.name = 'leftArm';
+      leftArm.position.set(-0.4, 0.24, 0);
+      const la = new THREE.Mesh(armGeo, shirtM);
+      la.name = 'shirtMeshArmL';
+      la.position.y = -0.15;
+      const lHand = new THREE.Mesh(handGeo, skinM);
+      lHand.position.y = -0.33;
+      leftArm.add(la, lHand);
+      torsoGroup.add(leftArm);
+
+      const rightArm = new THREE.Group();
+      rightArm.name = 'rightArm';
+      rightArm.position.set(0.4, 0.24, 0);
+      const ra = new THREE.Mesh(armGeo, shirtM);
+      ra.name = 'shirtMeshArmR';
+      ra.position.y = -0.15;
+      const rHand = new THREE.Mesh(handGeo, skinM);
+      rHand.position.y = -0.33;
+      rightArm.add(ra, rHand);
+      torsoGroup.add(rightArm);
+
+      // 6) Oversized Cute Rounded Head + Expressive Oval Eyes + Rosy Cheeks + Curved-Brim Mailman Cap!
+      const headGroup = new THREE.Group();
+      headGroup.name = 'headGroup';
+      headGroup.position.y = 0.72;
+      torsoGroup.add(headGroup);
+
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 20, 16), skinM);
+      head.scale.set(1.06, 0.96, 1.02);
+      headGroup.add(head);
+
+      // Tiny rounded ears
+      const earGeo = new THREE.SphereGeometry(0.09, 10, 8);
+      const lEar = new THREE.Mesh(earGeo, skinM);
+      lEar.position.set(-0.41, -0.02, 0.0);
+      const rEar = lEar.clone();
+      rEar.position.x = 0.41;
+      headGroup.add(lEar, rEar);
+
+      // Cute Dark Oval Eyes + Bright White Specular Catchlights
+      const eyeM = new THREE.MeshBasicMaterial({ color: 0x1a2026 });
+      const catchM = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      eyeM.userData.outlineParameters = { visible: false };
+      catchM.userData.outlineParameters = { visible: false };
+
+      [-0.145, 0.145].forEach((ex) => {
+        const eye = new THREE.Mesh(new THREE.SphereGeometry(0.052, 10, 8), eyeM);
+        eye.scale.set(0.85, 1.28, 0.55);
+        eye.position.set(ex, 0.03, 0.385);
+        const glint = new THREE.Mesh(new THREE.SphereGeometry(0.018, 6, 6), catchM);
+        glint.position.set(ex + 0.016, 0.058, 0.412);
+        headGroup.add(eye, glint);
+      });
+
+      // Rosy Cheek Blush Circles
+      const blushM = new THREE.MeshBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.75 });
+      blushM.userData.outlineParameters = { visible: false };
+      [-0.245, 0.245].forEach((bx) => {
+        const blush = new THREE.Mesh(new THREE.CircleGeometry(0.068, 14), blushM);
+        blush.scale.set(1.25, 0.75, 1);
+        blush.position.set(bx, -0.06, 0.365);
+        blush.rotation.y = bx < 0 ? -0.45 : 0.45;
+        headGroup.add(blush);
+      });
+
+      // Stylish Oversized Mailman Cap with Smooth Curved Brim + Top Button + Brass Badge
+      const capDome = new THREE.Mesh(
+        new THREE.SphereGeometry(0.455, 20, 14, 0, Math.PI * 2, 0, Math.PI * 0.58),
+        hatM
+      );
+      capDome.name = 'hatMeshDome';
+      capDome.scale.set(1.06, 0.96, 1.08);
+      capDome.position.set(0, 0.07, -0.02);
+      capDome.rotation.x = -0.18;
+
+      const capBtn = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 8), hatM);
+      capBtn.name = 'hatMeshBtn';
+      capBtn.position.set(0, 0.5, -0.09);
+
+      // Curved organic visor brim (flattened ellipsoid arc!)
+      const brim = new THREE.Mesh(new THREE.SphereGeometry(0.36, 18, 10), hatM);
+      brim.name = 'hatMeshVisor';
+      brim.scale.set(1.12, 0.14, 0.92);
+      brim.position.set(0, 0.17, 0.31);
+      brim.rotation.x = 0.16;
+
+      // Gleaming brass mail emblem on cap front
+      const capBadge = new THREE.Mesh(new THREE.SphereGeometry(0.065, 10, 8), brassM);
+      capBadge.scale.set(1.25, 0.9, 0.5);
+      capBadge.position.set(0, 0.29, 0.43);
+
+      headGroup.add(capDome, capBtn, brim, capBadge);
+
+      enableShadows(root);
+      return root;
+    }
+
+    /** Lively procedural walk cycle + idle breathing + 3-segment flowing scarf animation! */
+    function animateChibiCharacter(grp, { t, phase = 0, moving = false, sprinting = false, jumpH = 0, jumpHeld = false, squash = 1, excited = false }) {
+      const body = grp.getObjectByName('bodyRoot');
+      const torso = grp.getObjectByName('torsoGroup');
+      const head = grp.getObjectByName('headGroup');
+      const ll = grp.getObjectByName('leftLeg');
+      const rl = grp.getObjectByName('rightLeg');
+      const la = grp.getObjectByName('leftArm');
+      const ra = grp.getObjectByName('rightArm');
+      const s1 = grp.getObjectByName('scarfSeg1');
+      const s2 = grp.getObjectByName('scarfSeg2');
+      const s3 = grp.getObjectByName('scarfSeg3');
+
+      const freq = sprinting ? 13.5 : 9.5;
+      const breath = Math.sin(t * 2.6 + phase);
+      const invSq = 1 / Math.sqrt(squash);
+
+      if (body) {
+        body.scale.set(invSq, squash, invSq);
+        if (moving && jumpH < 0.05) {
+          // Bouncy chibi run bob + playful side-to-side waddle
+          body.position.y = Math.abs(Math.sin(t * freq + phase)) * (sprinting ? 0.17 : 0.12);
+          body.rotation.z = Math.sin(t * freq + phase) * 0.085;
+        } else {
+          const idleBounce = excited ? Math.abs(Math.sin(t * 3.8 + phase)) * 0.12 : 0;
+          body.position.y += (idleBounce - body.position.y) * 0.2;
+          body.rotation.z *= 0.85;
+        }
+      }
+
+      // Subtle rhythmic idle breathing on chubby torso
+      if (torso) {
+        const bScale = 1 + breath * 0.026;
+        torso.scale.set(bScale, 1 - breath * 0.018, bScale);
+      }
+
+      // Expressive head tilt & gentle nod
+      if (head) {
+        if (moving) {
+          head.rotation.z = -Math.sin(t * freq + phase) * 0.09;
+          head.rotation.x = 0.06 + Math.sin(t * freq * 2 + phase) * 0.04;
+        } else {
+          head.rotation.z = Math.sin(t * 1.4 + phase) * 0.075;
+          head.rotation.x = Math.sin(t * 2.1 + phase) * 0.04;
+        }
+      }
+
+      // Natural swinging stubby legs & arms (or outstretched glide arms in mid-air!)
+      const swing = moving ? Math.sin(t * freq + phase) * (sprinting ? 0.82 : 0.58) : 0;
+      if (ll && rl) {
+        ll.rotation.x += (swing - ll.rotation.x) * 0.3;
+        rl.rotation.x += (-swing - rl.rotation.x) * 0.3;
+      }
+      if (la && ra) {
+        const glideRaise = jumpH > 0.28 && jumpHeld ? 2.15 : 0;
+        const idleArm = moving ? 0 : Math.sin(t * 2.6 + phase) * 0.06;
+        la.rotation.z += (-glideRaise - 0.12 - idleArm - la.rotation.z) * 0.22;
+        ra.rotation.z += (glideRaise + 0.12 + idleArm - ra.rotation.z) * 0.22;
+        la.rotation.x += (-swing * 0.9 - la.rotation.x) * 0.3;
+        ra.rotation.x += (swing * 0.9 - ra.rotation.x) * 0.3;
+      }
+
+      // Dynamic 3-segment flowing scarf wave (phase-delayed chain reacts to running & breeze!)
+      const scarfSpeed = moving ? (sprinting ? 14 : 10) : 3.2;
+      const scarfAmp = moving ? (sprinting ? 0.28 : 0.2) : 0.09;
+      const lift = moving ? (sprinting ? 0.35 : 0.2) : -0.18;
+      if (s1) {
+        s1.rotation.x = lift + Math.sin(t * scarfSpeed + phase) * scarfAmp;
+        s1.rotation.y = Math.cos(t * scarfSpeed * 0.7 + phase) * scarfAmp * 0.7;
+      }
+      if (s2) {
+        s2.rotation.x = Math.sin(t * scarfSpeed - 0.9 + phase) * scarfAmp * 1.25;
+        s2.rotation.y = Math.cos(t * scarfSpeed * 0.7 - 0.9 + phase) * scarfAmp * 0.9;
+      }
+      if (s3) {
+        s3.rotation.x = Math.sin(t * scarfSpeed - 1.8 + phase) * scarfAmp * 1.5;
+        s3.rotation.y = Math.cos(t * scarfSpeed * 0.7 - 1.8 + phase) * scarfAmp * 1.1;
+      }
+    }
+
+    // =========================================================================
+    // 4. POPULATE BUILDINGS, BRIDGE, WINDMILL, TREES, CLOUDS & 5 QUEST NPCS
+    // =========================================================================
+    // Zone 1: Small Town
+    const postOffice = buildTownHouse(0xeae3d2, 0x6b6058, 0xf5bd33, 4.2, 3.0, 3.2);
+    const postOfficeDir = new THREE.Vector3(-0.08, 0.99, -0.11).normalize();
+    placeOnSphere(postOffice, postOfficeDir, -0.25, 0.15);
+    planetGroup.add(postOffice);
+    colliders.push({ dir: postOfficeDir, r: 0.135 });
+
+    const redBox = buildRedPostbox();
+    placeOnSphere(redBox, new THREE.Vector3(0.11, 0.985, -0.12).normalize(), -0.1, -0.3);
+    planetGroup.add(redBox);
+
+    const cafeHouse = buildTownHouse(0xf7ecd5, 0xc75c4a, 0x9fe2cf, 3.5, 2.6, 2.9);
+    const cafeDir = new THREE.Vector3(-0.34, 0.91, 0.24).normalize();
+    placeOnSphere(cafeHouse, cafeDir, -0.25, 0.8);
+    planetGroup.add(cafeHouse);
+    colliders.push({ dir: cafeDir, r: 0.125 });
+
+    const bakeryHouse = buildTownHouse(0xebe7df, 0x4d7c8a, 0xf9a8d4, 3.4, 2.5, 2.8);
+    const bakeryDir = new THREE.Vector3(0.32, 0.91, 0.25).normalize();
+    placeOnSphere(bakeryHouse, bakeryDir, -0.25, -0.7);
+    planetGroup.add(bakeryHouse);
+    colliders.push({ dir: bakeryDir, r: 0.12 });
+
+    // Utility poles in Town
+    [
+      new THREE.Vector3(-0.18, 0.96, 0.21),
+      new THREE.Vector3(0.22, 0.95, -0.21),
+      new THREE.Vector3(-0.42, 0.89, -0.14),
+    ].forEach((d, i) => {
+      const pole = buildUtilityPole();
+      placeOnSphere(pole, d, -0.15, i * 1.2);
+      planetGroup.add(pole);
+    });
+
+    // Zone 2: Two Arched Wooden Bridges spanning cleanly above the animated turquoise riverbed!
+    function placeAtFixedRadius(obj, dir, fixedRadius, spin = 0) {
+      const n = dir.clone().normalize();
+      obj.position.copy(n).multiplyScalar(fixedRadius);
+      const q = new THREE.Quaternion().setFromUnitVectors(UP, n);
+      if (spin !== 0) q.multiply(new THREE.Quaternion().setFromAxisAngle(UP, spin));
+      obj.quaternion.copy(q);
+    }
+
+    const bridge1 = buildWoodenBridge();
+    placeAtFixedRadius(bridge1, bridge1Dir, WATER_RADIUS + 0.18, 0.65);
+    planetGroup.add(bridge1);
+
+    const bridge2 = buildWoodenBridge();
+    placeAtFixedRadius(bridge2, bridge2Dir, WATER_RADIUS + 0.18, -0.55);
+    planetGroup.add(bridge2);
+
+    const forestCabin = buildTownHouse(0xeadbc8, 0x9a5b32, null, 3.1, 2.3, 2.6);
+    const cabinDir = new THREE.Vector3(0.92, 0.1, 0.38).normalize();
+    placeOnSphere(forestCabin, cabinDir, -0.22, 1.4);
+    planetGroup.add(forestCabin);
+    colliders.push({ dir: cabinDir, r: 0.115 });
+
+    // Zone 3: Quirky Hillside Windmill Power Plant Observatory (on top of elevated plateau!)
+    const { group: powerPlant, blades: windmillBlades } = buildWindmillPowerPlant();
+    placeOnSphere(powerPlant, plantCenter, -0.3, 0.4);
+    planetGroup.add(powerPlant);
+    colliders.push({ dir: plantCenter, r: 0.135 });
+
+    // 58 Lush Multi-Cluster Gradient Trees across Town, Autumn Forest & Hillside (strictly on dry land!)
+    const swayTrees = [];
+    const townPalettes = [
+      [0x7ae582, 0x2d7a4d], // Sunlit lime -> cool emerald
+      [0x95f088, 0x3b8c58], // Fresh meadow green
+      [0xffc6df, 0xd46a9c], // Warm sunlit cherry blossom -> rose shade
+    ];
+    const autumnPalettes = [
+      [0xffcf5c, 0xc26327], // Sunlit gold -> warm rust
+      [0xf79b5c, 0xa83e2b], // Sunset orange -> deep crimson
+      [0xffe07d, 0xc98a2c], // Golden birch
+      [0xffc6df, 0xd46a9c], // Pastel cherry blossom
+    ];
+
+    for (let i = 0; i < 72; i++) {
+      const y = 1 - (i / 71) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = i * 2.399963;
+      const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+
+      // Keep town plaza, buildings, bridges & underwater riverbed/lake completely clear!
+      if (dir.distanceTo(townCenter) < 0.36) continue;
+      if (getTerrainRadiusAt(dir, false) < WATER_RADIUS + 0.35) continue;
+      if (colliders.some((c) => c.dir.distanceTo(dir) < 0.22)) continue;
+
+      const isForest = dir.distanceTo(forestCenter) < 0.78;
+      const pal = isForest ? autumnPalettes : townPalettes;
+      const [topHex, botHex] = pal[i % pal.length];
+      const tree = buildStylizedTree(topHex, botHex, 0.85 + (i % 4) * 0.18);
+      placeOnSphere(tree, dir, -0.22, i * 0.9);
+      planetGroup.add(tree);
+      swayTrees.push({ group: tree, baseQuat: tree.quaternion.clone(), phase: i * 0.7 });
+      colliders.push({ dir, r: 0.042 });
+    }
+
+    // 38 Smooth Rounded Mossy Boulders along riverbanks, cliff bases & forest trails!
+    const boulderMat = toonMat(0x9aa6a8);
+    const mossyMat = toonMat(0x6da675);
+    for (let i = 0; i < 48; i++) {
+      const y = 1 - ((i + 0.4) / 48) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = i * 2.91 + 0.8;
+      const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+      if (dir.distanceTo(townCenter) < 0.52) continue;
+      if (getTerrainRadiusAt(dir, false) < WATER_RADIUS + 0.05) continue;
+      if (colliders.some((c) => c.dir.distanceTo(dir) < 0.14)) continue;
+
+      const bGroup = new THREE.Group();
+      const mainRock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55 + (i % 3) * 0.2, 1), boulderMat);
+      mainRock.scale.set(1.25, 0.78, 1.05);
+      mainRock.position.y = 0.25;
+      bGroup.add(mainRock);
+      if (i % 2 === 0) {
+        const subRock = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32, 1), mossyMat);
+        subRock.scale.set(1.2, 0.7, 1.1);
+        subRock.position.set(0.45, 0.16, 0.22);
+        bGroup.add(subRock);
+      }
+      enableShadows(bGroup);
+      placeOnSphere(bGroup, dir, -0.1, i * 1.3);
+      planetGroup.add(bGroup);
+    }
+
+    // 1,400 Stylized 3D Grass Blades with GPU Vertex-Shader Wind Sway (1 single InstancedMesh draw call!)
+    const bladeGeo = new THREE.ConeGeometry(0.09, 0.72, 3, 2);
+    bladeGeo.translate(0, 0.36, 0); // Anchor root strictly at y = 0 so tips sway while roots stay planted!
+    const grassWindMat = createWindToonMaterial(0xffffff, {
+      swayStrength: 0.18,
+      isInstancedGrass: true,
+      extra: { side: THREE.DoubleSide },
+    });
+    grassWindMat.userData.outlineParameters = { visible: false };
+    const grassPositions = [];
+    const grassColors = [];
+    const gColGreen = [new THREE.Color(0x5eb86c), new THREE.Color(0x78cf76), new THREE.Color(0x9be084)];
+    const gColAutumn = [new THREE.Color(0xe3a84f), new THREE.Color(0xd98048), new THREE.Color(0xf0c960)];
+
+    for (let i = 0; i < 2100 && grassPositions.length < 1400; i++) {
+      const y = 1 - ((i + 0.5) / 2100) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = i * 2.399963 + 0.37;
+      const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+
+      // Skip paved town square, asphalt road, underwater riverbed/lake, and buildings
+      if (dir.distanceTo(townCenter) < 0.53) continue;
+      if (getTerrainRadiusAt(dir, false) < WATER_RADIUS + 0.22) continue;
+      if (colliders.some((c) => c.r > 0.08 && c.dir.distanceTo(dir) < c.r + 0.03)) continue;
+
+      grassPositions.push(dir);
+      const inForest = dir.distanceTo(forestCenter) < 0.74;
+      const pal = inForest ? gColAutumn : gColGreen;
+      grassColors.push(pal[i % pal.length]);
+    }
+
+    const grassMesh = new THREE.InstancedMesh(bladeGeo, grassWindMat, grassPositions.length);
+    grassMesh.userData.outlineParameters = { visible: false };
+    const grassDummy = new THREE.Object3D();
+    grassPositions.forEach((dir, idx) => {
+      placeOnSphere(grassDummy, dir, -0.04, (idx * 1.73) % (Math.PI * 2));
+      const sc = 0.75 + (idx % 5) * 0.16;
+      grassDummy.scale.set(sc, sc * (0.85 + (idx % 3) * 0.2), sc);
+      grassDummy.updateMatrix();
+      grassMesh.setMatrixAt(idx, grassDummy.matrix);
+      grassMesh.setColorAt(idx, grassColors[idx]);
+    });
+    grassMesh.instanceMatrix.needsUpdate = true;
+    if (grassMesh.instanceColor) grassMesh.instanceColor.needsUpdate = true;
+    planetGroup.add(grassMesh);
+
+    // Cozy Street Lamps, Wooden Fences, Cobblestone Stepping Stones & Wildflower Clusters!
+    function buildStreetLamp() {
+      const g = new THREE.Group();
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.11, 3.6, 8), toonMat(0x2f3a40));
+      pole.position.y = 1.8;
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.09, 0.09), toonMat(0x2f3a40));
+      arm.position.set(0.32, 3.55, 0);
+      const cap = new THREE.Mesh(new THREE.ConeGeometry(0.34, 0.28, 8), toonMat(0x2f3a40));
+      cap.position.set(0.62, 3.52, 0);
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.22, 10, 8),
+        new THREE.MeshBasicMaterial({ color: 0xfff3b0 })
+      );
+      bulb.position.set(0.62, 3.28, 0);
+      bulb.userData.outlineParameters = { visible: false };
+      g.add(pole, arm, cap, bulb);
+      enableShadows(g);
+      return g;
+    }
+
+    function buildWoodenFenceSegment() {
+      const g = new THREE.Group();
+      const woodM = toonMat(0xc4925e);
+      [-0.8, 0, 0.8].forEach((x) => {
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.9, 0.14), woodM);
+        post.position.set(x, 0.45, 0);
+        g.add(post);
+      });
+      [0.32, 0.68].forEach((y) => {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.1, 0.09), woodM);
+        rail.position.set(0, y, 0);
+        g.add(rail);
+      });
+      enableShadows(g);
+      return g;
+    }
+
+    // Place Street Lamps around Town Plaza & along main pathways
+    [
+      new THREE.Vector3(-0.24, 0.95, 0.04),
+      new THREE.Vector3(0.24, 0.95, 0.04),
+      new THREE.Vector3(0.04, 0.92, 0.38),
+      new THREE.Vector3(0.45, 0.72, 0.52),
+      new THREE.Vector3(0.66, 0.16, -0.73),
+      new THREE.Vector3(-0.26, -0.89, -0.37),
+    ].forEach((d, idx) => {
+      const lamp = buildStreetLamp();
+      placeOnSphere(lamp, d, -0.08, idx * 1.1);
+      planetGroup.add(lamp);
+    });
+
+    // Place Wooden Picket Fences around the cozy town edge & forest path
+    [
+      [new THREE.Vector3(-0.32, 0.92, -0.18), 0.5],
+      [new THREE.Vector3(-0.24, 0.93, -0.25), 0.9],
+      [new THREE.Vector3(0.32, 0.92, -0.18), -0.5],
+      [new THREE.Vector3(0.76, 0.25, 0.59), 0.3],
+      [new THREE.Vector3(0.82, 0.18, 0.54), 0.6],
+      [new THREE.Vector3(-0.42, -0.84, -0.32), 1.2],
+    ].forEach(([d, rot]) => {
+      const fence = buildWoodenFenceSegment();
+      placeOnSphere(fence, d, -0.05, rot);
+      planetGroup.add(fence);
+    });
+
+    // 3D Cobblestone Stepping Stones along the winding pathways
+    const cobbleMat = toonMat(0xdfd5c5);
+    pathRoutes.forEach(([a, b]) => {
+      for (let s = 1; s < 11; s++) {
+        const dir = a.clone().lerp(b, s / 11).normalize();
+        if (dir.distanceTo(townCenter) < 0.49) continue;
+        if (getTerrainRadiusAt(dir, false) < WATER_RADIUS + 0.2) continue;
+        const stone = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.36 + (s % 3) * 0.08, 0.42, 0.12, 7),
+          cobbleMat
+        );
+        placeOnSphere(stone, dir, 0.02, s * 0.8);
+        planetGroup.add(stone);
+      }
+    });
+
+    // 90 Pastel Wildflower Clusters dotting meadows & forest edges
+    const flowerPalette = [0xfef08a, 0xf9a8d4, 0xc4b5fd, 0xffffff, 0xfdba74];
+    for (let i = 0; i < 90; i++) {
+      const y = 1 - ((i + 0.3) / 90) * 2;
+      const r = Math.sqrt(Math.max(0, 1 - y * y));
+      const theta = i * 2.81 + 0.5;
+      const dir = new THREE.Vector3(Math.cos(theta) * r, y, Math.sin(theta) * r).normalize();
+      if (dir.distanceTo(townCenter) < 0.54) continue;
+      if (getTerrainRadiusAt(dir, false) < WATER_RADIUS + 0.22) continue;
+      const cluster = new THREE.Group();
+      const fMat = new THREE.MeshBasicMaterial({ color: flowerPalette[i % flowerPalette.length] });
+      for (let k = 0; k < 3; k++) {
+        const f = new THREE.Mesh(new THREE.SphereGeometry(0.14, 6, 5), fMat);
+        f.position.set((k - 1) * 0.22, 0.18 + (k % 2) * 0.08, (k % 2 - 0.5) * 0.18);
+        f.userData.outlineParameters = { visible: false };
+        cluster.add(f);
+      }
+      placeOnSphere(cluster, dir, 0.02, i);
+      planetGroup.add(cluster);
+    }
+
+    // Orbiting Fluffy Warm-Cream 3D Clouds (18 clouds drifting gently around the planet!)
+    const cloudRing = new THREE.Group();
+    const cloudM = toonMat(0xfffdf8, { noRim: true });
+    for (let i = 0; i < 18; i++) {
+      const cg = new THREE.Group();
+      const s1 = new THREE.Mesh(new THREE.SphereGeometry(1.85, 10, 8), cloudM);
+      const s2 = new THREE.Mesh(new THREE.SphereGeometry(1.3, 10, 8), cloudM);
+      s2.position.set(1.35, -0.2, 0.15);
+      const s3 = new THREE.Mesh(new THREE.SphereGeometry(1.2, 10, 8), cloudM);
+      s3.position.set(-1.25, -0.18, -0.1);
+      const s4 = new THREE.Mesh(new THREE.SphereGeometry(1.0, 8, 6), cloudM);
+      s4.position.set(0.3, 0.65, -0.2);
+      cg.add(s1, s2, s3, s4);
+      cg.scale.set(1.25, 0.68, 0.9);
+      const a = (i / 18) * Math.PI * 2;
+      const lat = ((i % 3) - 1) * 0.58;
+      const d = new THREE.Vector3(Math.cos(a) * Math.cos(lat), Math.sin(lat), Math.sin(a) * Math.cos(lat));
+      placeOnSphere(cg, d, 11.5 + (i % 3) * 2.4, a);
+      cloudRing.add(cg);
+    }
+    scene.add(cloudRing);
+
+    // =========================================================================
+    // 5. QUEST LOOP & 5 QUIRKY NPC RESIDENTS
+    // =========================================================================
+    const NPCS = [
+      {
+        id: 'postmaster',
+        name: 'Postmaster Ben',
+        zone: 'Small Town · Post Office',
+        dir: new THREE.Vector3(0.02, 0.99, 0.05).normalize(),
+        hat: 0x2563eb, shirt: 0x3b82f6, bag: 0x7c4522,
+        pickupLine: 'Morning, courier! Here is a fresh bundle of letters—start by delivering this seed packet to Gardener Hana in town!',
+      },
+      {
+        id: 'gardener',
+        name: 'Gardener Hana',
+        zone: 'Small Town · Flower Corner',
+        dir: new THREE.Vector3(-0.22, 0.94, 0.26).normalize(),
+        hat: 0xe6c88a, shirt: 0x7ab872, bag: 0x9a5b32,
+        questTitle: 'Deliver Seed Packet to Gardener Hana',
+        questSub: 'Town Flower Corner · Near the Café',
+        deliverLine: 'Oh wonderful, my rare moon-tulip seeds arrived! Thank you so much, little messenger! 🌱✨',
+      },
+      {
+        id: 'baker',
+        name: 'Baker Mochi',
+        zone: 'Small Town · Pastel Bakery',
+        dir: new THREE.Vector3(0.26, 0.93, 0.27).normalize(),
+        hat: 0xffffff, shirt: 0xe07a5f, bag: 0x6b4f3a,
+        questTitle: 'Deliver Cinnamon Parcel to Baker Mochi',
+        questSub: 'East Side of Town Square',
+        deliverLine: 'Just in time for the afternoon buns! Take a warm wave and keep exploring! 🥐❤️',
+      },
+      {
+        id: 'ranger',
+        name: 'Ranger Pip',
+        zone: 'Autumn Forest · Cabin Trail',
+        dir: new THREE.Vector3(0.84, 0.22, 0.49).normalize(),
+        hat: 0x9a5b32, shirt: 0xd97706, bag: 0x4b5563,
+        questTitle: 'Deliver Trail Map to Ranger Pip',
+        questSub: 'Serene Autumn Forest Cabin',
+        deliverLine: 'Whoa, you crossed into the Autumn Forest! This map will help hikers find the wooden bridge! 🍁',
+      },
+      {
+        id: 'bridge-poet',
+        name: 'Poet Sora',
+        zone: 'Autumn Forest · Wooden Bridge',
+        dir: new THREE.Vector3(0.68, 0.12, -0.72).normalize(),
+        hat: 0x7c3aed, shirt: 0x60a5fa, bag: 0x374151,
+        questTitle: 'Deliver Ink Bottle to Poet Sora',
+        questSub: 'By the Wooden Stream Bridge',
+        deliverLine: 'Fresh turquoise ink for my sunset poems! Listen to the lo-fi breeze over the stream... 🎵✨',
+      },
+      {
+        id: 'engineer',
+        name: 'Engineer Tesla',
+        zone: 'Hillside Windmill Power Plant',
+        dir: new THREE.Vector3(-0.22, -0.92, -0.32).normalize(),
+        hat: 0xf5bd33, shirt: 0x0d9488, bag: 0x1e293b,
+        questTitle: 'Deliver Turbine Blueprint to Engineer Tesla',
+        questSub: 'Southern Windmill Power Plant',
+        deliverLine: 'Brilliant delivery! The windmill observatory is humming at 100% cozy power! ⚡🎉',
+      },
+    ];
+
+    const npcInstances = NPCS.map((n, i) => {
+      const grp = buildCourierCharacter({ hatColor: n.hat, shirtColor: n.shirt, bagColor: n.bag });
+      placeOnSphere(grp, n.dir, 0, i * 1.3);
+      planetGroup.add(grp);
+
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(0.95, 1.3, 22),
+        new THREE.MeshBasicMaterial({ color: 0xf5bd33, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.userData.outlineParameters = { visible: false };
+      const rh = new THREE.Group();
+      rh.add(ring);
+      placeOnSphere(rh, n.dir, 0.14);
+      planetGroup.add(rh);
+
+      return { ...n, group: grp, ring };
+    });
+
+    // Quest State: phase 'pickup' (at Post Office) -> 'deliver' (targetIdx 1..5)
+    let questPhase = 'pickup';
+    let targetNpcIdx = 0; // Start at Postmaster Ben
+    let nextDeliveryIdx = 1;
+    let deliveredCount = 0;
+
+    // =========================================================================
+    // 6. PLAYER, 4 AMBIENT COURIER BOTS, COMPASS ARROW, CONFETTI & DUST
+    // =========================================================================
+    const outfitState = { hat: 0x232a2f, shirt: 0xc93b3b, bag: 0x8a5430 };
+    const player = buildCourierCharacter({
+      hatColor: outfitState.hat,
+      shirtColor: outfitState.shirt,
+      bagColor: outfitState.bag,
+      scarfColor: 0xf5bd33,
+      isPlayer: true,
+    });
+    scene.add(player);
+
+    // Surface-locked Soft Circular Drop-Shadow directly beneath the Player (scales & fades when jumping/gliding!)
+    const playerShadowHolder = new THREE.Group();
+    const playerShadowDisc = createSoftDropShadow(0.84);
+    playerShadowHolder.add(playerShadowDisc);
+    scene.add(playerShadowHolder);
+
+    // Floating Golden 3D Compass Arrow above Player
+    const compassGroup = new THREE.Group();
+    const arrowCone = new THREE.Mesh(new THREE.ConeGeometry(0.26, 0.72, 8), toonMat(0xf5bd33));
+    arrowCone.rotation.x = Math.PI / 2;
+    compassGroup.add(arrowCone);
+    scene.add(compassGroup);
+
+    // 4 Ambient Multiplayer Courier Bots wandering smoothly around the planet!
+    const botNames = ['Kai', 'Mina', 'Leo', 'Yuki'];
+    const botShirts = [0x3b82f6, 0xec4899, 0x10b981, 0x8b5cf6];
+    const bots = botNames.map((name, i) => {
+      const a = (i / 4) * Math.PI * 2 + 0.5;
+      const posDir = new THREE.Vector3(Math.cos(a) * 0.78, i % 2 === 0 ? 0.52 : -0.45, Math.sin(a) * 0.78).normalize();
+      const vel = new THREE.Vector3(-Math.sin(a), 0.12, Math.cos(a)).normalize();
+      const grp = buildCourierCharacter({ hatColor: 0x232a2f, shirtColor: botShirts[i], bagColor: 0x9a5b32 });
+      placeOnSphere(grp, posDir, 0);
+      planetGroup.add(grp);
+      return { name, group: grp, posDir, vel, phase: i * 1.7 };
+    });
+
+    // Dust Puffs + Delivery Confetti Particle Pools
+    const dustPool = [];
+    const dustGeo = new THREE.SphereGeometry(0.22, 7, 6);
+    for (let i = 0; i < 16; i++) {
+      const m = new THREE.Mesh(dustGeo, new THREE.MeshBasicMaterial({ color: 0xfffdf7, transparent: true, opacity: 0.7 }));
+      m.visible = false;
+      m.userData.outlineParameters = { visible: false };
+      scene.add(m);
+      dustPool.push({ mesh: m, life: 0, vel: new THREE.Vector3() });
+    }
+    let dustIdx = 0;
+
+    const confettiPool = [];
+    const confColors = [0xf5bd33, 0xef4444, 0x38bdf8, 0x4ade80, 0xf472b6, 0xa855f7];
+    const confGeo = new THREE.BoxGeometry(0.24, 0.24, 0.06);
+    for (let i = 0; i < 42; i++) {
+      const m = new THREE.Mesh(confGeo, new THREE.MeshBasicMaterial({ color: confColors[i % confColors.length] }));
+      m.visible = false;
+      m.userData.outlineParameters = { visible: false };
+      scene.add(m);
+      confettiPool.push({ mesh: m, life: 0, vel: new THREE.Vector3(), normal: new THREE.Vector3() });
+    }
+
+    function spawnConfetti(normal) {
+      const origin = normal.clone().multiplyScalar(PLANET_RADIUS + 1.8);
+      const t1 = new THREE.Vector3(1, 0, 0).cross(normal);
+      if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(normal);
+      t1.normalize();
+      const t2 = normal.clone().cross(t1).normalize();
+      confettiPool.forEach((c) => {
+        c.mesh.position.copy(origin);
+        c.mesh.visible = true;
+        c.life = 1.0 + Math.random() * 0.4;
+        c.normal.copy(normal);
+        const a = Math.random() * Math.PI * 2;
+        const spread = 0.06 + Math.random() * 0.14;
+        c.vel.copy(normal).multiplyScalar(0.14 + Math.random() * 0.16)
+          .addScaledVector(t1, Math.cos(a) * spread)
+          .addScaledVector(t2, Math.sin(a) * spread);
+      });
+    }
+
+    // =========================================================================
+    // 7. UI WIRING: OUTFIT CUSTOMIZER, EMOJI BUBBLES, QUESTS, MOBILE JOYSTICK
+    // =========================================================================
+    const questTitleEl = document.getElementById('quest-title');
+    const questSubEl = document.getElementById('quest-sub');
+    const statsBadgeEl = document.getElementById('stats-badge');
+    const interactPill = document.getElementById('interact-pill');
+    const interactLabel = document.getElementById('interact-label');
+    const dialogBox = document.getElementById('dialog-box');
+    const dialogName = document.getElementById('dialog-name');
+    const dialogText = document.getElementById('dialog-text');
+    const toastEl = document.getElementById('toast');
+    const emoteLayer = document.getElementById('emote-layer');
+
+    let toastTimer = null;
+    function showToast(msg) {
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3600);
+    }
+
+    function updateQuestUI(distM = 0) {
+      const target = npcInstances[targetNpcIdx];
+      const carried = player.getObjectByName('carriedLetter');
+      if (carried) carried.visible = questPhase === 'deliver';
+      if (questPhase === 'pickup') {
+        questTitleEl.textContent = 'Pick up parcel from Postmaster Ben';
+        questSubEl.textContent = `Town Post Office · ${distM}m away`;
+      } else {
+        questTitleEl.textContent = target.questTitle;
+        questSubEl.textContent = `${target.questSub} · ${distM}m away`;
+      }
+    }
+
+    // Outfit swatches
+    const SWATCH_COLORS = ['#232a2f', '#c93b3b', '#2563eb', '#16a34a', '#f5bd33', '#9333ea', '#ec4899', '#8a5430', '#f5f5f0'];
+    function setupSwatches(containerId, part) {
+      const el = document.getElementById(containerId);
+      SWATCH_COLORS.forEach((hex) => {
+        const b = document.createElement('button');
+        b.className = 'swatch';
+        b.style.background = hex;
+        b.onclick = () => {
+          const col = new THREE.Color(hex);
+          const hexNum = col.getHex();
+          outfitState[part] = hexNum;
+          player.traverse((o) => {
+            if (!o.isMesh) return;
+            if (part === 'hat' && (o.name === 'hatMeshDome' || o.name === 'hatMeshVisor' || o.name === 'hatMeshBtn')) o.material.color.copy(col);
+            if (part === 'shirt' && (o.name === 'shirtMesh' || o.name === 'shirtMeshHem' || o.name === 'shirtMeshArmL' || o.name === 'shirtMeshArmR')) o.material.color.copy(col);
+            if (part === 'bag' && (o.name === 'bagMesh' || o.name === 'bagFlap' || o.name === 'bagStrap')) o.material.color.copy(col);
+          });
+          el.querySelectorAll('.swatch').forEach((s) => s.classList.remove('selected'));
+          b.classList.add('selected');
+          audio.playEmote();
+          broadcastOutfit();
+        };
+        el.appendChild(b);
+      });
+    }
+    setupSwatches('swatches-hat', 'hat');
+    setupSwatches('swatches-shirt', 'shirt');
+    setupSwatches('swatches-bag', 'bag');
+
+    const outfitPanel = document.getElementById('outfit-panel');
+    const mpPanel = document.getElementById('mp-panel');
+    document.getElementById('btn-outfit').onclick = () => {
+      mpPanel.classList.remove('open');
+      outfitPanel.classList.toggle('open');
+    };
+    document.getElementById('btn-mp').onclick = () => {
+      outfitPanel.classList.remove('open');
+      mpPanel.classList.toggle('open');
+    };
+
+    // =========================================================================
+    // 7B. REAL-TIME MULTIPLAYER ENGINE (PeerJS WebRTC + Local BroadcastChannel)
+    // =========================================================================
+    const myShortCode = 'PLANET-' + Math.floor(1000 + Math.random() * 9000);
+    const mpMyIdInput = document.getElementById('mp-my-id');
+    const mpJoinInput = document.getElementById('mp-join-input');
+    const mpNameInput = document.getElementById('mp-name-input');
+    const mpStatusPill = document.getElementById('mp-status-pill');
+    const mpCountDot = document.getElementById('mp-count-dot');
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialName = urlParams.get('name');
+    mpNameInput.value = initialName ? initialName.slice(0, 16) : ('Courier-' + myShortCode.slice(-2));
+
+    function notifyParentXp(xp, reason) {
+      try {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'speaksharp-xp', xp, reason }, '*');
+        }
+      } catch {}
+    }
+
+    const peerConns = new Map();       // peerId -> PeerJS DataConnection
+    const remotePlayers = new Map();   // peerId -> { group, targetPos, targetQuat, moving, sprinting, jumpH, name, lastSeen }
+    let peerInstance = null;
+    let localChannel = null;
+
+    function updateMpBadges() {
+      const total = 1 + remotePlayers.size;
+      mpCountDot.textContent = String(total);
+      mpStatusPill.textContent = remotePlayers.size > 0
+        ? `● ${total} Online`
+        : (peerInstance && !peerInstance.disconnected ? '● Ready' : '● Local Sync');
+    }
+
+    function applyRemoteOutfit(grp, outfit) {
+      if (!outfit) return;
+      grp.traverse((o) => {
+        if (!o.isMesh) return;
+        if (outfit.hat !== undefined && (o.name === 'hatMeshDome' || o.name === 'hatMeshVisor' || o.name === 'hatMeshBtn')) o.material.color.setHex(outfit.hat);
+        if (outfit.shirt !== undefined && (o.name === 'shirtMesh' || o.name === 'shirtMeshHem' || o.name === 'shirtMeshArmL' || o.name === 'shirtMeshArmR')) o.material.color.setHex(outfit.shirt);
+        if (outfit.bag !== undefined && (o.name === 'bagMesh' || o.name === 'bagFlap' || o.name === 'bagStrap')) o.material.color.setHex(outfit.bag);
+      });
+    }
+
+    function getOrCreateRemotePlayer(id, name, outfit) {
+      if (remotePlayers.has(id)) return remotePlayers.get(id);
+      const grp = buildCourierCharacter({
+        hatColor: outfit?.hat ?? 0x232a2f,
+        shirtColor: outfit?.shirt ?? 0x3b82f6,
+        bagColor: outfit?.bag ?? 0x8a5430,
+        scarfColor: 0x38bdf8,
+      });
+      scene.add(grp);
+      const rp = {
+        id,
+        name: name || id.slice(0, 10),
+        group: grp,
+        targetPos: new THREE.Vector3(0, PLANET_RADIUS, 0),
+        targetQuat: new THREE.Quaternion(),
+        moving: false,
+        sprinting: false,
+        jumpH: 0,
+        lastSeen: performance.now(),
+      };
+      remotePlayers.set(id, rp);
+      updateMpBadges();
+      showToast(`👋 ${rp.name} joined your planet!`);
+      audio.playEmote();
+      return rp;
+    }
+
+    function removeRemotePlayer(id) {
+      const rp = remotePlayers.get(id);
+      if (!rp) return;
+      scene.remove(rp.group);
+      remotePlayers.delete(id);
+      updateMpBadges();
+      showToast(`👋 ${rp.name} left the planet`);
+    }
+
+    function handleIncomingMpPacket(pkt) {
+      if (!pkt || !pkt.id || pkt.id === myShortCode) return;
+      if (pkt.type === 'leave') {
+        removeRemotePlayer(pkt.id);
+        return;
+      }
+      const rp = getOrCreateRemotePlayer(pkt.id, pkt.name, pkt.outfit);
+      rp.lastSeen = performance.now();
+      if (pkt.name) rp.name = pkt.name;
+
+      if (pkt.type === 'state') {
+        if (pkt.pos) rp.targetPos.set(pkt.pos[0], pkt.pos[1], pkt.pos[2]);
+        if (pkt.quat) rp.targetQuat.set(pkt.quat[0], pkt.quat[1], pkt.quat[2], pkt.quat[3]);
+        rp.moving = Boolean(pkt.moving);
+        rp.sprinting = Boolean(pkt.sprinting);
+        rp.jumpH = pkt.jumpH || 0;
+        if (pkt.outfit) applyRemoteOutfit(rp.group, pkt.outfit);
+      } else if (pkt.type === 'outfit') {
+        applyRemoteOutfit(rp.group, pkt.outfit);
+      } else if (pkt.type === 'emote' && pkt.emoji) {
+        audio.playEmote();
+        popEmote(
+          pkt.emoji,
+          () => rp.group.position.clone().addScaledVector(rp.group.position.clone().normalize(), 2.5),
+          rp.name
+        );
+      }
+    }
+
+    function broadcastMp(pkt) {
+      peerConns.forEach((conn) => {
+        if (conn.open) {
+          try { conn.send(pkt); } catch {}
+        }
+      });
+      if (localChannel) {
+        try { localChannel.postMessage(pkt); } catch {}
+      }
+    }
+
+    function broadcastOutfit() {
+      broadcastMp({
+        type: 'outfit',
+        id: myShortCode,
+        name: mpNameInput.value.trim() || myShortCode,
+        outfit: { ...outfitState },
+      });
+    }
+
+    // 1) Instant Zero-Config Same-Browser Multi-Tab Sync via BroadcastChannel
+    if ('BroadcastChannel' in window) {
+      localChannel = new BroadcastChannel('messenger-planet-mp-v1');
+      localChannel.onmessage = (ev) => handleIncomingMpPacket(ev.data);
+      window.addEventListener('beforeunload', () => {
+        try { localChannel.postMessage({ type: 'leave', id: myShortCode }); } catch {}
+      });
+    }
+
+    // 2) Cross-Device WebRTC P2P Sync via PeerJS
+    function attachPeerConnection(conn) {
+      conn.on('open', () => {
+        peerConns.set(conn.peer, conn);
+        broadcastOutfit();
+        showToast(`🌐 Connected to ${conn.peer}!`);
+      });
+      conn.on('data', (data) => handleIncomingMpPacket(data));
+      conn.on('close', () => {
+        peerConns.delete(conn.peer);
+        removeRemotePlayer(conn.peer);
+      });
+      conn.on('error', () => {
+        peerConns.delete(conn.peer);
+      });
+    }
+
+    if (typeof window.Peer !== 'undefined') {
+      try {
+        peerInstance = new window.Peer(myShortCode);
+        peerInstance.on('open', (id) => {
+          mpMyIdInput.value = id;
+          updateMpBadges();
+          // Auto-join if ?join=PLANET-XXXX is in the URL!
+          const params = new URLSearchParams(window.location.search);
+          const joinTarget = params.get('join');
+          if (joinTarget && joinTarget !== id) {
+            mpJoinInput.value = joinTarget;
+            attachPeerConnection(peerInstance.connect(joinTarget));
+          }
+        });
+        peerInstance.on('connection', (conn) => attachPeerConnection(conn));
+        peerInstance.on('error', () => {
+          mpMyIdInput.value = myShortCode;
+          updateMpBadges();
+        });
+      } catch {
+        mpMyIdInput.value = myShortCode;
+      }
+    } else {
+      mpMyIdInput.value = myShortCode;
+    }
+
+    document.getElementById('btn-join-peer').onclick = () => {
+      const targetId = mpJoinInput.value.trim().toUpperCase();
+      if (!targetId || targetId === myShortCode || !peerInstance) return;
+      showToast(`🌐 Connecting to ${targetId}...`);
+      attachPeerConnection(peerInstance.connect(targetId));
+    };
+
+    document.getElementById('btn-copy-id').onclick = () => {
+      navigator.clipboard?.writeText(mpMyIdInput.value);
+      showToast(`📋 Copied Room Code: ${mpMyIdInput.value}`);
+    };
+
+    document.getElementById('btn-copy-link').onclick = () => {
+      const url = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(mpMyIdInput.value)}`;
+      navigator.clipboard?.writeText(url);
+      showToast('🔗 Invite link copied! Send it to a friend!');
+    };
+
+    const btnAudio = document.getElementById('btn-audio');
+    btnAudio.onclick = () => {
+      audio.init();
+      audio.setMuted(!audio.muted);
+      btnAudio.textContent = audio.muted ? '🔇' : '🎵';
+    };
+
+    // Day / Sunset / Night Toggle
+    const times = ['day', 'sunset', 'night'];
+    let timeIdx = 0;
+    const btnTime = document.getElementById('btn-time');
+    function applyTime(mode) {
+      if (mode === 'day') {
+        skyMat.uniforms.topColor.value.setHex(0x2892e8);
+        skyMat.uniforms.midColor.value.setHex(0x78cbf8);
+        skyMat.uniforms.horizonColor.value.setHex(0xffdcb8);
+        scene.background.setHex(0x52b6f5);
+        scene.fog.color.setHex(0xd8eef8);
+        sunLight.color.setHex(0xffefd1); sunLight.intensity = 1.55;
+        hemiLight.intensity = 0.98; starMat.opacity = 0.08;
+        btnTime.textContent = '☀️';
+      } else if (mode === 'sunset') {
+        skyMat.uniforms.topColor.value.setHex(0x3b2d68);
+        skyMat.uniforms.midColor.value.setHex(0xf08556);
+        skyMat.uniforms.horizonColor.value.setHex(0xffe4a0);
+        scene.background.setHex(0xe88054);
+        scene.fog.color.setHex(0xf2a87b);
+        sunLight.color.setHex(0xffa45b); sunLight.intensity = 1.75;
+        hemiLight.intensity = 0.82; starMat.opacity = 0.45;
+        btnTime.textContent = '🌅';
+      } else {
+        skyMat.uniforms.topColor.value.setHex(0x0b1026);
+        skyMat.uniforms.midColor.value.setHex(0x1e254d);
+        skyMat.uniforms.horizonColor.value.setHex(0x3b4880);
+        scene.background.setHex(0x0f172a);
+        scene.fog.color.setHex(0x1c2345);
+        sunLight.color.setHex(0xa5c8ff); sunLight.intensity = 0.85;
+        hemiLight.intensity = 0.55; starMat.opacity = 0.95;
+        btnTime.textContent = '🌙';
+      }
+    }
+    btnTime.onclick = () => {
+      timeIdx = (timeIdx + 1) % times.length;
+      applyTime(times[timeIdx]);
+    };
+
+    // Floating 3D-Projected Emoji Bubbles
+    const EMOJIS = ['👋', '❤️', '✨', '😊', '📦'];
+    const activeEmotes = [];
+    function popEmote(emoji, anchorFn, who = '') {
+      const el = document.createElement('div');
+      el.className = 'float-bubble';
+      el.innerHTML = who ? `<span>${emoji}</span><span class="who">${who}</span>` : `<span>${emoji}</span>`;
+      emoteLayer.appendChild(el);
+      activeEmotes.push({ el, anchorFn, expires: performance.now() + 2200 });
+    }
+
+    function triggerPlayerEmote(emoji) {
+      audio.init();
+      audio.playEmote();
+      popEmote(emoji, () => pState.posDir.clone().multiplyScalar(getTerrainRadiusAt(pState.posDir) + pState.jumpH + 2.5));
+      // Broadcast emoji in real time to all connected multiplayer peers!
+      broadcastMp({
+        type: 'emote',
+        id: myShortCode,
+        name: mpNameInput.value.trim() || myShortCode,
+        emoji,
+      });
+      // Nearby bot replies with a friendly emoji!
+      const nearestBot = bots.find((b) => b.posDir.angleTo(pState.posDir) * PLANET_RADIUS < 18) || bots[Math.floor(Math.random() * bots.length)];
+      if (nearestBot) {
+        setTimeout(() => {
+          const reply = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+          popEmote(reply, () => nearestBot.posDir.clone().multiplyScalar(getTerrainRadiusAt(nearestBot.posDir) + 2.5), nearestBot.name);
+        }, 420);
+      }
+    }
+    document.querySelectorAll('.emoji-btn').forEach((btn) => {
+      btn.onclick = () => triggerPlayerEmote(btn.dataset.emoji);
+    });
+
+    // Interaction Handler
+    let nearbyNpc = null;
+    function interactWithNpc(npc) {
+      if (!npc) return;
+      audio.init();
+      dialogName.textContent = `${npc.name} · ${npc.zone}`;
+
+      if (questPhase === 'pickup' && npc.id === 'postmaster') {
+        audio.playPickup();
+        questPhase = 'deliver';
+        targetNpcIdx = nextDeliveryIdx;
+        dialogText.textContent = npc.pickupLine;
+        showToast(`📦 Picked up parcel for ${npcInstances[targetNpcIdx].name}!`);
+        triggerPlayerEmote('📦');
+      } else if (questPhase === 'deliver' && npc.id === npcInstances[targetNpcIdx].id) {
+        audio.playDeliver();
+        spawnConfetti(npc.dir);
+        deliveredCount++;
+        dialogText.textContent = npc.deliverLine;
+        nextDeliveryIdx = nextDeliveryIdx >= npcInstances.length - 1 ? 1 : nextDeliveryIdx + 1;
+        questPhase = 'pickup';
+        targetNpcIdx = 0; // Return to Post Office for next parcel!
+        showToast(`🎉 Delivered to ${npc.name}! (${deliveredCount}/5) +25 XP!`);
+        notifyParentXp(25, `Delivered parcel to ${npc.name}`);
+        triggerPlayerEmote('✨');
+      } else {
+        audio.playEmote();
+        dialogText.textContent = npc.deliverLine || npc.pickupLine;
+      }
+      updateQuestUI();
+      dialogBox.classList.add('open');
+    }
+
+    interactPill.onclick = () => interactWithNpc(nearbyNpc);
+    document.getElementById('dialog-ok').onclick = () => dialogBox.classList.remove('open');
+
+    // Start Splash Button
+    document.getElementById('play-btn').onclick = () => {
+      audio.init();
+      document.getElementById('start-overlay').style.display = 'none';
+      window.focus();
+      renderer.domElement.focus?.();
+      triggerPlayerEmote('👋');
+    };
+
+    // =========================================================================
+    // 8. PLAYER SPHERICAL PHYSICS, IME-SAFE e.code CONTROLS & TOUCH JOYSTICK
+    // =========================================================================
+    const codes = {}; // Track physical scan codes (e.code) so Vietnamese Unikey/Telex NEVER breaks or sticks WASD!
+    const joyVec = { x: 0, y: 0 };
+    let touchJumpHeld = false;
+
+    // Blur any clicked HUD button so Spacebar ALWAYS jumps instead of re-clicking the button!
+    document.addEventListener('click', (e) => {
+      if (e.target && e.target.tagName === 'BUTTON') {
+        e.target.blur();
+      }
+    });
+
+    const PREVENT_CODES = new Set([
+      'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space',
+    ]);
+
+    const onKeyDown = (e) => {
+      const tag = e.target?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+      const code = e.code;
+      if (PREVENT_CODES.has(code)) e.preventDefault();
+      codes[code] = true;
+
+      if (code === 'KeyE' && nearbyNpc) interactWithNpc(nearbyNpc);
+      if (code === 'Digit1') triggerPlayerEmote(EMOJIS[0]);
+      if (code === 'Digit2') triggerPlayerEmote(EMOJIS[1]);
+      if (code === 'Digit3') triggerPlayerEmote(EMOJIS[2]);
+      if (code === 'Digit4') triggerPlayerEmote(EMOJIS[3]);
+      if (code === 'Digit5') triggerPlayerEmote(EMOJIS[4]);
+      if (code === 'Escape') {
+        dialogBox.classList.remove('open');
+        outfitPanel.classList.remove('open');
+        mpPanel.classList.remove('open');
+      }
+    };
+    const onKeyUp = (e) => {
+      codes[e.code] = false;
+    };
+    const clearAllKeys = () => {
+      for (const c in codes) codes[c] = false;
+      touchJumpHeld = false;
+      pState.dragging = false;
+    };
+
+    window.addEventListener('keydown', onKeyDown, true);
+    window.addEventListener('keyup', onKeyUp, true);
+    window.addEventListener('blur', clearAllKeys);
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) clearAllKeys();
+    });
+    // Also listen for keyup/blur on same-origin parent window so releasing WASD while dragging outside the iframe NEVER sticks!
+    try {
+      if (window.parent && window.parent !== window) {
+        window.parent.addEventListener('keyup', onKeyUp, true);
+        window.parent.addEventListener('blur', clearAllKeys);
+        window.addEventListener('unload', () => {
+          try {
+            window.parent.removeEventListener('keyup', onKeyUp, true);
+            window.parent.removeEventListener('blur', clearAllKeys);
+          } catch {}
+        });
+      }
+    } catch {}
+
+    // Mobile Virtual Joystick
+    const joyZone = document.getElementById('mobile-joy-zone');
+    const joyKnob = document.getElementById('mobile-joy-knob');
+    let joyTouchId = null;
+    joyZone.addEventListener('touchstart', (e) => {
+      joyTouchId = e.changedTouches[0].identifier;
+      audio.init();
+    }, { passive: true });
+    joyZone.addEventListener('touchmove', (e) => {
+      for (const t of e.changedTouches) {
+        if (t.identifier !== joyTouchId) continue;
+        const r = joyZone.getBoundingClientRect();
+        const dx = t.clientX - (r.left + r.width / 2);
+        const dy = t.clientY - (r.top + r.height / 2);
+        const maxR = 38;
+        const dist = Math.hypot(dx, dy);
+        const clamped = Math.min(dist, maxR);
+        const ang = Math.atan2(dy, dx);
+        const kx = Math.cos(ang) * clamped;
+        const ky = Math.sin(ang) * clamped;
+        joyKnob.style.transform = `translate(${kx}px, ${ky}px)`;
+        joyVec.x = kx / maxR;
+        joyVec.y = -ky / maxR;
+      }
+    }, { passive: true });
+    const resetJoy = () => {
+      joyTouchId = null; joyVec.x = 0; joyVec.y = 0;
+      joyKnob.style.transform = 'translate(0, 0)';
+    };
+    joyZone.addEventListener('touchend', resetJoy);
+    joyZone.addEventListener('touchcancel', resetJoy);
+
+    const btnTouchJump = document.getElementById('btn-touch-jump');
+    btnTouchJump.addEventListener('touchstart', () => { touchJumpHeld = true; audio.init(); }, { passive: true });
+    btnTouchJump.addEventListener('touchend', () => { touchJumpHeld = false; });
+    document.getElementById('btn-touch-act').onclick = () => {
+      if (nearbyNpc) interactWithNpc(nearbyNpc);
+      else triggerPlayerEmote('👋');
+    };
+
+    const startNormal = new THREE.Vector3(0.06, 0.985, 0.16).normalize();
+    const startForward = new THREE.Vector3(0, -0.16, 0.985).normalize();
+    const pState = {
+      position: startNormal.clone().multiplyScalar(getTerrainRadiusAt(startNormal)),
+      velocity: new THREE.Vector3(0, 0, 0),
+      posDir: startNormal.clone(),
+      forward: startForward.clone(),      // Character's facing direction (turns freely in 360°)
+      camForward: startForward.clone(),   // Independent camera heading (parallel-transports over sphere, NO flip on S/A/D!)
+      grounded: true,
+      camDist: 14.5,
+      camElev: 5.8,
+      jumpH: 0,
+      squash: 1,
+      dragging: false,
+      lastX: 0,
+      lastY: 0,
+    };
+
+    document.getElementById('btn-recenter').onclick = () => {
+      pState.camForward.copy(pState.forward);
+      pState.camDist = 14.5;
+      pState.camElev = 5.8;
+    };
+
+    const dom = renderer.domElement;
+    dom.tabIndex = 0;
+    dom.addEventListener('dragstart', (e) => e.preventDefault());
+    dom.addEventListener('contextmenu', (e) => e.preventDefault());
+    dom.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      window.focus();
+      try { dom.setPointerCapture(e.pointerId); } catch {}
+      pState.dragging = true; pState.lastX = e.clientX; pState.lastY = e.clientY;
+    });
+    dom.addEventListener('pointermove', (e) => {
+      if (!pState.dragging) return;
+      if (e.buttons === 0) {
+        pState.dragging = false;
+        return;
+      }
+      const dx = e.clientX - pState.lastX;
+      const dy = e.clientY - pState.lastY;
+      // Rotate independent camera heading cleanly around current surface normal
+      pState.camForward.applyAxisAngle(pState.posDir, -dx * 0.007).normalize();
+      pState.camElev = Math.max(3.0, Math.min(13.0, pState.camElev + dy * 0.035));
+      pState.lastX = e.clientX; pState.lastY = e.clientY;
+    });
+    const endDrag = (e) => {
+      pState.dragging = false;
+      try { dom.releasePointerCapture(e.pointerId); } catch {}
+    };
+    dom.addEventListener('pointerup', endDrag);
+    dom.addEventListener('pointercancel', endDrag);
+    window.addEventListener('pointerup', () => { pState.dragging = false; });
+    dom.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      pState.camDist = Math.max(8.5, Math.min(28, pState.camDist + e.deltaY * 0.015));
+    }, { passive: false });
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      effect.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // =========================================================================
+    // 9. MAIN 60 FPS GAME LOOP
+    // =========================================================================
+    const tmpUp = new THREE.Vector3();
+    const tmpFwd = new THREE.Vector3();
+    const tmpRight = new THREE.Vector3();
+    const tmpMove = new THREE.Vector3();
+    const tmpNext = new THREE.Vector3();
+    const tmpMat = new THREE.Matrix4();
+    const tmpQ = new THREE.Quaternion();
+    const swayQ = new THREE.Quaternion();
+    const camDesired = new THREE.Vector3();
+    const camLook = new THREE.Vector3();
+    const xAxis = new THREE.Vector3(1, 0, 0);
+    const zAxis = new THREE.Vector3(0, 0, 1);
+
+    camera.position.copy(pState.posDir).multiplyScalar(PLANET_RADIUS + 8).addScaledVector(pState.forward, -14);
+
+    let t = 0;
+    let frame = 0;
+    let fpsFrames = 0;
+    let lastFpsT = performance.now();
+    let fpsVal = 60;
+
+    function animate() {
+      requestAnimationFrame(animate);
+      t += 0.016;
+      frame++;
+      fpsFrames++;
+      const now = performance.now();
+      if (now - lastFpsT >= 600) {
+        fpsVal = Math.round((fpsFrames * 1000) / (now - lastFpsT));
+        statsBadgeEl.textContent = `📦 ${deliveredCount}/5 · ${fpsVal} FPS`;
+        fpsFrames = 0;
+        lastFpsT = now;
+      }
+
+      // Update GPU Wind Shader, Animated Water Ripple Shader & Dynamic Sky Up-Vector!
+      windUniforms.uWindTime.value = t;
+      waterUniforms.uWaterTime.value = t;
+      skyMat.uniforms.uLocalUp.value.copy(pState.posDir);
+
+      // World animations
+      windmillBlades.rotation.z -= 0.025;
+      cloudRing.rotation.y += 0.0012;
+
+      swayTrees.forEach((tr) => {
+        swayQ.setFromAxisAngle(xAxis, Math.sin(t * 1.9 + tr.phase) * 0.024);
+        tmpQ.setFromAxisAngle(zAxis, Math.cos(t * 1.4 + tr.phase) * 0.018);
+        swayQ.multiply(tmpQ);
+        tr.group.quaternion.copy(tr.baseQuat).multiply(swayQ);
+      });
+
+      // Highlight active quest NPC ring + lively idle breathing, head tilt & scarf wave!
+      npcInstances.forEach((n, idx) => {
+        const isTarget = idx === targetNpcIdx;
+        n.ring.material.color.setHex(isTarget ? 0xf5bd33 : 0xffffff);
+        n.ring.material.opacity = isTarget ? 0.55 + Math.sin(t * 5) * 0.3 : 0.22;
+        n.ring.scale.setScalar(isTarget ? 1 + Math.sin(t * 4) * 0.16 : 0.85);
+        animateChibiCharacter(n.group, { t, phase: idx * 1.4, moving: false, excited: isTarget });
+      });
+
+      // Ambient Multiplayer Courier Bots walking along undulating 3D planet surface
+      bots.forEach((b) => {
+        b.posDir.addScaledVector(b.vel, 0.0022).normalize();
+        b.vel.addScaledVector(b.posDir, -b.vel.dot(b.posDir)).normalize();
+        b.vel.applyQuaternion(tmpQ.setFromAxisAngle(b.posDir, Math.sin(t * 0.5 + b.phase) * 0.009)).normalize();
+        const botSurfR = getTerrainRadiusAt(b.posDir);
+        b.group.position.copy(b.posDir).multiplyScalar(botSurfR);
+        tmpRight.crossVectors(b.posDir, b.vel).normalize();
+        tmpMat.makeBasis(tmpRight, b.posDir, b.vel);
+        b.group.quaternion.setFromRotationMatrix(tmpMat);
+        animateChibiCharacter(b.group, { t, phase: b.phase, moving: true, sprinting: false });
+      });
+
+      // === TRUE 3D SPHERICAL GRAVITY PHYSICS (IME-Safe Physical Scan Codes!) ===
+      let inFwd = joyVec.y;
+      let inRight = joyVec.x;
+      if (codes['KeyW'] || codes['ArrowUp']) inFwd += 1;
+      if (codes['KeyS'] || codes['ArrowDown']) inFwd -= 1;
+      if (codes['KeyD'] || codes['ArrowRight']) inRight += 1;
+      if (codes['KeyA'] || codes['ArrowLeft']) inRight -= 1;
+
+      const moving = Math.hypot(inFwd, inRight) > 0.08;
+      const sprinting = Boolean(codes['ShiftLeft'] || codes['ShiftRight']);
+
+      // Compute outward surface normal from planet center (0, 0, 0)
+      tmpUp.copy(pState.position).normalize();
+      pState.posDir.copy(tmpUp);
+
+      // Parallel-transport independent camera heading onto current tangent plane (zero pole flip, zero spin on S/A/D!)
+      pState.camForward.addScaledVector(tmpUp, -pState.camForward.dot(tmpUp));
+      if (pState.camForward.lengthSq() < 0.0001) {
+        pState.camForward.set(0, 0, 1).addScaledVector(tmpUp, -tmpUp.z);
+      }
+      pState.camForward.normalize();
+
+      tmpFwd.copy(pState.camForward);
+      tmpRight.crossVectors(tmpFwd, tmpUp).normalize();
+
+      // Separate current 3D velocity into radial (gravity/jump) + tangent components
+      const radialSpeed = pState.velocity.dot(tmpUp);
+      if (moving) {
+        tmpMove.set(0, 0, 0).addScaledVector(tmpFwd, inFwd).addScaledVector(tmpRight, inRight).normalize();
+        const moveSpeed = sprinting ? 0.21 : 0.135;
+
+        pState.velocity.copy(tmpMove).multiplyScalar(moveSpeed).addScaledVector(tmpUp, radialSpeed);
+
+        // Smoothly steer character facing direction toward movement tangent (independent of camera!)
+        pState.forward.lerp(tmpMove, 0.24);
+        pState.forward.addScaledVector(tmpUp, -pState.forward.dot(tmpUp));
+        if (pState.forward.lengthSq() > 0.0001) pState.forward.normalize();
+
+        if (frame % (sprinting ? 11 : 16) === 0 && pState.grounded) {
+          audio.playFootstep();
+        }
+        if (frame % (sprinting ? 4 : 8) === 0 && pState.grounded) {
+          const d = dustPool[dustIdx++ % dustPool.length];
+          const surfR = getTerrainRadiusAt(tmpUp);
+          d.mesh.position.copy(tmpUp).multiplyScalar(surfR + 0.22);
+          d.mesh.scale.setScalar(0.6);
+          d.mesh.visible = true;
+          d.life = 1;
+          d.vel.copy(tmpUp).multiplyScalar(0.032).addScaledVector(pState.forward, -0.02);
+        }
+      } else {
+        pState.velocity.copy(tmpUp).multiplyScalar(radialSpeed);
+        pState.forward.addScaledVector(tmpUp, -pState.forward.dot(tmpUp));
+        if (pState.forward.lengthSq() > 0.0001) pState.forward.normalize();
+      }
+
+      // Jump impulse outward along surface normal + radial gravity toward (0,0,0)!
+      const jumpHeld = Boolean(codes['Space']) || touchJumpHeld;
+      if (jumpHeld && pState.grounded) {
+        pState.velocity.addScaledVector(tmpUp, 0.3);
+        pState.grounded = false;
+        pState.squash = 1.28;
+        audio.playJump();
+      }
+
+      const curRadialVel = pState.velocity.dot(tmpUp);
+      const gliding = !pState.grounded && jumpHeld && curRadialVel < 0;
+      const gravityStrength = gliding ? 0.0048 : 0.016;
+      pState.velocity.addScaledVector(tmpUp, -gravityStrength);
+      if (gliding && pState.velocity.dot(tmpUp) < -0.05) {
+        const excess = pState.velocity.dot(tmpUp) - (-0.05);
+        pState.velocity.addScaledVector(tmpUp, -excess);
+      }
+
+      // Integrate 3D position + smooth sliding push-out against buildings & trees
+      pState.position.add(pState.velocity);
+      pState.posDir.copy(pState.position).normalize();
+      for (const c of colliders) {
+        const d = pState.posDir.distanceTo(c.dir);
+        if (d < c.r && d > 0.0001) {
+          tmpNext.copy(pState.posDir).sub(c.dir).normalize();
+          pState.posDir.copy(c.dir).addScaledVector(tmpNext, c.r).normalize();
+          const curR = pState.position.length();
+          pState.position.copy(pState.posDir).multiplyScalar(curR);
+        }
+      }
+
+      const groundRadius = getTerrainRadiusAt(pState.posDir, true);
+      const currentRadius = pState.position.length();
+
+      if (currentRadius <= groundRadius) {
+        if (!pState.grounded) pState.squash = 0.78;
+        pState.position.copy(pState.posDir).multiplyScalar(groundRadius);
+        const inwardVel = pState.velocity.dot(pState.posDir);
+        if (inwardVel < 0) pState.velocity.addScaledVector(pState.posDir, -inwardVel);
+        pState.grounded = true;
+        pState.jumpH = 0;
+      } else {
+        pState.grounded = false;
+        pState.jumpH = currentRadius - groundRadius;
+      }
+      pState.squash += (1 - pState.squash) * 0.18;
+
+      // Align Player +Y Up-Vector smoothly to the spherical surface normal via Quaternion slerp!
+      player.position.copy(pState.position);
+      pState.forward.addScaledVector(pState.posDir, -pState.forward.dot(pState.posDir)).normalize();
+      tmpRight.crossVectors(pState.posDir, pState.forward).normalize();
+      tmpMat.makeBasis(tmpRight, pState.posDir, pState.forward);
+      tmpQ.setFromRotationMatrix(tmpMat);
+      player.quaternion.slerp(tmpQ, 0.35);
+
+      // Update Surface-Locked Soft Circular Drop-Shadow directly beneath the Player
+      placeOnSphere(playerShadowHolder, pState.posDir, 0.05);
+      const shScale = Math.max(0.42, 1.0 - pState.jumpH * 0.14);
+      playerShadowDisc.scale.setScalar(shScale);
+      playerShadowDisc.material.opacity = Math.max(0.18, 0.9 - pState.jumpH * 0.18);
+
+      // Lively bouncy chibi walk/run cycle, idle breathing, head tilt & 3-segment scarf wave!
+      animateChibiCharacter(player, {
+        t,
+        phase: 0,
+        moving,
+        sprinting,
+        jumpH: pState.jumpH,
+        jumpHeld,
+        squash: pState.squash,
+      });
+
+      // Dust & Confetti updates
+      dustPool.forEach((d) => {
+        if (d.life <= 0) return;
+        d.life -= 0.04;
+        d.mesh.position.add(d.vel);
+        d.mesh.scale.setScalar(0.6 + (1 - d.life) * 0.8);
+        d.mesh.material.opacity = Math.max(0, d.life * 0.65);
+        if (d.life <= 0) d.mesh.visible = false;
+      });
+      confettiPool.forEach((c) => {
+        if (c.life <= 0) return;
+        c.life -= 0.018;
+        c.vel.addScaledVector(c.normal, -0.008);
+        c.mesh.position.add(c.vel);
+        c.mesh.rotation.x += 0.12;
+        c.mesh.rotation.y += 0.15;
+        c.mesh.scale.setScalar(Math.max(0.01, c.life));
+        if (c.life <= 0) c.mesh.visible = false;
+      });
+
+      // Compass Arrow pointing to active quest target
+      const activeTarget = npcInstances[targetNpcIdx];
+      const arcDist = pState.posDir.angleTo(activeTarget.dir) * PLANET_RADIUS;
+      if (frame % 10 === 0) updateQuestUI(Math.round(arcDist));
+
+      const toTarget = activeTarget.dir.clone().sub(pState.posDir);
+      toTarget.addScaledVector(pState.posDir, -toTarget.dot(pState.posDir));
+        if (toTarget.lengthSq() > 0.001 && arcDist > 3.2) {
+        toTarget.normalize();
+        compassGroup.visible = true;
+        compassGroup.position.copy(pState.posDir).multiplyScalar(groundRadius + pState.jumpH + 2.55 + Math.sin(t * 5) * 0.12);
+        tmpRight.crossVectors(pState.posDir, toTarget).normalize();
+        tmpMat.makeBasis(tmpRight, pState.posDir, toTarget);
+        compassGroup.quaternion.setFromRotationMatrix(tmpMat);
+      } else {
+        compassGroup.visible = false;
+      }
+
+      // Check nearby NPC
+      if (frame % 5 === 0) {
+        let closest = null;
+        let minD = 999;
+        for (const n of npcInstances) {
+          const d = pState.posDir.angleTo(n.dir) * PLANET_RADIUS;
+          if (d < 4.5 && d < minD) { minD = d; closest = n; }
+        }
+        nearbyNpc = closest;
+        if (nearbyNpc && !dialogBox.classList.contains('open')) {
+          const isTarget = nearbyNpc.id === activeTarget.id;
+          interactLabel.textContent = isTarget
+            ? (questPhase === 'pickup' ? `Pick up parcel from ${nearbyNpc.name}` : `Deliver parcel to ${nearbyNpc.name}!`)
+            : `Talk to ${nearbyNpc.name}`;
+          interactPill.classList.add('show');
+        } else {
+          interactPill.classList.remove('show');
+        }
+      }
+
+      // Smooth Spherical Follow Camera using independent camForward (zero flip on S, zero spiral on A/D!)
+      camDesired
+        .copy(pState.posDir)
+        .multiplyScalar(groundRadius + pState.camElev + pState.jumpH * 0.35)
+        .addScaledVector(pState.camForward, -pState.camDist);
+      camera.position.lerp(camDesired, 0.12);
+      camera.up.lerp(pState.posDir, 0.12).normalize();
+      camLook
+        .copy(pState.posDir)
+        .multiplyScalar(groundRadius + 1.5 + pState.jumpH * 0.25)
+        .addScaledVector(pState.camForward, 2.0);
+      camera.lookAt(camLook);
+
+      // Project Floating Emoji Bubbles
+      for (let i = activeEmotes.length - 1; i >= 0; i--) {
+        const em = activeEmotes[i];
+        if (now > em.expires) {
+          em.el.remove();
+          activeEmotes.splice(i, 1);
+          continue;
+        }
+        const pt = em.anchorFn().project(camera);
+        if (pt.z < 1) {
+          em.el.style.display = 'inline-flex';
+          em.el.style.left = `${(pt.x * 0.5 + 0.5) * window.innerWidth}px`;
+          em.el.style.top = `${(-pt.y * 0.5 + 0.5) * window.innerHeight}px`;
+        } else {
+          em.el.style.display = 'none';
+        }
+      }
+
+      // Smoothly interpolate & animate real-time remote multiplayer peers + broadcast local state at 20 Hz
+      if (frame % 3 === 0) {
+        broadcastMp({
+          type: 'state',
+          id: myShortCode,
+          name: mpNameInput.value.trim() || myShortCode,
+          pos: [pState.position.x, pState.position.y, pState.position.z],
+          quat: [player.quaternion.x, player.quaternion.y, player.quaternion.z, player.quaternion.w],
+          moving,
+          sprinting,
+          jumpH: pState.jumpH,
+          outfit: frame % 60 === 0 ? { ...outfitState } : undefined,
+        });
+      }
+
+      remotePlayers.forEach((rp, id) => {
+        if (now - rp.lastSeen > 12000) {
+          removeRemotePlayer(id);
+          return;
+        }
+        if (rp.group.position.lengthSq() < 1) {
+          rp.group.position.copy(rp.targetPos);
+          rp.group.quaternion.copy(rp.targetQuat);
+        } else {
+          rp.group.position.lerp(rp.targetPos, 0.22);
+          rp.group.quaternion.slerp(rp.targetQuat, 0.22);
+        }
+        animateChibiCharacter(rp.group, {
+          t,
+          phase: 2.1,
+          moving: rp.moving,
+          sprinting: rp.sprinting,
+          jumpH: rp.jumpH,
+        });
+      });
+
+      effect.render(scene, camera);
+    }
+
+    updateQuestUI(0);
+    animate();
+  </script>
+</body>
+</html>

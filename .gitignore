@@ -8,6 +8,9 @@ dist/
 dist-ssr/
 *.local
 
+# Large 3D binary models (>100MB GitHub limit)
+public/models/*.glb
+
 # Logs
 logs
 *.log
