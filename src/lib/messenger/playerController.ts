@@ -392,8 +392,8 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 export type HairStyle = 'bob' | 'buns' | 'cap' | 'headphones';
 
 /**
- * Stylish Slender Anime Courier Character inspired by Messenger by Abeto
- * (cropped wide-leg shorts, white-trimmed jacket, crossbody satchel, anime hair + 4 swappable styles)
+ * Expressive Sculpted Anime Courier Character matching Messenger by Abeto proportions
+ * (open-front jacket over white tee, diagonal shoulder-to-hip satchel, expressive anime face & 4 hairstyles)
  */
 export function buildChibiCourier(
 	toonGradient: THREE.DataTexture,
@@ -402,230 +402,274 @@ export function buildChibiCourier(
 	const root = new THREE.Group();
 	const bodyRoot = new THREE.Group();
 	bodyRoot.name = 'bodyRoot';
-	bodyRoot.scale.setScalar(0.118); // True alley-walkable anime teen height (~0.32 units)
+	bodyRoot.scale.setScalar(0.132); // Matches real Abeto NPC height right beside them!
 	root.add(bodyRoot);
 
 	const toon = (c: number) => new THREE.MeshToonMaterial({ color: c, gradientMap: toonGradient });
-	const skinM = toon(0xfde0c8);
+	const skinM = toon(0xfde2cc);
 	const shirtM = toon(opts.shirtColor);
 	const hairM = toon(opts.hatColor);
 	const bagM = toon(opts.bagColor);
-	const strapM = toon(0x232a2f);
-	const pantsM = toon(0x28313b);
-	const sockM = toon(0xf5f5f0);
-	const shoeM = toon(0x1f262e);
+	const strapM = toon(0x273038);
+	const pantsM = toon(0x283340);
+	const sockM = toon(0xf7f7f2);
+	const shoeM = toon(0x212932);
 	const whiteTrimM = toon(0xfffdf7);
 	const goldM = toon(0xf5bd33);
+	const darkInkM = new THREE.MeshBasicMaterial({ color: 0x1a222b });
 
-	// 1. Articulated Anime Legs: Wide Cropped Pants + Slim Calves + Socks + Chunky Sneakers
-	([-0.145, 0.145] as const).forEach((lx, i) => {
+	// 1. Articulated Anime Legs: Wide Cropped Shorts/Pants + Slim Calves + Socks + Chunky Sneakers
+	([-0.14, 0.14] as const).forEach((lx, i) => {
 		const leg = new THREE.Group();
 		leg.name = i === 0 ? 'leftLeg' : 'rightLeg';
 		leg.position.set(lx, 1.05, 0);
 
-		const pant = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.145, 0.56, 10), pantsM);
-		pant.position.y = -0.26;
+		const pant = new THREE.Mesh(new THREE.CylinderGeometry(0.115, 0.142, 0.54, 12), pantsM);
+		pant.position.y = -0.25;
 		leg.add(pant);
 
 		const shin = new THREE.Group();
 		shin.name = i === 0 ? 'leftShin' : 'rightShin';
-		shin.position.y = -0.52;
+		shin.position.y = -0.50;
 		leg.add(shin);
 
-		const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.24, 6, 10), skinM);
+		const calf = new THREE.Mesh(new THREE.CapsuleGeometry(0.058, 0.23, 6, 10), skinM);
 		calf.position.y = -0.15;
 		shin.add(calf);
 
-		const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.064, 0.14, 10), sockM);
+		const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.065, 0.06, 0.14, 10), sockM);
 		sock.position.y = -0.32;
 		shin.add(sock);
 
-		const shoe = new THREE.Mesh(new THREE.CapsuleGeometry(0.085, 0.11, 6, 10), shoeM);
+		const shoe = new THREE.Mesh(new THREE.CapsuleGeometry(0.082, 0.12, 6, 10), shoeM);
 		shoe.rotation.x = Math.PI / 2;
-		shoe.scale.set(1.0, 1.15, 0.8);
-		shoe.position.set(0, -0.43, 0.045);
-		const sole = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.04, 0.25), whiteTrimM);
-		sole.position.set(0, -0.48, 0.045);
+		shoe.scale.set(0.95, 1.15, 0.78);
+		shoe.position.set(0, -0.43, 0.05);
+		const sole = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.042, 0.26), whiteTrimM);
+		sole.position.set(0, -0.48, 0.05);
 		shin.add(shoe, sole);
 
 		bodyRoot.add(leg);
 	});
 
-	// 2. Slender Anime Torso + Tailored Jacket with Crisp White Trim
+	// 2. Sculpted Anime Torso: Open-Front Jacket over White Inner Tee + Collar + Diagonal Satchel
 	const torsoGroup = new THREE.Group();
 	torsoGroup.name = 'torsoGroup';
 	torsoGroup.position.y = 1.48;
 	bodyRoot.add(torsoGroup);
 
-	const jacket = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.30, 0.78, 12), shirtM);
-	jacket.name = 'shirtMesh';
-	jacket.scale.set(1.06, 1.0, 0.72);
-	torsoGroup.add(jacket);
+	// Main tailored anime jacket + crisp open-front white inner tee strip
+	const jacketBack = new THREE.Mesh(new THREE.CylinderGeometry(0.245, 0.295, 0.76, 14), shirtM);
+	jacketBack.name = 'shirtMesh';
+	jacketBack.scale.set(1.06, 1.0, 0.76);
+	torsoGroup.add(jacketBack);
 
-	const hemTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.312, 0.065, 12), whiteTrimM);
-	hemTrim.scale.set(1.06, 1.0, 0.73);
-	hemTrim.position.y = -0.37;
+	// Crisp white inner T-shirt peeking down the front of the open jacket (+Z)
+	const frontTeeStrip = new THREE.Mesh(new THREE.BoxGeometry(0.145, 0.72, 0.05), whiteTrimM);
+	frontTeeStrip.position.set(0, 0.0, 0.205);
+	torsoGroup.add(frontTeeStrip);
+
+	// Crisp white bottom hem trim & jacket collar
+	const hemTrim = new THREE.Mesh(new THREE.CylinderGeometry(0.298, 0.305, 0.055, 14), whiteTrimM);
+	hemTrim.scale.set(1.06, 1.0, 0.76);
+	hemTrim.position.y = -0.36;
 	torsoGroup.add(hemTrim);
 
-	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.045, 8, 16), whiteTrimM);
+	const collar = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.042, 8, 16), whiteTrimM);
 	collar.rotation.x = Math.PI / 2;
-	collar.position.y = 0.38;
+	collar.position.y = 0.37;
 	torsoGroup.add(collar);
 
-	const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.095, 0.16, 10), skinM);
+	// Rounded shoulder caps so silhouette looks natural & anime, never boxy
+	([-0.24, 0.24] as const).forEach((sx) => {
+		const shoulder = new THREE.Mesh(new THREE.SphereGeometry(0.115, 10, 8), shirtM);
+		shoulder.name = sx < 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
+		shoulder.position.set(sx, 0.31, 0);
+		torsoGroup.add(shoulder);
+	});
+
+	// Neck
+	const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.078, 0.088, 0.16, 10), skinM);
 	neck.position.y = 0.45;
 	torsoGroup.add(neck);
 
-	// Diagonal Crossbody Messenger Strap & Back-Hip Satchel
-	const strap = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 22), strapM);
-	strap.name = 'bagStrap';
-	strap.scale.set(0.96, 1.25, 0.78);
-	strap.rotation.y = Math.PI * 0.42;
-	strap.rotation.z = 0.56;
-	strap.position.set(0, 0.02, 0);
-	torsoGroup.add(strap);
+	// True Diagonal Shoulder-to-Hip Crossbody Strap (drapes from right shoulder to left hip!)
+	const strapFront = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.82, 0.025), strapM);
+	strapFront.name = 'bagStrap';
+	strapFront.position.set(0.02, 0.04, 0.215);
+	strapFront.rotation.z = -0.56;
+	const strapBack = new THREE.Mesh(new THREE.BoxGeometry(0.065, 0.82, 0.025), strapM);
+	strapBack.name = 'bagStrap';
+	strapBack.position.set(0.02, 0.04, -0.215);
+	strapBack.rotation.z = -0.56;
+	torsoGroup.add(strapFront, strapBack);
 
+	// Curved Leather Messenger Satchel resting on left hip
 	const bagGroup = new THREE.Group();
-	bagGroup.position.set(-0.22, -0.18, -0.22);
-	bagGroup.rotation.set(0.12, 0.35, 0.24);
+	bagGroup.position.set(-0.30, -0.20, -0.06);
+	bagGroup.rotation.set(0.06, 0.18, 0.18);
 	torsoGroup.add(bagGroup);
 
-	const bagMesh = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), bagM);
+	const bagMesh = new THREE.Mesh(new THREE.SphereGeometry(0.20, 12, 10), bagM);
 	bagMesh.name = 'bagMesh';
-	bagMesh.scale.set(1.22, 0.92, 0.55);
-	bagGroup.add(bagMesh);
+	bagMesh.scale.set(0.55, 0.92, 1.25);
+	const bagFlap = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.36), bagM);
+	bagFlap.position.set(-0.04, 0.07, 0);
+	const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.04, 0.065, 0.065), goldM);
+	buckle.position.set(-0.12, 0.0, 0);
+	bagGroup.add(bagMesh, bagFlap, buckle);
 
-	const bagFlap = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.14, 0.16), bagM);
-	bagFlap.position.set(0, 0.08, -0.02);
-	const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.07, 0.04), goldM);
-	buckle.position.set(0, 0.01, -0.11);
-	bagGroup.add(bagFlap, buckle);
-
-	const letter = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.16, 0.035), whiteTrimM);
+	const letter = new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.15, 0.22), whiteTrimM);
 	letter.name = 'carriedLetter';
-	letter.position.set(0.06, 0.2, 0.01);
-	letter.rotation.z = -0.24;
+	letter.position.set(0.02, 0.19, 0.02);
+	letter.rotation.x = 0.2;
 	letter.visible = false;
 	bagGroup.add(letter);
 
-	// 3. Slim Articulated Anime Arms with Jacket Sleeves & Hands
-	([-0.31, 0.31] as const).forEach((ax, i) => {
+	// 3. Natural Relaxed Anime Arms (angled cleanly outward from shoulders!)
+	([-0.28, 0.28] as const).forEach((ax, i) => {
 		const arm = new THREE.Group();
 		arm.name = i === 0 ? 'leftArm' : 'rightArm';
-		arm.position.set(ax, 0.30, 0);
-		arm.rotation.z = i === 0 ? 0.14 : -0.14;
+		arm.position.set(ax, 0.31, 0);
+		arm.rotation.z = i === 0 ? 0.22 : -0.22;
 
-		const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.105, 0.46, 10), shirtM);
+		const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.082, 0.098, 0.44, 10), shirtM);
 		sleeve.name = i === 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
-		sleeve.position.y = -0.22;
-		const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.106, 0.108, 0.04, 10), whiteTrimM);
-		cuff.position.y = -0.44;
-		const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.16, 6, 8), skinM);
-		forearm.position.y = -0.54;
-		const hand = new THREE.Mesh(new THREE.SphereGeometry(0.068, 8, 8), skinM);
-		hand.scale.set(0.9, 1.1, 0.75);
-		hand.position.y = -0.66;
+		sleeve.position.y = -0.21;
+		const cuff = new THREE.Mesh(new THREE.CylinderGeometry(0.10, 0.102, 0.038, 10), whiteTrimM);
+		cuff.position.y = -0.42;
+		const forearm = new THREE.Mesh(new THREE.CapsuleGeometry(0.052, 0.16, 6, 8), skinM);
+		forearm.position.y = -0.52;
+		const hand = new THREE.Mesh(new THREE.SphereGeometry(0.066, 8, 8), skinM);
+		hand.scale.set(0.85, 1.15, 0.72);
+		hand.position.y = -0.65;
 
 		arm.add(sleeve, cuff, forearm, hand);
 		torsoGroup.add(arm);
 	});
 
-	// 4. Sculpted Anime Head + Expressive Eyes + 4 Swappable Hairstyles
+	// 4. Expressive Sculpted Anime Head (OPEN FACE — hair never blocks the eyes!)
 	const headGroup = new THREE.Group();
 	headGroup.name = 'headGroup';
 	headGroup.position.y = 0.78;
 	torsoGroup.add(headGroup);
 
-	const head = new THREE.Mesh(new THREE.SphereGeometry(0.30, 18, 14), skinM);
+	const head = new THREE.Mesh(new THREE.SphereGeometry(0.285, 18, 14), skinM);
 	head.scale.set(0.98, 1.04, 0.96);
 	headGroup.add(head);
 
-	const eyeM = new THREE.MeshBasicMaterial({ color: 0x182026 });
-	const catchM = new THREE.MeshBasicMaterial({ color: 0xffffff });
-	const blushM = new THREE.MeshBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.65 });
-	([-0.105, 0.105] as const).forEach((ex) => {
-		const eye = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), eyeM);
-		eye.scale.set(0.82, 1.35, 0.45);
-		eye.position.set(ex, -0.01, 0.275);
-		const gl = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 6), catchM);
-		gl.position.set(ex + 0.012, 0.018, 0.295);
-		headGroup.add(eye, gl);
+	// Cute Anime Ears
+	([-0.275, 0.275] as const).forEach((ex) => {
+		const ear = new THREE.Mesh(new THREE.SphereGeometry(0.058, 8, 8), skinM);
+		ear.scale.set(0.55, 1.1, 0.75);
+		ear.position.set(ex, -0.02, 0.0);
+		headGroup.add(ear);
 	});
-	([-0.18, 0.18] as const).forEach((bx) => {
-		const b = new THREE.Mesh(new THREE.CircleGeometry(0.045, 10), blushM);
-		b.scale.set(1.25, 0.65, 1);
-		b.position.set(bx, -0.08, 0.255);
+
+	// Crisp Expressive Anime Face (white sclera + dark iris + catchlight + eyebrows + smile + blush!)
+	const whiteEyeM = new THREE.MeshBasicMaterial({ color: 0xffffff });
+	const blushM = new THREE.MeshBasicMaterial({ color: 0xfda4af, transparent: true, opacity: 0.7 });
+	([-0.095, 0.095] as const).forEach((ex) => {
+		// White sclera backing
+		const sclera = new THREE.Mesh(new THREE.SphereGeometry(0.054, 10, 8), whiteEyeM);
+		sclera.scale.set(0.92, 1.18, 0.35);
+		sclera.position.set(ex, -0.02, 0.258);
+		// Crisp dark anime pupil
+		const pupil = new THREE.Mesh(new THREE.SphereGeometry(0.038, 10, 8), darkInkM);
+		pupil.scale.set(0.85, 1.18, 0.42);
+		pupil.position.set(ex, -0.022, 0.272);
+		// Sparkling anime catchlight
+		const shine = new THREE.Mesh(new THREE.SphereGeometry(0.013, 6, 6), whiteEyeM);
+		shine.position.set(ex + 0.012, 0.006, 0.288);
+		// Crisp eyebrow
+		const brow = new THREE.Mesh(new THREE.BoxGeometry(0.085, 0.022, 0.02), darkInkM);
+		brow.position.set(ex, 0.072, 0.268);
+		brow.rotation.z = ex < 0 ? 0.08 : -0.08;
+		headGroup.add(sclera, pupil, shine, brow);
+	});
+
+	// Cute anime smile & rosy cheeks
+	const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.032, 0.008, 6, 12, Math.PI), darkInkM);
+	mouth.rotation.z = Math.PI;
+	mouth.position.set(0, -0.115, 0.265);
+	headGroup.add(mouth);
+
+	([-0.165, 0.165] as const).forEach((bx) => {
+		const b = new THREE.Mesh(new THREE.CircleGeometry(0.042, 10), blushM);
+		b.scale.set(1.3, 0.65, 1);
+		b.position.set(bx, -0.095, 0.242);
 		b.rotation.y = bx < 0 ? -0.45 : 0.45;
 		headGroup.add(b);
 	});
 
+	// Sculpted Anime Hair Crown tilted BACKWARD (-0.34 around +X moves +Y toward -Z!)
 	const hairCrown = new THREE.Mesh(
-		new THREE.SphereGeometry(0.33, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.65),
+		new THREE.SphereGeometry(0.312, 18, 14, 0, Math.PI * 2, 0, Math.PI * 0.50),
 		hairM
 	);
 	hairCrown.name = 'hatMeshDome';
-	hairCrown.scale.set(1.03, 1.06, 1.05);
-	hairCrown.position.set(0, 0.03, -0.02);
-	hairCrown.rotation.x = -0.22;
+	hairCrown.scale.set(1.03, 1.02, 1.04);
+	hairCrown.position.set(0, 0.06, -0.025);
+	hairCrown.rotation.x = -0.34; // Right-hand rule: -X rotation tilts top BACKWARD off forehead!
 	headGroup.add(hairCrown);
 
-	const backHair = new THREE.Mesh(
-		new THREE.CylinderGeometry(0.28, 0.31, 0.28, 12, 1, false, Math.PI * 0.55, Math.PI * 0.9),
-		hairM
-	);
+	// Full back hair strictly behind the head (z <= 0, NEVER covers the face!)
+	const backHair = new THREE.Mesh(new THREE.SphereGeometry(0.305, 16, 12), hairM);
 	backHair.name = 'hatMeshBtn';
-	backHair.position.set(0, -0.10, -0.04);
+	backHair.scale.set(1.02, 1.06, 0.72);
+	backHair.position.set(0, -0.02, -0.115);
 	headGroup.add(backHair);
 
-	([-0.12, 0, 0.12] as const).forEach((fx, idx) => {
-		const bang = new THREE.Mesh(new THREE.ConeGeometry(0.085, 0.22, 5), hairM);
+	// Parted side-swept anime bangs framing forehead ABOVE eyebrows (never blocking eyes!)
+	([-0.11, 0.11] as const).forEach((fx) => {
+		const bang = new THREE.Mesh(new THREE.ConeGeometry(0.075, 0.16, 6), hairM);
 		bang.name = 'hatMeshDome';
-		bang.rotation.x = Math.PI + 0.18;
-		bang.rotation.z = (idx - 1) * -0.18;
-		bang.position.set(fx, 0.14, 0.265);
+		bang.rotation.x = Math.PI - 0.12;
+		bang.rotation.z = fx < 0 ? 0.42 : -0.42;
+		bang.position.set(fx, 0.205, 0.225);
 		headGroup.add(bang);
 	});
 
-	// Style A: Messenger Bob Hair
+	// Style A: Messenger Bob Hair (sleek side locks framing cheeks behind ears)
 	const styleBob = new THREE.Group();
 	styleBob.name = 'style-bob';
-	([-0.26, 0.26] as const).forEach((sx) => {
-		const lock = new THREE.Mesh(new THREE.CapsuleGeometry(0.075, 0.22, 6, 8), hairM);
-		lock.position.set(sx, -0.08, 0.04);
-		lock.rotation.z = sx < 0 ? 0.12 : -0.12;
+	([-0.255, 0.255] as const).forEach((sx) => {
+		const lock = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.22, 6, 8), hairM);
+		lock.position.set(sx, -0.06, -0.02);
+		lock.rotation.z = sx < 0 ? 0.1 : -0.1;
 		styleBob.add(lock);
 	});
 	headGroup.add(styleBob);
 
-	// Style B: Twin Anime Hair Buns with Yellow Ties
+	// Style B: Twin Anime Hair Buns with Yellow Ties (like final_step_46.png!)
 	const styleBuns = new THREE.Group();
 	styleBuns.name = 'style-buns';
-	([-0.26, 0.26] as const).forEach((bx) => {
-		const bun = new THREE.Mesh(new THREE.SphereGeometry(0.145, 12, 10), hairM);
-		bun.position.set(bx, 0.24, -0.05);
-		const tie = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.025, 6, 12), goldM);
-		tie.position.set(bx * 0.88, 0.2, -0.04);
+	([-0.255, 0.255] as const).forEach((bx) => {
+		const bun = new THREE.Mesh(new THREE.SphereGeometry(0.14, 12, 10), hairM);
+		bun.position.set(bx, 0.25, -0.06);
+		const tie = new THREE.Mesh(new THREE.TorusGeometry(0.105, 0.024, 6, 12), goldM);
+		tie.position.set(bx * 0.88, 0.21, -0.05);
 		tie.rotation.y = bx < 0 ? 0.7 : -0.7;
 		styleBuns.add(bun, tie);
 	});
 	styleBuns.visible = false;
 	headGroup.add(styleBuns);
 
-	// Style C: Stylish Mailman Cap
+	// Style C: Stylish Mailman Cap (perched cleanly above eyebrows!)
 	const styleCap = new THREE.Group();
 	styleCap.name = 'style-cap';
 	const capTop = new THREE.Mesh(
-		new THREE.SphereGeometry(0.355, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52),
+		new THREE.SphereGeometry(0.335, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.48),
 		shirtM
 	);
-	capTop.position.set(0, 0.08, -0.01);
-	const brim = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), shirtM);
+	capTop.position.set(0, 0.11, -0.01);
+	const brim = new THREE.Mesh(new THREE.SphereGeometry(0.26, 12, 8), shirtM);
 	brim.name = 'hatMeshVisor';
-	brim.scale.set(1.08, 0.13, 0.88);
-	brim.position.set(0, 0.16, 0.25);
-	brim.rotation.x = 0.15;
-	const badge = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), goldM);
-	badge.position.set(0, 0.25, 0.34);
+	brim.scale.set(1.06, 0.12, 0.86);
+	brim.position.set(0, 0.18, 0.24);
+	brim.rotation.x = 0.08;
+	const badge = new THREE.Mesh(new THREE.SphereGeometry(0.042, 8, 8), goldM);
+	badge.position.set(0, 0.26, 0.32);
 	styleCap.add(capTop, brim, badge);
 	styleCap.visible = false;
 	headGroup.add(styleCap);
@@ -633,12 +677,12 @@ export function buildChibiCourier(
 	// Style D: Cozy Retro Headphones
 	const styleHeadphones = new THREE.Group();
 	styleHeadphones.name = 'style-headphones';
-	const band = new THREE.Mesh(new THREE.TorusGeometry(0.34, 0.032, 8, 20, Math.PI), whiteTrimM);
-	band.position.y = 0.06;
-	([-0.34, 0.34] as const).forEach((hx) => {
-		const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.105, 0.105, 0.075, 12), goldM);
+	const band = new THREE.Mesh(new THREE.TorusGeometry(0.325, 0.03, 8, 20, Math.PI), whiteTrimM);
+	band.position.y = 0.08;
+	([-0.325, 0.325] as const).forEach((hx) => {
+		const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.098, 0.098, 0.07, 12), goldM);
 		cup.rotation.z = Math.PI / 2;
-		cup.position.set(hx, 0.02, 0);
+		cup.position.set(hx, 0.01, 0);
 		styleHeadphones.add(cup);
 	});
 	styleHeadphones.add(band);
@@ -677,7 +721,7 @@ export function animateChibi(
 	const invSq = 1 / Math.sqrt(squash);
 
 	if (body) {
-		body.scale.set(0.118 * invSq, 0.118 * squash, 0.118 * invSq);
+		body.scale.set(0.132 * invSq, 0.132 * squash, 0.132 * invSq);
 		if (moving && jumpH < 0.02) {
 			body.position.y = Math.abs(Math.sin(t * freq + phase)) * 0.022;
 			body.rotation.z = Math.sin(t * freq + phase) * 0.045;

@@ -402,7 +402,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     const compassGroup = new Group();
     const arrowCone = new Mesh(
-      new ConeGeometry(0.036, 0.105, 8),
+      new ConeGeometry(0.022, 0.062, 8),
       new MeshBasicMaterial({ color: 0xf5bd33 })
     );
     arrowCone.rotation.x = Math.PI / 2;
