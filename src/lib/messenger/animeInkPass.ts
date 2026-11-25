@@ -229,6 +229,7 @@ const SKIP_INFO_NAMES = new Set([
   'ChimneySmoke',
   'AnimeButterflies',
   'SoaringBirds',
+  'AnimatedNpc',
 ]);
 
 export class AnimeInkPass {

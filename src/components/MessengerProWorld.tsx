@@ -533,12 +533,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     }> = [];
     const strollingNpcs: Array<{
       group: Group;
-      centerDir: Vector3;
-      t1: Vector3;
-      t2: Vector3;
+      waypoints: Vector3[];
+      wpIdx: number;
+      pauseUntil: number;
       posDir: Vector3;
+      forward: Vector3;
       groundR: number;
-      radius: number;
       speed: number;
       phase: number;
     }> = [];
@@ -1040,106 +1040,263 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           pState.groundR = spawnSpot.r;
           scene.add(player, playerShadowHolder, compassGroup);
 
-          // Spawn REAL rigged & animated Abeto NPC models at all 5 Quest Stops!
-          const atlasTex = await new TextureLoader().loadAsync(introTexturePaths.atlas);
-          const npcAtlasMat = createMessengerMaterials(atlasTex, atlasTex, sun.position).atlas;
+          // Spawn 5 fully animated Quest NPCs (breathing, blinking & waving when player approaches — ZERO A-pose!)
+          const questNpcStyles: Record<
+            string,
+            {
+              hatColor: number;
+              shirtColor: number;
+              pantsColor: number;
+              shoeColor: number;
+              bagColor: number;
+              hairStyle: HairStyle;
+              topStyle: TopStyle;
+            }
+          > = {
+            'town-post': {
+              hatColor: 0x3b4956,
+              shirtColor: 0x355c87,
+              pantsColor: 0x283442,
+              shoeColor: 0x262c34,
+              bagColor: 0x6e4f38,
+              hairStyle: 'cap',
+              topStyle: 'coat',
+            },
+            'cliff-lookout': {
+              hatColor: 0x4b3b34,
+              shirtColor: 0x4f9468,
+              pantsColor: 0x5c5346,
+              shoeColor: 0x4a3b30,
+              bagColor: 0x8c6d46,
+              hairStyle: 'strawhat',
+              topStyle: 'coat',
+            },
+            'waterfall-cove': {
+              hatColor: 0x2e3c4c,
+              shirtColor: 0x3e768c,
+              pantsColor: 0x36424d,
+              shoeColor: 0x232a32,
+              bagColor: 0x3f4e5c,
+              hairStyle: 'headphones',
+              topStyle: 'tee',
+            },
+            'harbor-town': {
+              hatColor: 0x4d3430,
+              shirtColor: 0xd97a54,
+              pantsColor: 0x3b444e,
+              shoeColor: 0x4d352c,
+              bagColor: 0xb88642,
+              hairStyle: 'buns',
+              topStyle: 'coat',
+            },
+            'south-observatory': {
+              hatColor: 0x34414f,
+              shirtColor: 0xc99638,
+              pantsColor: 0x2e3945,
+              shoeColor: 0x242a32,
+              bagColor: 0x4a5b6b,
+              hairStyle: 'bob',
+              topStyle: 'coat',
+            },
+          };
 
-          await Promise.all(
-            localStops.map(async (stop) => {
-              const streetSpot = findStreetSpot(stop.dir, 0.22);
-              stop.dir.copy(streetSpot.dir);
-              const surfR = streetSpot.r;
-              const quest = ENGLISH_NPC_QUESTS[stop.id];
-              const { group: npc, mixer } = await loadRealPlanetNpc(
-                quest?.npcModel ?? 'office-worker',
-                0.31,
-                npcAtlasMat
-              );
-              if (cancelled) return;
-              npc.position.copy(stop.dir).multiplyScalar(surfR);
-              npc.quaternion.setFromUnitVectors(UP, stop.dir);
-              npc.add(createSoftDropShadow(0.15));
-              scene.add(npc);
-              if (mixer) runtime.npcMixers.push(mixer);
+          localStops.forEach((stop) => {
+            const streetSpot = findStreetSpot(stop.dir, 0.22);
+            stop.dir.copy(streetSpot.dir);
+            const surfR = streetSpot.r;
+            const style = questNpcStyles[stop.id] ?? questNpcStyles['town-post'];
+            const npc = buildChibiCourier(toonGradient, style);
+            npc.name = 'AnimatedNpc';
+            npc.traverse((o) => {
+              if ((o as Mesh).isMesh && !o.name.endsWith('_outline')) o.castShadow = true;
+            });
+            npc.position.copy(stop.dir).multiplyScalar(surfR);
+            npc.quaternion.setFromUnitVectors(UP, stop.dir);
+            npc.add(createSoftDropShadow(0.14));
+            scene.add(npc);
 
-              const ring = new Mesh(
-                new RingGeometry(0.17, 0.23, 22),
-                new MeshBasicMaterial({
-                  color: 0xf5bd33,
-                  transparent: true,
-                  opacity: 0.75,
-                  side: DoubleSide,
-                  depthWrite: false,
-                })
-              );
-              ring.rotation.x = -Math.PI / 2;
-              const rh = new Group();
-              rh.add(ring);
-              rh.position.copy(stop.dir).multiplyScalar(surfR + 0.04);
-              rh.quaternion.setFromUnitVectors(UP, stop.dir);
-              scene.add(rh);
+            const ring = new Mesh(
+              new RingGeometry(0.17, 0.23, 22),
+              new MeshBasicMaterial({
+                color: 0xf5bd33,
+                transparent: true,
+                opacity: 0.75,
+                side: DoubleSide,
+                depthWrite: false,
+              })
+            );
+            ring.rotation.x = -Math.PI / 2;
+            const rh = new Group();
+            rh.add(ring);
+            rh.position.copy(stop.dir).multiplyScalar(surfR + 0.04);
+            rh.quaternion.setFromUnitVectors(UP, stop.dir);
+            scene.add(rh);
 
-              const isDoneInit = liveCompletedStopsRef.current.includes(stop.id);
-              const badge = new Sprite(
-                new SpriteMaterial({
-                  map: isDoneInit ? badgeTexDone : badgeTexTodo,
-                  transparent: true,
-                  depthWrite: false,
-                })
-              );
-              badge.scale.set(0.16, 0.16, 1);
-              badge.position.copy(stop.dir).multiplyScalar(surfR + 0.44);
-              scene.add(badge);
+            const isDoneInit = liveCompletedStopsRef.current.includes(stop.id);
+            const badge = new Sprite(
+              new SpriteMaterial({
+                map: isDoneInit ? badgeTexDone : badgeTexTodo,
+                transparent: true,
+                depthWrite: false,
+              })
+            );
+            badge.scale.set(0.16, 0.16, 1);
+            badge.position.copy(stop.dir).multiplyScalar(surfR + 0.44);
+            scene.add(badge);
 
-              stopNodes.push({ stop, npc, ring, badge, badgeDone: isDoneInit, surfR });
-            })
-          );
+            stopNodes.push({ stop, npc, ring, badge, badgeDone: isDoneInit, surfR });
+          });
 
-          // Spawn 5 lively strolling NPCs walking naturally around town streets & coastal plazas!
-          const strollSpecs: Array<{ model: string; dir: Vector3; radius: number; speed: number; phase: number }> = [
-            { model: 'office-worker', dir: new Vector3(0.22, 0.89, 0.39), radius: 0.055, speed: 0.42, phase: 0.0 },
-            { model: 'factory-worker-b', dir: new Vector3(0.11, 0.91, 0.40), radius: 0.06, speed: 0.36, phase: 1.4 },
-            { model: 'office-worker-alt', dir: new Vector3(-0.54, 0.72, 0.43), radius: 0.055, speed: 0.40, phase: 2.8 },
-            { model: 'young-lady', dir: new Vector3(0.73, 0.18, -0.66), radius: 0.05, speed: 0.34, phase: 4.1 },
-            { model: 'scout', dir: new Vector3(-0.44, -0.68, 0.58), radius: 0.058, speed: 0.38, phase: 5.3 },
+          // Spawn 5 fully animated strolling townsfolk following multi-waypoint street & coastal routes!
+          const strollRouteSpecs: Array<{
+            name: string;
+            style: {
+              hatColor: number;
+              shirtColor: number;
+              pantsColor: number;
+              shoeColor: number;
+              bagColor: number;
+              hairStyle: HairStyle;
+              topStyle: TopStyle;
+            };
+            rawWaypoints: Vector3[];
+            speed: number;
+            phase: number;
+          }> = [
+            {
+              name: 'TownStreetWalker',
+              style: {
+                hatColor: 0x384654,
+                shirtColor: 0x4b87a8,
+                pantsColor: 0x2d3a46,
+                shoeColor: 0x232930,
+                bagColor: 0x7c5b42,
+                hairStyle: 'bob',
+                topStyle: 'coat',
+              },
+              rawWaypoints: [
+                new Vector3(0.20, 0.90, 0.39),
+                new Vector3(0.27, 0.87, 0.41),
+                new Vector3(0.24, 0.85, 0.47),
+                new Vector3(0.15, 0.89, 0.43),
+              ],
+              speed: 0.068,
+              phase: 0.0,
+            },
+            {
+              name: 'HarborDockWalker',
+              style: {
+                hatColor: 0x4f3d35,
+                shirtColor: 0x5aa378,
+                pantsColor: 0x3b444e,
+                shoeColor: 0x3c312b,
+                bagColor: 0x8f6b47,
+                hairStyle: 'strawhat',
+                topStyle: 'tee',
+              },
+              rawWaypoints: [
+                new Vector3(0.10, 0.92, 0.38),
+                new Vector3(0.03, 0.90, 0.43),
+                new Vector3(0.08, 0.87, 0.48),
+                new Vector3(0.16, 0.90, 0.41),
+              ],
+              speed: 0.062,
+              phase: 1.5,
+            },
+            {
+              name: 'CliffTrailWalker',
+              style: {
+                hatColor: 0x2e3b48,
+                shirtColor: 0xd9895b,
+                pantsColor: 0x303a45,
+                shoeColor: 0x252c34,
+                bagColor: 0x4d5d6e,
+                hairStyle: 'headphones',
+                topStyle: 'coat',
+              },
+              rawWaypoints: [
+                new Vector3(-0.56, 0.72, 0.41),
+                new Vector3(-0.48, 0.76, 0.44),
+                new Vector3(-0.52, 0.69, 0.50),
+                new Vector3(-0.61, 0.67, 0.42),
+              ],
+              speed: 0.065,
+              phase: 2.9,
+            },
+            {
+              name: 'WaterfallMeadowWalker',
+              style: {
+                hatColor: 0x47353c,
+                shirtColor: 0xd46a84,
+                pantsColor: 0x323d4a,
+                shoeColor: 0x2a3038,
+                bagColor: 0xc29248,
+                hairStyle: 'buns',
+                topStyle: 'tee',
+              },
+              rawWaypoints: [
+                new Vector3(0.75, 0.16, -0.64),
+                new Vector3(0.70, 0.24, -0.67),
+                new Vector3(0.68, 0.12, -0.72),
+                new Vector3(0.77, 0.08, -0.63),
+              ],
+              speed: 0.058,
+              phase: 4.2,
+            },
+            {
+              name: 'HarborCafeWalker',
+              style: {
+                hatColor: 0x303d4a,
+                shirtColor: 0xd9a944,
+                pantsColor: 0x2c3642,
+                shoeColor: 0x232930,
+                bagColor: 0x614b3c,
+                hairStyle: 'cap',
+                topStyle: 'coat',
+              },
+              rawWaypoints: [
+                new Vector3(-0.46, -0.67, 0.58),
+                new Vector3(-0.38, -0.71, 0.59),
+                new Vector3(-0.42, -0.75, 0.51),
+                new Vector3(-0.51, -0.69, 0.51),
+              ],
+              speed: 0.064,
+              phase: 5.4,
+            },
           ];
-          await Promise.all(
-            strollSpecs.map(async (spec) => {
-              try {
-                const centerSpot = findStreetSpot(spec.dir.clone().normalize(), 0.2);
-                const { group: wNpc, mixer } = await loadRealPlanetNpc(
-                  spec.model,
-                  0.30,
-                  npcAtlasMat,
-                  true
-                );
-                if (cancelled) return;
-                const t1 = new Vector3(1, 0, 0).cross(centerSpot.dir);
-                if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(centerSpot.dir);
-                t1.normalize();
-                const t2 = centerSpot.dir.clone().cross(t1).normalize();
 
-                wNpc.position.copy(centerSpot.dir).multiplyScalar(centerSpot.r);
-                wNpc.quaternion.setFromUnitVectors(UP, centerSpot.dir);
-                wNpc.add(createSoftDropShadow(0.14));
-                scene.add(wNpc);
-                if (mixer) runtime.npcMixers.push(mixer);
-                strollingNpcs.push({
-                  group: wNpc,
-                  centerDir: centerSpot.dir.clone(),
-                  t1,
-                  t2,
-                  posDir: centerSpot.dir.clone(),
-                  groundR: centerSpot.r,
-                  radius: spec.radius,
-                  speed: spec.speed,
-                  phase: spec.phase,
-                });
-              } catch {
-                // Skip if optional strolling rig fails
-              }
-            })
-          );
+          strollRouteSpecs.forEach((spec) => {
+            const snappedWps = spec.rawWaypoints.map(
+              (wp) => findStreetSpot(wp.clone().normalize(), 0.18).dir
+            );
+            const startSpot = findStreetSpot(snappedWps[0], 0.12);
+            const wNpc = buildChibiCourier(toonGradient, spec.style);
+            wNpc.name = 'AnimatedNpc';
+            wNpc.traverse((o) => {
+              if ((o as Mesh).isMesh && !o.name.endsWith('_outline')) o.castShadow = true;
+            });
+            wNpc.position.copy(startSpot.dir).multiplyScalar(startSpot.r);
+            wNpc.quaternion.setFromUnitVectors(UP, startSpot.dir);
+            wNpc.add(createSoftDropShadow(0.13));
+            scene.add(wNpc);
+
+            const initFwd = snappedWps[1].clone().sub(startSpot.dir);
+            initFwd.addScaledVector(startSpot.dir, -initFwd.dot(startSpot.dir));
+            if (initFwd.lengthSq() < 0.0001) initFwd.set(0, 0, 1);
+            initFwd.normalize();
+
+            strollingNpcs.push({
+              group: wNpc,
+              waypoints: snappedWps,
+              wpIdx: 1,
+              pauseUntil: 0,
+              posDir: startSpot.dir.clone(),
+              forward: initFwd,
+              groundR: startSpot.r,
+              speed: spec.speed,
+              phase: spec.phase,
+            });
+          });
 
           if (cancelled) return;
           runtime.composer = createMessengerComposer(renderer, scene, camera, bundle.lut);
@@ -1213,42 +1370,54 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       if (dustRig) dustRig.update();
       if (rippleRig) rippleRig.update();
 
-      // Update 5 strolling NPCs smoothly along their spherical street loops
+      // Update 5 strolling NPCs smoothly along their multi-waypoint street & coastal routes!
       if (strollingNpcs.length > 0 && runtime.ready) {
         for (let i = 0; i < strollingNpcs.length; i++) {
           const s = strollingNpcs[i];
-          const a = elapsed * s.speed + s.phase;
-          const na = a + 0.08;
-          tmpMove
-            .copy(s.centerDir)
-            .addScaledVector(s.t1, Math.cos(a) * s.radius)
-            .addScaledVector(s.t2, Math.sin(a) * s.radius)
-            .normalize();
-          s.posDir.copy(tmpMove);
+          const targetWp = s.waypoints[s.wpIdx];
+          let isWalking = false;
 
-          // Resample ground height every 4 frames (super lightweight on BVH!)
-          if ((frameCount + i) % 4 === 0) {
-            const gHit = sampleLocalGround(s.posDir, s.groundR, 0.35);
-            if (gHit && Math.abs(gHit - s.groundR) < 0.45) {
-              s.groundR += (gHit - s.groundR) * 0.45;
+          if (elapsed >= s.pauseUntil) {
+            const distToWp = s.posDir.angleTo(targetWp);
+            if (distToWp < 0.012) {
+              // Arrived at waypoint: pause naturally to look around, then head to next waypoint!
+              s.wpIdx = (s.wpIdx + 1) % s.waypoints.length;
+              s.pauseUntil = elapsed + 1.8 + (i % 3) * 0.55;
+            } else {
+              isWalking = true;
+              tmpMove.copy(targetWp).sub(s.posDir);
+              tmpMove.addScaledVector(s.posDir, -tmpMove.dot(s.posDir));
+              if (tmpMove.lengthSq() > 0.00001) {
+                tmpMove.normalize();
+                const step = Math.min(distToWp, s.speed * delta);
+                s.posDir.addScaledVector(tmpMove, step).normalize();
+                s.forward.lerp(tmpMove, Math.min(1, 7 * delta));
+                s.forward.addScaledVector(s.posDir, -s.forward.dot(s.posDir)).normalize();
+              }
+
+              // Resample BVH ground height every 3 frames so feet stay glued to streets & slopes
+              if ((frameCount + i) % 3 === 0) {
+                const gHit = sampleLocalGround(s.posDir, s.groundR, 0.35);
+                if (gHit && Math.abs(gHit - s.groundR) < 0.5) {
+                  s.groundR += (gHit - s.groundR) * 0.45;
+                }
+              }
             }
           }
-          s.group.position.copy(s.posDir).multiplyScalar(s.groundR);
 
-          tmpFwd
-            .copy(s.centerDir)
-            .addScaledVector(s.t1, Math.cos(na) * s.radius)
-            .addScaledVector(s.t2, Math.sin(na) * s.radius)
-            .normalize()
-            .sub(s.posDir);
-          tmpFwd.addScaledVector(s.posDir, -tmpFwd.dot(s.posDir));
-          if (tmpFwd.lengthSq() > 0.00001) {
-            tmpFwd.normalize();
-            tmpRight.crossVectors(s.posDir, tmpFwd).normalize();
-            tmpMat.makeBasis(tmpRight, s.posDir, tmpFwd);
-            tmpQ.setFromRotationMatrix(tmpMat);
-            s.group.quaternion.slerp(tmpQ, 0.2);
-          }
+          s.group.position.copy(s.posDir).multiplyScalar(s.groundR);
+          tmpRight.crossVectors(s.posDir, s.forward).normalize();
+          tmpMat.makeBasis(tmpRight, s.posDir, s.forward);
+          tmpQ.setFromRotationMatrix(tmpMat);
+          s.group.quaternion.slerp(tmpQ, 0.18);
+
+          // Full anime walking / idle breathing / blinking animation!
+          animateChibi(s.group, {
+            t: elapsed,
+            phase: s.phase,
+            moving: isWalking,
+            sprinting: false,
+          });
         }
       }
 
@@ -1413,6 +1582,27 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           node.badge.position.copy(node.stop.dir).multiplyScalar(node.surfR + 0.44 + bob);
           const sc = isTarget ? 0.175 + Math.sin(elapsed * 5) * 0.014 : 0.145;
           node.badge.scale.set(sc, sc, 1);
+
+          // Animate Quest NPC (relaxed breathing, eye-blinking & friendly waving when player is close!)
+          const isPlayerClose = currentNearby?.id === node.stop.id;
+          animateChibi(node.npc, {
+            t: elapsed,
+            phase: idx * 1.35,
+            moving: false,
+            emoteAction: isPlayerClose ? 'wave' : null,
+          });
+          if (isPlayerClose) {
+            // Gently turn toward the player when they walk up!
+            tmpFwd.copy(pState.posDir).sub(node.stop.dir);
+            tmpFwd.addScaledVector(node.stop.dir, -tmpFwd.dot(node.stop.dir));
+            if (tmpFwd.lengthSq() > 0.0001) {
+              tmpFwd.normalize();
+              tmpRight.crossVectors(node.stop.dir, tmpFwd).normalize();
+              tmpMat.makeBasis(tmpRight, node.stop.dir, tmpFwd);
+              tmpQ.setFromRotationMatrix(tmpMat);
+              node.npc.quaternion.slerp(tmpQ, 0.12);
+            }
+          }
         });
 
         const arcDist = pState.posDir.angleTo(activeTarget.dir) * 28;
