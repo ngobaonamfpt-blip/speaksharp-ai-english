@@ -97,25 +97,25 @@ void main() {
 		float wetSand = 1.0 - step(6.48, shoreSignal);
 		float dirtSpeck = step(0.75, triplanarNoise.r) * (1.0 - step(6.98, worldR));
 
-		vec3 grassLit = vec3(0.35, 0.67, 0.44);    // #59ab70 airy coastal meadow green
-		vec3 grassVar = vec3(0.31, 0.61, 0.40);    // subtle sunlit turf patch
-		vec3 sandBank = vec3(0.82, 0.77, 0.62);    // #d1c49e warm sunlit sand bank
-		vec3 wetSandCol = vec3(0.68, 0.62, 0.49);  // subtle damp shoreline sand
-		vec3 cliffEarth = vec3(0.77, 0.74, 0.63);  // airy warm cream-stone cliff
+		vec3 grassLit = vec3(0.36, 0.72, 0.47);    // #5cb878 fresh luminous meadow green
+		vec3 grassVar = vec3(0.32, 0.66, 0.43);    // soft sunlit turf patch
+		vec3 sandBank = vec3(0.87, 0.82, 0.67);    // #ded1ab warm sunlit sand bank
+		vec3 wetSandCol = vec3(0.75, 0.69, 0.56);  // gentle damp shoreline sand
+		vec3 cliffEarth = vec3(0.89, 0.86, 0.74);  // #e3dbbd bright sun-kissed Abeto cream cliff
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
-		color = mix(color, vec3(0.18, 0.27, 0.22), grassRim * 0.58);
+		color = mix(color, vec3(0.24, 0.36, 0.30), grassRim * 0.42);
 		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
-		color = mix(color, wetSandCol, wetSand * 0.65);
+		color = mix(color, wetSandCol, wetSand * 0.50);
 
-		// Sparse broken hand-drawn horizontal cliff strata lines + subtle rock flecks (like Abeto!)
+		// Sparse delicate hand-drawn horizontal cliff strata lines + subtle rock flecks (airy like Abeto!)
 		float cliffMask = 1.0 - grassMask;
 		float strataWave = fract(worldR * 2.2 + triplanarNoise.r * 0.45);
-		float strataLine = (1.0 - smoothstep(0.0, 0.032, abs(strataWave - 0.5))) * step(0.54, triplanarNoise.g) * cliffMask;
-		float rockFleck = smoothstep(0.77, 0.85, triplanarNoise.b) * cliffMask;
-		color = mix(color, color * 0.72, strataLine * 0.52);
-		color = mix(color, color * 0.88, rockFleck * 0.5);
+		float strataLine = (1.0 - smoothstep(0.0, 0.028, abs(strataWave - 0.5))) * step(0.58, triplanarNoise.g) * cliffMask;
+		float rockFleck = smoothstep(0.78, 0.86, triplanarNoise.b) * cliffMask;
+		color = mix(color, color * 0.82, strataLine * 0.42);
+		color = mix(color, color * 0.92, rockFleck * 0.42);
 	} else {
 		// Subtle hand-illustrated surface details for wooden docks, crates, boat hull & walls!
 		vec4 fineNoise = triplanar(tNoise, wNormal, wPos * 0.28, 1.0);
@@ -123,21 +123,21 @@ void main() {
 		bool isWoodDeck = (upness > 0.65 && baseAtlas.r > 0.46 && baseAtlas.g > 0.42 && baseAtlas.b < 0.68 && (baseAtlas.r - baseAtlas.b) > 0.035);
 		if (isWoodDeck) {
 			float plankCoord = fract(dot(wPos.xz, vec2(4.2, 1.4)));
-			float plankLine = 1.0 - smoothstep(0.0, 0.048, min(plankCoord, 1.0 - plankCoord));
-			float plankTone = step(0.5, fract(dot(floor(wPos.xz * 4.2), vec2(0.37, 0.71)))) * 0.035;
-			color = mix(color, color * 0.72, plankLine * 0.65);
+			float plankLine = 1.0 - smoothstep(0.0, 0.044, min(plankCoord, 1.0 - plankCoord));
+			float plankTone = step(0.5, fract(dot(floor(wPos.xz * 4.2), vec2(0.37, 0.71)))) * 0.025;
+			color = mix(color, color * 0.80, plankLine * 0.48);
 			color *= (1.0 - plankTone);
 		}
 		// Subtle concrete/plaster weathering speckles on buildings, boxes & boat hull
-		float speck = smoothstep(0.78, 0.86, fineNoise.r);
-		color = mix(color, color * 0.91, speck * 0.35);
+		float speck = smoothstep(0.80, 0.88, fineNoise.r);
+		color = mix(color, color * 0.94, speck * 0.28);
 	}
 
-	// Soft sunlit 2-step anime cel shading with airy cool sky-tinted shadows (never dark!)
+	// Luminous sunlit 2-step anime cel shading with super airy sky-tinted shadows (never dark!)
 	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r += 0.025;
-	colorShadow.y = min(1.0, colorShadow.y * 1.05);
-	colorShadow.z *= 0.80;
+	colorShadow.r += 0.02;
+	colorShadow.y = min(1.0, colorShadow.y * 1.03);
+	colorShadow.z *= 0.88;
 	colorShadow = hsv2rgb(colorShadow);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);

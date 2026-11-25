@@ -44,9 +44,9 @@ void main() {
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
 	float shade = dot(normalize(vNormal), lightDir);
-	vec3 lit = tint * 1.14 + vec3(0.02, 0.05, 0.0);
-	vec3 mid = tint * 0.85;
-	vec3 dark = tint * vec3(0.48, 0.60, 0.66);
+	vec3 lit = tint * 1.22 + vec3(0.03, 0.06, 0.01);
+	vec3 mid = tint * 0.96;
+	vec3 dark = tint * vec3(0.62, 0.76, 0.78);
 	vec3 color = mix(dark, mid, smoothstep(-0.08, 0.02, shade));
 	color = mix(color, lit, smoothstep(0.38, 0.46, shade));
 
@@ -57,7 +57,7 @@ void main() {
 	float cellRand = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
 	float dist = length(f);
 	float leafArc = smoothstep(0.28, 0.22, abs(dist - 0.26)) * step(0.0, f.y) * step(0.68, cellRand);
-	color = mix(color, dark * 0.72, leafArc * 0.65);
+	color = mix(color, dark * 0.80, leafArc * 0.52);
 
 	gl_FragColor = vec4(color, 1.0);
 }

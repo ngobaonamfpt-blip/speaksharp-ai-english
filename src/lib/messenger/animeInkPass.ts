@@ -145,14 +145,14 @@ void main() {
   float nDiffH = length(nR - nL);
   float nDiffV = length(nU - nD);
   float normalGrad = sqrt(nDiffH * nDiffH + nDiffV * nDiffV);
-  float normalEdge = smoothstep(0.36, 0.78, normalGrad) * hasInfo;
+  float normalEdge = smoothstep(0.42, 0.86, normalGrad) * hasInfo;
 
   // Flat panel seam detection via surfaceId/elementId hash (wooden deck planks, crates, boat panels!)
   float idDiff = max(
     max(abs(iC.a - iL.a), abs(iC.a - iR.a)),
     max(abs(iC.a - iU.a), abs(iC.a - iD.a))
   );
-  float idEdge = step(0.028, idDiff) * hasInfo;
+  float idEdge = step(0.032, idDiff) * hasInfo;
 
   // --- 3. Colour Sobel for painted decals, boat lettering, cone stripes & window frames ---
   float l00 = luma(sampleColor(vUv + vec2(-o.x, -o.y)));
@@ -165,35 +165,35 @@ void main() {
   float l22 = luma(sampleColor(vUv + vec2(o.x, o.y)));
   float cx = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
   float cy = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
-  float colorEdge = smoothstep(0.24, 0.48, sqrt(cx * cx + cy * cy));
+  float colorEdge = smoothstep(0.28, 0.54, sqrt(cx * cx + cy * cy));
 
   bool isSky = texture2D(tDepth, vUv).x > 0.99995;
-  float nearDetailFade = 1.0 - smoothstep(13.0, 34.0, dC);
+  float nearDetailFade = 1.0 - smoothstep(12.0, 32.0, dC);
   float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
 
-  float interiorCrease = max(normalEdge * 0.88, idEdge * 0.72) * nearDetailFade;
-  float ink = max(max(depthEdge, colorEdge * 0.52), interiorCrease) * distFade;
+  float interiorCrease = max(normalEdge * 0.72, idEdge * 0.58) * nearDetailFade;
+  float ink = max(max(depthEdge, colorEdge * 0.44), interiorCrease) * distFade;
   if (isSky) ink = 0.0;
 
-  // --- Airy, sun-washed Studio Ghibli / Abeto pastel grading ---
+  // --- Dreamy, luminous, soothing Abeto / Studio Ghibli coastal pastel grading ---
   vec3 col = sampleColor(vUv);
   vec3 hsv = rgb2hsv(col);
-  hsv.y = clamp(hsv.y * 0.93, 0.0, 1.0);
-  hsv.z = mix(hsv.z, sqrt(max(hsv.z, 0.0)), 0.12);
+  // Gentle pastel saturation & lifted bright sunlit values (never dark or muddy!)
+  hsv.y = clamp(hsv.y * 0.90, 0.0, 1.0);
+  hsv.z = mix(hsv.z, pow(max(hsv.z, 0.0), 0.78), 0.32);
   col = hsv2rgb(hsv);
 
   float L = luma(col);
-  col = mix(col, col + vec3(0.022, 0.032, 0.042), (1.0 - smoothstep(0.15, 0.55, L)) * 0.42);
-  col = mix(col, col + vec3(0.028, 0.024, 0.01), smoothstep(0.60, 0.95, L) * 0.55);
+  // Soft aqua-sky bounce in shadows + warm sunlit cream glow on highlights
+  col = mix(col, col + vec3(0.045, 0.068, 0.072), (1.0 - smoothstep(0.10, 0.62, L)) * 0.62);
+  col = mix(col, col + vec3(0.035, 0.032, 0.018), smoothstep(0.55, 0.95, L) * 0.58);
 
-  // --- Crisp Abeto ligne-claire charcoal-slate ink (76% opacity) ---
-  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.76);
+  // --- Delicate, soothing slate-teal charcoal ink (56% opacity, airy like Abeto!) ---
+  col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.56);
 
-  // Subtle paper grain & whisper-light edge framing
+  // Whisper-light paper warmth (no dark vignette!)
   float grain = hash(vUv * uResolution) - 0.5;
-  col += grain * 0.01;
-  vec2 vc = vUv - 0.5;
-  col *= 1.0 - dot(vc, vc) * 0.045;
+  col += grain * 0.008;
 
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }
@@ -223,6 +223,7 @@ export function patchMaterialForInk(material: Material) {
 
 const SKIP_INFO_NAMES = new Set([
   'SkyDome',
+  'CloudRing',
   'TreeLeaves',
   'AnimeWindStreaks',
   'ChimneySmoke',
@@ -275,9 +276,9 @@ export class AnimeInkPass {
         uNear: { value: cam.near ?? 0.1 },
         uFar: { value: cam.far ?? 400 },
         uTime: { value: 0 },
-        uInkColor: { value: new Color('#222a32') },
-        uShadowTint: { value: new Color('#7ea3be') },
-        uLineWidth: { value: 0.95 },
+        uInkColor: { value: new Color('#34444e') },
+        uShadowTint: { value: new Color('#8ab4c9') },
+        uLineWidth: { value: 0.85 },
       },
     });
 

@@ -855,11 +855,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
           const terrainObj = bundle.group.getObjectByName('GameplayTerrain') ?? bundle.group;
           const chunks: Array<{ mesh: Mesh; box: Box3 }> = [];
-          // Cool sky-tinted translucent ShadowMaterial overlay so custom ShaderMaterial terrain
-          // receives REAL 3D silhouette shadows from player, buildings, cliffs & trees!
+          // Airy sky-tinted translucent ShadowMaterial overlay so custom ShaderMaterial terrain
+          // receives soft, luminous 3D silhouette shadows (never heavy or dark!)
           const groundShadowMat = new ShadowMaterial({
-            color: 0x204456,
-            opacity: 0.28,
+            color: 0x3b6e80,
+            opacity: 0.19,
             depthWrite: false,
             polygonOffset: true,
             polygonOffsetFactor: -1.5,

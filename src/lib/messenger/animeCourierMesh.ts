@@ -406,10 +406,10 @@ function addAnimeOutline(
  * matching media_1795542472014_12cfbc12.png!).
  */
 function createSharpAnimeGradient(): THREE.DataTexture {
-	// 4 texels: 1 cool shadow step + 3 bright sunlit steps -> clean anime terminator
+	// 4 texels: 1 airy cool-lavender shadow step + 3 bright sunlit steps -> soft Abeto cel split
 	const data = new Uint8Array([
-		174, 180, 198, 255,
-		246, 246, 248, 255,
+		202, 206, 222, 255,
+		248, 248, 250, 255,
 		255, 255, 255, 255,
 		255, 255, 255, 255
 	]);
@@ -597,9 +597,9 @@ export function buildSculptedAnimeCourier(
 	const goldM = toon(0xf5bd33);
 	const strawM = toon(0xe0cfa2);
 	const ribbonM = toon(0x74b589);
-	const darkInkM = new THREE.MeshBasicMaterial({ color: 0x181f26 });
+	const darkInkM = new THREE.MeshBasicMaterial({ color: 0x26313a });
 	const outlineM = new THREE.MeshBasicMaterial({
-		color: 0x1c2329,
+		color: 0x2f3d47,
 		side: THREE.BackSide
 	});
 

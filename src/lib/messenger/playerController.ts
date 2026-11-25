@@ -328,9 +328,15 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 	const stars = new THREE.Points(starGeo, starMat);
 	scene.add(stars);
 
-	// 14 Fluffy 3D Clouds orbiting the Gameplay planet (fitted radius ~9 -> clouds at ~14)
+	// 14 Fluffy 3D Clouds orbiting the Gameplay planet (airy glowing pastel clouds, never grey rocks!)
 	const cloudRing = new THREE.Group();
-	const cloudMat = new THREE.MeshToonMaterial({ color: 0xfffdf8, gradientMap: toonGradient });
+	cloudRing.name = 'CloudRing';
+	const cloudMat = new THREE.MeshBasicMaterial({
+		color: 0xe2faf3,
+		transparent: true,
+		opacity: 0.82,
+		depthWrite: false
+	});
 	const up = new THREE.Vector3(0, 1, 0);
 	for (let i = 0; i < 14; i++) {
 		const cg = new THREE.Group();
@@ -352,16 +358,16 @@ export function createAtmosphereRig(scene: THREE.Scene, toonGradient: THREE.Data
 
 	const applyTime = (mode: TimeOfDay, sun: THREE.DirectionalLight, ambient: THREE.AmbientLight) => {
 		if (mode === 'day') {
-			skyMat.uniforms.topColor.value.setHex(0x2fa7a6);
-			skyMat.uniforms.midColor.value.setHex(0x5cc7bd);
-			skyMat.uniforms.horizonColor.value.setHex(0xa9e4d6);
-			skyMat.uniforms.cloudLight.value.setHex(0xc6f0e4);
-			skyMat.uniforms.cloudShade.value.setHex(0x86d6c8);
-			sun.color.setHex(0xfff1dc);
-			sun.intensity = 1.55;
-			ambient.intensity = 0.82;
-			starMat.opacity = 0.08;
-			cloudMat.color.setHex(0xf2fbf7);
+			skyMat.uniforms.topColor.value.setHex(0x52c4be);
+			skyMat.uniforms.midColor.value.setHex(0x76dad1);
+			skyMat.uniforms.horizonColor.value.setHex(0xbef3e8);
+			skyMat.uniforms.cloudLight.value.setHex(0xd4f8ef);
+			skyMat.uniforms.cloudShade.value.setHex(0x9ce3d7);
+			sun.color.setHex(0xfff6e8);
+			sun.intensity = 1.45;
+			ambient.intensity = 1.02;
+			starMat.opacity = 0.04;
+			cloudMat.color.setHex(0xe8faf4);
 		} else if (mode === 'sunset') {
 			skyMat.uniforms.topColor.value.setHex(0x3b2d68);
 			skyMat.uniforms.midColor.value.setHex(0xf08556);
