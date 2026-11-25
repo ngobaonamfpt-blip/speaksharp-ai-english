@@ -123,7 +123,8 @@ export async function createNpcGalleryGroup(renderer: WebGLRenderer): Promise<Np
 export async function loadRealPlanetNpc(
 	npcName: string,
 	targetHeight = 0.29,
-	material: ShaderMaterial
+	material: ShaderMaterial,
+	preferWalk = false
 ): Promise<{ group: Group; mixer: AnimationMixer | null }> {
 	const entry = npcGalleryEntries.find((e) => e.name === npcName) ?? npcGalleryEntries[0];
 	const wrapper = new Group();
@@ -136,9 +137,10 @@ export async function loadRealPlanetNpc(
 
 	let mixer: AnimationMixer | null = null;
 	try {
-		const [bones, idle] = await Promise.all([
+		const animPath = preferWalk && entry.walk ? entry.walk : entry.idle;
+		const [bones, animGeo] = await Promise.all([
 			loadDracoGeometry(entry.bones),
-			loadDracoGeometry(entry.idle)
+			loadDracoGeometry(animPath)
 		]);
 		const mesh = createSkin(model, bones, material);
 		mesh.scale.setScalar(scale);
@@ -146,7 +148,7 @@ export async function loadRealPlanetNpc(
 		mesh.castShadow = true;
 		wrapper.add(mesh);
 
-		const clip = createSkinAnimation(`${entry.name}-idle`, idle);
+		const clip = createSkinAnimation(`${entry.name}-${preferWalk ? 'walk' : 'idle'}`, animGeo);
 		if (clip.duration > 0) {
 			mixer = new AnimationMixer(mesh);
 			mixer.clipAction(clip).play();

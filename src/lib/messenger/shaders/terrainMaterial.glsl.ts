@@ -91,23 +91,30 @@ void main() {
 		// Delicate hand-inked dark olive transition rim right at the jagged grass-to-cliff border!
 		float grassRim = (1.0 - smoothstep(0.0, 0.026, abs(grassSignal - 0.41))) * step(6.66, worldR);
 
-		// Painterly scalloped sandy dirt bank + damp waterline rim right along the shore
-		float shoreSignal = worldR + edgeNoise * 0.32;
-		float shoreBank = 1.0 - step(6.62, shoreSignal);
-		float wetSand = 1.0 - step(6.48, shoreSignal);
-		float dirtSpeck = step(0.75, triplanarNoise.r) * (1.0 - step(6.98, worldR));
+		// Painterly scalloped golden-cream beach + glistening wet-sand tide zone right along the shore!
+		float shoreSignal = worldR + edgeNoise * 0.34;
+		float shoreBank = 1.0 - step(6.68, shoreSignal);
+		float wetSand = 1.0 - step(6.52, shoreSignal);
+		float dirtSpeck = step(0.74, triplanarNoise.r) * (1.0 - step(7.02, worldR));
 
-		vec3 grassLit = vec3(0.36, 0.72, 0.47);    // #5cb878 fresh luminous meadow green
-		vec3 grassVar = vec3(0.32, 0.66, 0.43);    // soft sunlit turf patch
-		vec3 sandBank = vec3(0.87, 0.82, 0.67);    // #ded1ab warm sunlit sand bank
-		vec3 wetSandCol = vec3(0.75, 0.69, 0.56);  // gentle damp shoreline sand
+		vec3 grassLit   = vec3(0.36, 0.72, 0.47);  // #5cb878 fresh luminous meadow green
+		vec3 grassVar   = vec3(0.32, 0.66, 0.43);  // soft sunlit turf patch
+		vec3 drySand    = vec3(0.93, 0.88, 0.73);  // #ede0ba warm sunlit golden-cream beach sand
+		vec3 sandRipple = vec3(0.86, 0.80, 0.65);  // delicate wind-swept sand ripple accent
+		vec3 wetSandCol = vec3(0.77, 0.70, 0.55);  // glistening damp shoreline tide band
 		vec3 cliffEarth = vec3(0.89, 0.86, 0.74);  // #e3dbbd bright sun-kissed Abeto cream cliff
+
+		// Delicate hand-drawn wind ripples + tiny shell flecks on dry beach sand
+		float rippleBand = sin(worldR * 28.0 + triplanarNoise.r * 5.0) * 0.5 + 0.5;
+		vec3 beachCol = mix(drySand, sandRipple, step(0.72, rippleBand) * 0.42);
+		float shellFleck = step(0.86, triplanarNoise.b) * shoreBank;
+		beachCol = mix(beachCol, vec3(0.98, 0.96, 0.91), shellFleck * 0.75);
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
 		color = mix(color, vec3(0.24, 0.36, 0.30), grassRim * 0.42);
-		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
-		color = mix(color, wetSandCol, wetSand * 0.50);
+		color = mix(color, beachCol, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
+		color = mix(color, wetSandCol, wetSand * 0.68);
 
 		// Sparse delicate hand-drawn horizontal cliff strata lines + subtle rock flecks (airy like Abeto!)
 		float cliffMask = 1.0 - grassMask;

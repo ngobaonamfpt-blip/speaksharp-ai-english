@@ -250,6 +250,97 @@ function makeWoodenGuardrail(woodMat: THREE.Material): THREE.Group {
   return g;
 }
 
+/** Build a striped pastel anime beach umbrella tilted slightly toward the sun */
+function makeBeachUmbrella(
+  poleMat: THREE.Material,
+  canopyMat: THREE.Material,
+  stripeMat: THREE.Material
+): THREE.Group {
+  const g = new THREE.Group();
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.013, 0.56, 6), poleMat);
+  pole.position.y = 0.28;
+  const canopy = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.13, 8), canopyMat);
+  canopy.position.y = 0.54;
+  const trim = new THREE.Mesh(new THREE.CylinderGeometry(0.305, 0.325, 0.032, 8, 1, true), stripeMat);
+  trim.position.y = 0.485;
+  const finial = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), poleMat);
+  finial.position.y = 0.61;
+  g.add(pole, canopy, trim, finial);
+  g.rotation.z = 0.14;
+  return g;
+}
+
+/** Build a cozy wooden beach lounge chair with colorful striped fabric sling */
+function makeBeachChair(woodMat: THREE.Material, clothMat: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const frameL = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.018, 0.32), woodMat);
+  frameL.position.set(-0.085, 0.05, 0);
+  const frameR = frameL.clone();
+  frameR.position.x = 0.085;
+  const seat = new THREE.Mesh(new THREE.BoxGeometry(0.155, 0.014, 0.28), clothMat);
+  seat.position.set(0, 0.072, 0.01);
+  seat.rotation.x = -0.18;
+  const back = new THREE.Mesh(new THREE.BoxGeometry(0.155, 0.15, 0.016), clothMat);
+  back.position.set(0, 0.135, -0.125);
+  back.rotation.x = -0.52;
+  g.add(frameL, frameR, seat, back);
+  return g;
+}
+
+/** Build a cozy beached wooden coastal rowboat with painted gunwale trim & resting oar */
+function makeBeachedRowboat(
+  hullMat: THREE.Material,
+  trimMat: THREE.Material,
+  woodMat: THREE.Material
+): THREE.Group {
+  const g = new THREE.Group();
+  const hull = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.10, 0.52, 8), hullMat);
+  hull.rotation.x = Math.PI / 2;
+  hull.scale.set(1.0, 1.0, 0.52);
+  hull.position.y = 0.065;
+  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.018, 6, 12), trimMat);
+  rim.rotation.x = Math.PI / 2;
+  rim.scale.set(0.85, 1.48, 1.0);
+  rim.position.y = 0.11;
+  const bench = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.018, 0.075), woodMat);
+  bench.position.set(0, 0.095, 0);
+  const oar = new THREE.Mesh(new THREE.CylinderGeometry(0.008, 0.008, 0.46, 5), woodMat);
+  oar.rotation.x = Math.PI / 2;
+  oar.rotation.z = 0.18;
+  oar.position.set(0.07, 0.12, 0.02);
+  g.add(hull, rim, bench, oar);
+  return g;
+}
+
+/** Build a cute 5-point anime starfish resting on coastal sand */
+function makeStarfish(mat: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const armGeo = new THREE.ConeGeometry(0.018, 0.065, 4);
+  armGeo.rotateX(Math.PI / 2);
+  armGeo.translate(0, 0, 0.03);
+  for (let i = 0; i < 5; i++) {
+    const arm = new THREE.Mesh(armGeo, mat);
+    arm.rotation.y = (i / 5) * Math.PI * 2;
+    g.add(arm);
+  }
+  return g;
+}
+
+/** Build a red-and-white floating harbor buoy that bobs gently in the turquoise bay */
+function makeFloatingBuoy(redMat: THREE.Material, whiteMat: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.055, 0.11, 8), redMat);
+  base.position.y = 0.03;
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.068, 0.072, 0.036, 8), whiteMat);
+  band.position.y = 0.08;
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.015, 0.14, 6), redMat);
+  mast.position.y = 0.15;
+  const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), whiteMat);
+  lamp.position.y = 0.22;
+  g.add(base, band, mast, lamp);
+  return g;
+}
+
 /**
  * Generates living animated world details snapped cleanly onto the real BVH planet surface:
  * - Wind-swaying anime grass tufts (240) & wildflowers (72)
@@ -414,6 +505,85 @@ export function createWorldDetails(
     spinQ.setFromAxisAngle(UP, idx * 1.15);
     rail.quaternion.copy(quat).multiply(spinQ);
     root.add(rail);
+  });
+
+  // 2e. Cozy Coastal Beach Life: Striped Umbrellas, Lounge Chairs, Beached Rowboats, Starfish & Bobbing Buoys!
+  const beachCoralMat = toon(0xea7a6b);
+  const beachSkyMat = toon(0x5eb8d1);
+  const beachCreamMat = toon(0xf8f3e3);
+  const beachWoodMat = toon(0xb58a5e);
+  const starCoralMat = toon(0xf28b66);
+  const starGoldMat = toon(0xf5c85b);
+  const buoyRedMat = toon(0xd9544d);
+  const buoyWhiteMat = new THREE.MeshBasicMaterial({ color: 0xfefcf5 });
+
+  const beachSpots: Array<{ point: THREE.Vector3; up: THREE.Vector3 }> = [];
+  const bobbingBuoys: Array<{ group: THREE.Group; basePos: THREE.Vector3; up: THREE.Vector3; phase: number }> = [];
+
+  for (let i = 0; i < 360 && beachSpots.length < 14; i++) {
+    const u = rand() * 2 - 1;
+    const theta = rand() * Math.PI * 2;
+    const s = Math.sqrt(Math.max(0, 1 - u * u));
+    dir.set(s * Math.cos(theta), u, s * Math.sin(theta)).normalize();
+    const hit = sampleSurface(dir);
+    if (!hit) continue;
+    // Target gentle coastal sandy beach band right beside the turquoise bay
+    if (hit.radius < 6.50 || hit.radius > 6.96 || hit.normal.dot(dir) < 0.78) continue;
+    // Ensure well spaced apart
+    if (beachSpots.some((bs) => bs.point.distanceTo(hit.point) < 0.9)) continue;
+    beachSpots.push({ point: hit.point.clone(), up: dir.clone() });
+  }
+
+  beachSpots.forEach((spot, idx) => {
+    quat.setFromUnitVectors(UP, spot.up);
+    spinQ.setFromAxisAngle(UP, idx * 1.45);
+
+    if (idx % 3 === 0) {
+      // Beach umbrella + lounge chair pair!
+      const umb = makeBeachUmbrella(
+        beachWoodMat,
+        idx % 2 === 0 ? beachCoralMat : beachSkyMat,
+        beachCreamMat
+      );
+      umb.position.copy(spot.point);
+      umb.quaternion.copy(quat).multiply(spinQ);
+      root.add(umb);
+
+      const t1 = new THREE.Vector3(1, 0, 0).cross(spot.up);
+      if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(spot.up);
+      t1.normalize();
+      const chair = makeBeachChair(beachWoodMat, idx % 2 === 0 ? beachSkyMat : beachCoralMat);
+      chair.position.copy(spot.point).addScaledVector(t1, 0.24);
+      chair.quaternion.copy(quat).multiply(spinQ);
+      root.add(chair);
+    } else if (idx % 3 === 1) {
+      // Cozy beached wooden rowboat resting on the cove sand!
+      const boat = makeBeachedRowboat(
+        beachCreamMat,
+        idx % 2 === 0 ? beachSkyMat : beachCoralMat,
+        beachWoodMat
+      );
+      boat.position.copy(spot.point);
+      boat.quaternion.copy(quat).multiply(spinQ);
+      root.add(boat);
+    } else {
+      // Pair of cute starfish on the shoreline sand
+      const st = makeStarfish(idx % 2 === 0 ? starCoralMat : starGoldMat);
+      st.position.copy(spot.point).addScaledVector(spot.up, 0.018);
+      st.quaternion.copy(quat).multiply(spinQ);
+      root.add(st);
+    }
+
+    // Place 6 gently bobbing red-and-white harbor buoys slightly offshore in the bay!
+    if (bobbingBuoys.length < 6 && idx % 2 === 0) {
+      const offshoreDir = spot.up.clone();
+      const buoyPos = offshoreDir.clone().multiplyScalar(6.38);
+      const buoy = makeFloatingBuoy(buoyRedMat, buoyWhiteMat);
+      buoy.position.copy(buoyPos);
+      buoy.quaternion.copy(quat);
+      root.add(buoy);
+      bobbingBuoys.push({ group: buoy, basePos: buoyPos, up: offshoreDir, phase: idx * 1.1 });
+    }
   });
 
   // 3. Cozy Japanese Town Props + Swaying Shop Banners & Hanging Paper Lanterns
@@ -700,11 +870,16 @@ export function createWorldDetails(
   const update = (elapsed: number) => {
     windTime.value = elapsed;
 
-    // 1. Sway street banners & hanging lanterns
+    // 1. Sway street banners, hanging lanterns & bobbing harbor buoys
     for (let i = 0; i < swayingItems.length; i++) {
       const item = swayingItems[i];
       item.pivot.rotation.z = Math.sin(elapsed * item.speed + item.phase) * item.amp;
       item.pivot.rotation.x = Math.cos(elapsed * (item.speed * 0.75) + item.phase) * (item.amp * 0.5);
+    }
+    for (let i = 0; i < bobbingBuoys.length; i++) {
+      const b = bobbingBuoys[i];
+      const bob = Math.sin(elapsed * 2.1 + b.phase) * 0.028;
+      b.group.position.copy(b.basePos).addScaledVector(b.up, bob);
     }
 
     // 2. Fluttering butterflies in figure-8 loops

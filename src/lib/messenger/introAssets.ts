@@ -38,6 +38,7 @@ export type NpcGalleryEntry = {
 	model: string;
 	bones: string;
 	idle: string;
+	walk?: string;
 };
 
 export const npcGalleryEntries: NpcGalleryEntry[] = [
@@ -81,7 +82,22 @@ export const npcGalleryEntries: NpcGalleryEntry[] = [
 		name: 'office-worker',
 		model: '/messenger/geometries/npcs/present/office-worker/office-worker.drc',
 		bones: '/messenger/geometries/npcs/present/office-worker/office-worker-bones.drc',
-		idle: '/messenger/geometries/npcs/present/office-worker/office-worker-idle.drc'
+		idle: '/messenger/geometries/npcs/present/office-worker/office-worker-idle.drc',
+		walk: '/messenger/geometries/npcs/present/office-worker/office-worker-walk.drc'
+	},
+	{
+		name: 'office-worker-alt',
+		model: '/messenger/geometries/npcs/present/office-worker/office-worker-alt.drc',
+		bones: '/messenger/geometries/npcs/present/office-worker/office-worker-bones.drc',
+		idle: '/messenger/geometries/npcs/present/office-worker/office-worker-idle.drc',
+		walk: '/messenger/geometries/npcs/present/office-worker/office-worker-walk-alt.drc'
+	},
+	{
+		name: 'factory-worker-b',
+		model: '/messenger/geometries/npcs/present/factory-worker-b/factory-worker-b.drc',
+		bones: '/messenger/geometries/npcs/present/factory-worker-b/factory-worker-b-bones.drc',
+		idle: '/messenger/geometries/npcs/present/factory-worker-b/factory-worker-b-talk.drc',
+		walk: '/messenger/geometries/npcs/present/factory-worker-b/factory-worker-b-walk.drc'
 	},
 	{
 		name: 'scout',

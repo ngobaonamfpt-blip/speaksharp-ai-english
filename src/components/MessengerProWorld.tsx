@@ -531,6 +531,17 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       badgeDone: boolean;
       surfR: number;
     }> = [];
+    const strollingNpcs: Array<{
+      group: Group;
+      centerDir: Vector3;
+      t1: Vector3;
+      t2: Vector3;
+      posDir: Vector3;
+      groundR: number;
+      radius: number;
+      speed: number;
+      phase: number;
+    }> = [];
     const localStops: QuestStop[] = PLANET_QUEST_STOPS.map((s) => ({
       ...s,
       dir: s.dir.clone(),
@@ -1084,6 +1095,52 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             })
           );
 
+          // Spawn 5 lively strolling NPCs walking naturally around town streets & coastal plazas!
+          const strollSpecs: Array<{ model: string; dir: Vector3; radius: number; speed: number; phase: number }> = [
+            { model: 'office-worker', dir: new Vector3(0.22, 0.89, 0.39), radius: 0.055, speed: 0.42, phase: 0.0 },
+            { model: 'factory-worker-b', dir: new Vector3(0.11, 0.91, 0.40), radius: 0.06, speed: 0.36, phase: 1.4 },
+            { model: 'office-worker-alt', dir: new Vector3(-0.54, 0.72, 0.43), radius: 0.055, speed: 0.40, phase: 2.8 },
+            { model: 'young-lady', dir: new Vector3(0.73, 0.18, -0.66), radius: 0.05, speed: 0.34, phase: 4.1 },
+            { model: 'scout', dir: new Vector3(-0.44, -0.68, 0.58), radius: 0.058, speed: 0.38, phase: 5.3 },
+          ];
+          await Promise.all(
+            strollSpecs.map(async (spec) => {
+              try {
+                const centerSpot = findStreetSpot(spec.dir.clone().normalize(), 0.2);
+                const { group: wNpc, mixer } = await loadRealPlanetNpc(
+                  spec.model,
+                  0.30,
+                  npcAtlasMat,
+                  true
+                );
+                if (cancelled) return;
+                const t1 = new Vector3(1, 0, 0).cross(centerSpot.dir);
+                if (t1.lengthSq() < 0.01) t1.set(0, 0, 1).cross(centerSpot.dir);
+                t1.normalize();
+                const t2 = centerSpot.dir.clone().cross(t1).normalize();
+
+                wNpc.position.copy(centerSpot.dir).multiplyScalar(centerSpot.r);
+                wNpc.quaternion.setFromUnitVectors(UP, centerSpot.dir);
+                wNpc.add(createSoftDropShadow(0.14));
+                scene.add(wNpc);
+                if (mixer) runtime.npcMixers.push(mixer);
+                strollingNpcs.push({
+                  group: wNpc,
+                  centerDir: centerSpot.dir.clone(),
+                  t1,
+                  t2,
+                  posDir: centerSpot.dir.clone(),
+                  groundR: centerSpot.r,
+                  radius: spec.radius,
+                  speed: spec.speed,
+                  phase: spec.phase,
+                });
+              } catch {
+                // Skip if optional strolling rig fails
+              }
+            })
+          );
+
           if (cancelled) return;
           runtime.composer = createMessengerComposer(renderer, scene, camera, bundle.lut);
           runtime.composer.resize(host.clientWidth, host.clientHeight);
@@ -1155,6 +1212,45 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       if (updateWorldDetails) updateWorldDetails(elapsed);
       if (dustRig) dustRig.update();
       if (rippleRig) rippleRig.update();
+
+      // Update 5 strolling NPCs smoothly along their spherical street loops
+      if (strollingNpcs.length > 0 && runtime.ready) {
+        for (let i = 0; i < strollingNpcs.length; i++) {
+          const s = strollingNpcs[i];
+          const a = elapsed * s.speed + s.phase;
+          const na = a + 0.08;
+          tmpMove
+            .copy(s.centerDir)
+            .addScaledVector(s.t1, Math.cos(a) * s.radius)
+            .addScaledVector(s.t2, Math.sin(a) * s.radius)
+            .normalize();
+          s.posDir.copy(tmpMove);
+
+          // Resample ground height every 4 frames (super lightweight on BVH!)
+          if ((frameCount + i) % 4 === 0) {
+            const gHit = sampleLocalGround(s.posDir, s.groundR, 0.35);
+            if (gHit && Math.abs(gHit - s.groundR) < 0.45) {
+              s.groundR += (gHit - s.groundR) * 0.45;
+            }
+          }
+          s.group.position.copy(s.posDir).multiplyScalar(s.groundR);
+
+          tmpFwd
+            .copy(s.centerDir)
+            .addScaledVector(s.t1, Math.cos(na) * s.radius)
+            .addScaledVector(s.t2, Math.sin(na) * s.radius)
+            .normalize()
+            .sub(s.posDir);
+          tmpFwd.addScaledVector(s.posDir, -tmpFwd.dot(s.posDir));
+          if (tmpFwd.lengthSq() > 0.00001) {
+            tmpFwd.normalize();
+            tmpRight.crossVectors(s.posDir, tmpFwd).normalize();
+            tmpMat.makeBasis(tmpRight, s.posDir, tmpFwd);
+            tmpQ.setFromRotationMatrix(tmpMat);
+            s.group.quaternion.slerp(tmpQ, 0.2);
+          }
+        }
+      }
 
       if (mode === 'gameplay' && livePlayModeRef.current && runtime.ready) {
         controls.enabled = false;
