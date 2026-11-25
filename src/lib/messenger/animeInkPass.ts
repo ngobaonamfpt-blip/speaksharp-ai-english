@@ -235,6 +235,7 @@ export class AnimeInkPass {
   private target: WebGLRenderTarget;
   private infoTarget: WebGLRenderTarget;
   private infoMaterial: ShaderMaterial;
+  private flatOcclusionMaterial: ShaderMaterial;
   private material: ShaderMaterial;
   private quadScene: Scene;
   private quadCamera: OrthographicCamera;
@@ -261,6 +262,22 @@ export class AnimeInkPass {
     this.infoMaterial = new ShaderMaterial({
       vertexShader: infoVertexShader,
       fragmentShader: infoFragmentShader,
+    });
+
+    // Flat constant normal+id occluder for the player character:
+    // Blocks background wall/curb lines from bleeding through, without adding harsh low-poly seams inside the character!
+    this.flatOcclusionMaterial = new ShaderMaterial({
+      vertexShader: `
+        void main() {
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        precision highp float;
+        void main() {
+          gl_FragColor = vec4(0.5, 0.5, 1.0, 0.99);
+        }
+      `,
     });
 
     this.material = new ShaderMaterial({
@@ -308,6 +325,10 @@ export class AnimeInkPass {
 
     // 2. Render lightweight View-Space Normal + SurfaceId/ElementId pass for crisp interior object creases!
     const hiddenForInfo: Object3D[] = [];
+    const playerRoot = scene.getObjectByName('bodyRoot');
+    const savedPlayerVis = playerRoot ? playerRoot.visible : false;
+    if (playerRoot) playerRoot.visible = false;
+
     scene.traverse((obj) => {
       if (!obj.visible) return;
       if (SKIP_INFO_NAMES.has(obj.name)) {
@@ -348,10 +369,29 @@ export class AnimeInkPass {
     renderer.clear();
     renderer.render(scene, camera);
 
+    // Stamp player silhouette cleanly into infoTarget with flat constant normal (occludes walls, zero interior seams!)
+    if (playerRoot && savedPlayerVis) {
+      const savedAutoClear = renderer.autoClear;
+      const worldHidden: Object3D[] = [];
+      scene.children.forEach((ch) => {
+        if (ch.visible && ch !== playerRoot && !ch.getObjectByName('bodyRoot')) {
+          ch.visible = false;
+          worldHidden.push(ch);
+        }
+      });
+      playerRoot.visible = true;
+      scene.overrideMaterial = this.flatOcclusionMaterial;
+      renderer.autoClear = false;
+      renderer.render(scene, camera);
+      renderer.autoClear = savedAutoClear;
+      for (let i = 0; i < worldHidden.length; i++) worldHidden[i].visible = true;
+    }
+
     // Restore scene & renderer state cleanly
     scene.overrideMaterial = prevOverride;
     scene.background = prevBg;
     renderer.setClearColor(this.savedClearColor, prevClearAlpha);
+    if (playerRoot) playerRoot.visible = savedPlayerVis;
     for (let i = 0; i < hiddenForInfo.length; i++) {
       hiddenForInfo[i].visible = true;
     }
@@ -366,6 +406,7 @@ export class AnimeInkPass {
     this.target.dispose();
     this.infoTarget.dispose();
     this.infoMaterial.dispose();
+    this.flatOcclusionMaterial.dispose();
     this.material.dispose();
     this.quad.geometry.dispose();
   }

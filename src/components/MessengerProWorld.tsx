@@ -536,40 +536,52 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       dir: s.dir.clone(),
     }));
 
-    /** Hand-drawn beveled Abeto 3D speech/quest badge hovering above each NPC */
+    /** Hand-drawn beveled Abeto 3D speech/quest badge hovering above each NPC (single seamless path!) */
     const makeBadgeTex = (done: boolean) => {
       const c = document.createElement('canvas');
       c.width = 128;
       c.height = 128;
       const ctx = c.getContext('2d')!;
       ctx.clearRect(0, 0, 128, 128);
-      // Drop shadow
-      ctx.fillStyle = '#24323c';
-      ctx.beginPath();
-      ctx.roundRect(22, 22, 88, 76, 22);
+
+      const traceBubble = (ox: number, oy: number) => {
+        const x = 18 + ox, y = 16 + oy, w = 88, h = 72, r = 20;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.lineTo(x + w - r, y);
+        ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+        ctx.lineTo(x + w, y + h - r);
+        ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+        ctx.lineTo(x + w * 0.5 + 11, y + h);
+        ctx.lineTo(x + w * 0.5, y + h + 18);
+        ctx.lineTo(x + w * 0.5 - 11, y + h);
+        ctx.lineTo(x + r, y + h);
+        ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+        ctx.lineTo(x, y + r);
+        ctx.quadraticCurveTo(x, y, x + r, y);
+        ctx.closePath();
+      };
+
+      // Offset charcoal shadow
+      ctx.fillStyle = '#2d3b45';
+      traceBubble(4, 5);
       ctx.fill();
-      // Main pill card
-      ctx.fillStyle = done ? '#4ade80' : '#ffd859';
-      ctx.strokeStyle = '#24323c';
+
+      // Main clean bubble with seamless pointer
+      ctx.fillStyle = done ? '#74e8a4' : '#ffe074';
+      ctx.strokeStyle = '#2d3b45';
       ctx.lineWidth = 7;
-      ctx.beginPath();
-      ctx.roundRect(18, 16, 88, 76, 22);
+      ctx.lineJoin = 'round';
+      traceBubble(0, 0);
       ctx.fill();
       ctx.stroke();
-      // Little speech pointer triangle
-      ctx.beginPath();
-      ctx.moveTo(52, 90);
-      ctx.lineTo(62, 110);
-      ctx.lineTo(74, 90);
-      ctx.closePath();
-      ctx.fill();
-      ctx.stroke();
+
       // Crisp icon (! or checkmark)
-      ctx.fillStyle = '#1f2b34';
-      ctx.font = '900 50px system-ui, sans-serif';
+      ctx.fillStyle = '#23303a';
+      ctx.font = '900 46px system-ui, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(done ? '✓' : '!', 62, 55);
+      ctx.fillText(done ? '✓' : '!', 62, 53);
       const tex = new CanvasTexture(c);
       tex.needsUpdate = true;
       return tex;
@@ -1175,13 +1187,14 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             .addScaledVector(tmpFwd, inFwd)
             .addScaledVector(tmpRight, inRight)
             .normalize();
-          const angSpeed = sprinting ? 0.0044 : 0.0025;
+          // Frame-rate-independent crisp movement speed (identical snappy pace at 60/120/165 FPS!)
+          const angSpeed = (sprinting ? 0.44 : 0.26) * delta;
           const allowedMove = checkWallSlide(pState.posDir, tmpMove, pState.groundR + pState.jumpH);
           if (allowedMove) {
             pState.posDir.addScaledVector(allowedMove, angSpeed).normalize();
-            pState.forward.lerp(allowedMove, 0.24);
+            pState.forward.lerp(allowedMove, Math.min(1, 14 * delta));
           } else {
-            pState.forward.lerp(tmpMove, 0.14);
+            pState.forward.lerp(tmpMove, Math.min(1, 9 * delta));
           }
           pState.forward.addScaledVector(pState.posDir, -pState.forward.dot(pState.posDir)).normalize();
 

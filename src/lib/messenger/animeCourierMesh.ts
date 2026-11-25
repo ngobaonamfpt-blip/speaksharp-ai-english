@@ -177,7 +177,7 @@ function createHairStrandGeometry(
  * - Subtle integrated nose bridge/tip sculpted directly into front vertices
  */
 function createSculptedAnimeHeadGeometry(): THREE.BufferGeometry {
-	const geo = new THREE.SphereGeometry(0.255, 22, 18);
+	const geo = new THREE.SphereGeometry(0.252, 28, 22);
 	const pos = geo.attributes.position as THREE.BufferAttribute;
 	const uv = geo.attributes.uv as THREE.BufferAttribute;
 	const v = new THREE.Vector3();
@@ -189,52 +189,45 @@ function createSculptedAnimeHeadGeometry(): THREE.BufferGeometry {
 		const z = v.z;
 
 		// Normalize height roughly [-1, 1]
-		const yn = y / 0.255;
-		const zn = z / 0.255;
-		const xn = x / 0.255;
+		const yn = y / 0.252;
+		const zn = z / 0.252;
+		const xn = x / 0.252;
 
-		let nx = x * 0.94;
-		let ny = y * 1.02;
-		let nz = z * 0.94;
+		let nx = x * 0.93;
+		let ny = y * 1.01;
+		let nz = z * 0.93;
 
-		// Sculpt soft, natural anime jawline & gentle chin (like media_1795542472014_12cfbc12.png!)
+		// Sculpt smooth, youthful anime jawline & softly rounded chin
 		if (yn < 0.0) {
 			const jawT = Math.min(1, -yn);
-			// Gentle natural taper (NOT a sharp triangle!)
-			nx *= 1 - jawT * 0.24;
+			nx *= 1 - jawT * 0.22;
 			if (zn > 0) {
-				nz += jawT * 0.014 * Math.max(0, 1 - Math.abs(xn) * 1.5);
+				nz += jawT * 0.012 * Math.max(0, 1 - Math.abs(xn) * 1.4);
 			} else {
-				nz *= 1 - jawT * 0.22;
+				nz *= 1 - jawT * 0.2;
 			}
 		}
 
-		// Slightly flatten front face plane so anime cel-shadow cuts cleanly
+		// Gently flatten front face plane so anime cel-shadow cuts cleanly
 		if (zn > 0.35 && yn > -0.55 && yn < 0.55) {
 			const faceMask = Math.max(0, 1 - Math.abs(xn) * 1.15);
-			nz -= faceMask * 0.018;
+			nz -= faceMask * 0.014;
 		}
 
-		// Integrated subtle sculpted anime nose bridge & tip
-		if (zn > 0.65 && Math.abs(xn) < 0.19 && yn > -0.34 && yn < 0.06) {
-			const noseX = Math.max(0, 1 - Math.abs(xn) / 0.19);
-			const noseY = 1 - Math.abs((yn + 0.16) / 0.2);
-			const nosePeak = Math.pow(Math.max(0, noseX * noseY), 1.4);
-			nz += nosePeak * 0.036;
-			ny -= nosePeak * 0.008;
-		}
-
-		// Subtle brow ridge overhang above eyes
-		if (zn > 0.55 && yn > 0.12 && yn < 0.32 && Math.abs(xn) < 0.55) {
-			const browMask = Math.sin(((yn - 0.12) / 0.2) * Math.PI);
-			nz += browMask * 0.008;
+		// Subtle sculpted anime nose bridge & tip
+		if (zn > 0.65 && Math.abs(xn) < 0.16 && yn > -0.30 && yn < 0.04) {
+			const noseX = Math.max(0, 1 - Math.abs(xn) / 0.16);
+			const noseY = 1 - Math.abs((yn + 0.14) / 0.18);
+			const nosePeak = Math.pow(Math.max(0, noseX * noseY), 1.5);
+			nz += nosePeak * 0.026;
+			ny -= nosePeak * 0.005;
 		}
 
 		pos.setXYZ(i, nx, ny, nz);
 
-		// Planar front-projected UV for crisp, distortion-free anime face painting!
-		const u = 0.5 + nx / 0.52;
-		const vCoord = 0.5 + ny / 0.58;
+		// Planar front-projected UV for razor-sharp anime face painting!
+		const u = 0.5 + nx / 0.50;
+		const vCoord = 0.5 + ny / 0.56;
 		uv.setXY(i, THREE.MathUtils.clamp(u, 0.01, 0.99), THREE.MathUtils.clamp(vCoord, 0.01, 0.99));
 	}
 
@@ -243,120 +236,128 @@ function createSculptedAnimeHeadGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * High-res procedural anime face texture (512x512) matching Abeto Messenger:
- * - Warm peachy skin base with subtle cheek tint
- * - Crisp hand-inked almond eyes, bold angled brows, delicate nose shadow, calm smile
- * - Separate `blink` variant for smooth natural blinking!
+ * High-res 1024x1024 studio anime face texture matching Abeto Messenger:
+ * - Warm peachy skin base with soft blush
+ * - Crisp, clean almond anime eyes, expressive brows, subtle nose accent, gentle smile
  */
 function createAnimeFaceTexture(blink: boolean): THREE.CanvasTexture {
-	const size = 512;
+	const size = 1024;
 	const canvas = document.createElement('canvas');
 	canvas.width = size;
 	canvas.height = size;
 	const ctx = canvas.getContext('2d')!;
+	const s = size / 512;
 
 	// Warm anime skin tone matching reference
-	ctx.fillStyle = '#e7c6be';
+	ctx.fillStyle = '#ebd0c7';
 	ctx.fillRect(0, 0, size, size);
 
 	// Soft subtle blush on cheekbones
 	for (const side of [-1, 1]) {
 		const gx = size * (0.5 + side * 0.185);
-		const gy = size * 0.545;
-		const grad = ctx.createRadialGradient(gx, gy, 4, gx, gy, 34);
-		grad.addColorStop(0, 'rgba(218, 138, 134, 0.28)');
-		grad.addColorStop(1, 'rgba(218, 138, 134, 0.0)');
+		const gy = size * 0.565;
+		const grad = ctx.createRadialGradient(gx, gy, 6 * s, gx, gy, 36 * s);
+		grad.addColorStop(0, 'rgba(228, 138, 134, 0.30)');
+		grad.addColorStop(1, 'rgba(228, 138, 134, 0.0)');
 		ctx.fillStyle = grad;
 		ctx.beginPath();
-		ctx.arc(gx, gy, 34, 0, Math.PI * 2);
+		ctx.arc(gx, gy, 36 * s, 0, Math.PI * 2);
 		ctx.fill();
 	}
 
-	// Draw bold, expressive anime eyes & angled eyebrows (readable even at gameplay camera distance!)
+	// Draw razor-sharp expressive anime eyes & angled eyebrows
 	for (const side of [-1, 1]) {
-		const ex = size * (0.5 + side * 0.16);
+		const ex = size * (0.5 + side * 0.155);
 		const ey = size * 0.505;
 
-		// Bold tapered anime eyebrow
+		// Sleek tapered anime eyebrow
 		ctx.save();
-		ctx.translate(ex, ey - 42);
-		ctx.rotate(side * -0.1);
-		ctx.fillStyle = '#182028';
+		ctx.translate(ex, ey - 40 * s);
+		ctx.rotate(side * -0.09);
+		ctx.fillStyle = '#24303a';
 		ctx.beginPath();
-		ctx.moveTo(-side * 30, -6);
-		ctx.quadraticCurveTo(0, -13, side * 32, -2);
-		ctx.quadraticCurveTo(0, 3, -side * 30, 7);
+		ctx.moveTo(-side * 28 * s, -4 * s);
+		ctx.quadraticCurveTo(0, -11 * s, side * 30 * s, -1 * s);
+		ctx.quadraticCurveTo(0, 2 * s, -side * 28 * s, 5 * s);
 		ctx.closePath();
 		ctx.fill();
 		ctx.restore();
 
-		// Subtle upper eyelid crease
-		ctx.strokeStyle = 'rgba(130, 92, 92, 0.5)';
-		ctx.lineWidth = 3;
+		// Delicate upper eyelid crease
+		ctx.strokeStyle = 'rgba(138, 96, 96, 0.48)';
+		ctx.lineWidth = 2.6 * s;
 		ctx.beginPath();
-		ctx.moveTo(ex - 26, ey - 20);
-		ctx.quadraticCurveTo(ex, ey - 28, ex + 26, ey - 19);
+		ctx.moveTo(ex - 25 * s, ey - 19 * s);
+		ctx.quadraticCurveTo(ex, ey - 27 * s, ex + 25 * s, ey - 18 * s);
 		ctx.stroke();
 
 		if (blink) {
-			// Crisp closed-eye anime curve
-			ctx.strokeStyle = '#141a20';
-			ctx.lineWidth = 8;
+			ctx.strokeStyle = '#1b242c';
+			ctx.lineWidth = 7 * s;
 			ctx.lineCap = 'round';
 			ctx.beginPath();
-			ctx.moveTo(ex - 26, ey + 2);
-			ctx.quadraticCurveTo(ex, ey + 13, ex + 26, ey + 1);
+			ctx.moveTo(ex - 26 * s, ey + 2 * s);
+			ctx.quadraticCurveTo(ex, ey + 13 * s, ex + 26 * s, ey + 1 * s);
 			ctx.stroke();
 		} else {
-			// Clean off-white sclera
-			ctx.fillStyle = '#faf7f2';
+			// Crisp off-white sclera
+			ctx.fillStyle = '#fcfaf6';
 			ctx.beginPath();
-			ctx.ellipse(ex, ey + 2, 27, 16, side * -0.04, 0, Math.PI * 2);
+			ctx.ellipse(ex, ey + 2 * s, 27 * s, 17 * s, side * -0.04, 0, Math.PI * 2);
 			ctx.fill();
 
-			// Crisp bold dark anime iris/pupil
-			ctx.fillStyle = '#141a20';
+			// Rich deep-slate anime iris/pupil with subtle lower crescent shine
+			ctx.fillStyle = '#18212a';
 			ctx.beginPath();
-			ctx.ellipse(ex - side * 2, ey + 2, 15.5, 15.5, 0, 0, Math.PI * 2);
+			ctx.ellipse(ex - side * 1.5 * s, ey + 2 * s, 16 * s, 16.5 * s, 0, 0, Math.PI * 2);
 			ctx.fill();
 
-			// Tiny crisp anime eye glint
+			ctx.fillStyle = '#384c5c';
+			ctx.beginPath();
+			ctx.arc(ex - side * 1.5 * s, ey + 8 * s, 8.5 * s, 0, Math.PI);
+			ctx.fill();
+
+			// Crisp bright anime eye highlight
 			ctx.fillStyle = '#ffffff';
 			ctx.beginPath();
-			ctx.arc(ex - side * 6 - 2, ey - 3, 3.6, 0, Math.PI * 2);
+			ctx.arc(ex - side * 6 * s - 2 * s, ey - 4 * s, 4.2 * s, 0, Math.PI * 2);
+			ctx.fill();
+			ctx.beginPath();
+			ctx.arc(ex + side * 4 * s, ey + 7 * s, 2.0 * s, 0, Math.PI * 2);
 			ctx.fill();
 
-			// Bold tapered upper lash line (iconic Abeto Messenger look!)
-			ctx.strokeStyle = '#12181e';
-			ctx.lineWidth = 10;
+			// Bold tapered upper lash arch
+			ctx.strokeStyle = '#161e26';
+			ctx.lineWidth = 9.5 * s;
 			ctx.lineCap = 'round';
 			ctx.beginPath();
-			ctx.moveTo(ex - 30, ey - 4);
-			ctx.quadraticCurveTo(ex, ey - 18, ex + 30, ey - 3);
+			ctx.moveTo(ex - 29 * s, ey - 4 * s);
+			ctx.quadraticCurveTo(ex, ey - 19 * s, ex + 29 * s, ey - 3 * s);
 			ctx.stroke();
 		}
 	}
 
 	// Subtle nose tip shadow accent
-	ctx.fillStyle = 'rgba(155, 116, 112, 0.42)';
+	ctx.fillStyle = 'rgba(155, 114, 110, 0.36)';
 	ctx.beginPath();
-	ctx.moveTo(size * 0.5 - 6, size * 0.59);
-	ctx.lineTo(size * 0.5 + 10, size * 0.602);
-	ctx.lineTo(size * 0.5 - 2, size * 0.615);
+	ctx.moveTo(size * 0.5 - 4 * s, size * 0.595);
+	ctx.lineTo(size * 0.5 + 8 * s, size * 0.606);
+	ctx.lineTo(size * 0.5 - 2 * s, size * 0.616);
 	ctx.closePath();
 	ctx.fill();
 
-	// Calm, gentle anime mouth line (matches media_1795542472014_12cfbc12.png!)
-	ctx.strokeStyle = '#1e262e';
-	ctx.lineWidth = 6;
+	// Calm, refined anime mouth line
+	ctx.strokeStyle = '#28323c';
+	ctx.lineWidth = 4.6 * s;
 	ctx.lineCap = 'round';
 	ctx.beginPath();
-	ctx.moveTo(size * 0.452, size * 0.685);
-	ctx.quadraticCurveTo(size * 0.5, size * 0.698, size * 0.548, size * 0.683);
+	ctx.moveTo(size * 0.456, size * 0.688);
+	ctx.quadraticCurveTo(size * 0.5, size * 0.702, size * 0.544, size * 0.686);
 	ctx.stroke();
 
 	const tex = new THREE.CanvasTexture(canvas);
 	tex.colorSpace = THREE.SRGBColorSpace;
+	tex.anisotropy = 4;
 	tex.needsUpdate = true;
 	return tex;
 }
@@ -909,60 +910,60 @@ export function buildSculptedAnimeCourier(
 	letter.visible = false;
 	bagGroup.add(letter);
 
-	// 3. Sculpted Tapered 3/4 Jacket Sleeves + Forearms + Sculpted Anime Hands
+	// 3. Natural Sloped Anime Shoulders + Smooth 3/4 Jacket Sleeves + Forearms + Hands
 	([-1, 1] as const).forEach((side, i) => {
 		const arm = new THREE.Group();
 		arm.name = i === 0 ? 'leftArm' : 'rightArm';
-		// Positioned cleanly at outer shoulder edge and angled OUTWARD (side * +0.20!)
-		arm.position.set(side * 0.285, 0.32, 0);
+		// Tucked smoothly into the sloped coat shoulder line (zero boxy shoulder pads!)
+		arm.position.set(side * 0.245, 0.275, 0);
 		arm.rotation.z = side * 0.20;
 
-		// Continuous sloped shoulder -> elbow -> flared 3/4 cuff sleeve (no ball shoulder!)
+		// Silky-smooth sloped shoulder -> elbow -> flared 3/4 cuff sleeve (16 radial segments!)
 		const sleeveGeo = createLoftedMeshGeometry(
 			[
-				{ y: -0.50, rx: 0.118, rz: 0.114, foldAmp: 0.04, foldFreq: 5 },
-				{ y: -0.32, rx: 0.106, rz: 0.102 },
-				{ y: -0.12, rx: 0.098, rz: 0.094 },
-				{ y: 0.02, rx: 0.092, rz: 0.09 },
-				{ y: 0.075, rx: 0.062, rz: 0.064 }
+				{ y: -0.46, rx: 0.112, rz: 0.108, foldAmp: 0.025, foldFreq: 5 },
+				{ y: -0.28, rx: 0.10, rz: 0.096 },
+				{ y: -0.10, rx: 0.09, rz: 0.088 },
+				{ y: 0.02, rx: 0.082, rz: 0.082 },
+				{ y: 0.065, rx: 0.048, rz: 0.05 }
 			],
-			10,
+			16,
 			true,
 			true
 		);
 		const sleeve = new THREE.Mesh(sleeveGeo, shirtM);
 		sleeve.name = i === 0 ? 'shirtMeshArmL' : 'shirtMeshArmR';
-		addAnimeOutline(sleeve, 0.012, outlineM);
+		addAnimeOutline(sleeve, 0.01, outlineM);
 
 		// Crisp cream cuff stripe hugging the sleeve flare
 		const cuffGeo = createLoftedMeshGeometry(
 			[
-				{ y: -0.465, rx: 0.12, rz: 0.116 },
-				{ y: -0.432, rx: 0.117, rz: 0.113 }
+				{ y: -0.425, rx: 0.114, rz: 0.11 },
+				{ y: -0.392, rx: 0.111, rz: 0.107 }
 			],
-			10,
+			16,
 			false,
 			false
 		);
 		const cuffStripe = new THREE.Mesh(cuffGeo, creamM);
 
-		// Tapered anatomical forearm/wrist
+		// Smooth tapered anatomical forearm/wrist
 		const forearmGeo = createLoftedMeshGeometry(
 			[
-				{ y: -0.62, rx: 0.042, rz: 0.044 },
-				{ y: -0.53, rx: 0.052, rz: 0.054 },
-				{ y: -0.45, rx: 0.058, rz: 0.058 }
+				{ y: -0.57, rx: 0.039, rz: 0.041 },
+				{ y: -0.48, rx: 0.048, rz: 0.05 },
+				{ y: -0.40, rx: 0.055, rz: 0.055 }
 			],
-			8,
+			12,
 			true,
 			true
 		);
 		const forearm = new THREE.Mesh(forearmGeo, skinM);
-		addAnimeOutline(forearm, 0.008, outlineM);
+		addAnimeOutline(forearm, 0.007, outlineM);
 
 		// Sculpted anime hand with curved palm & thumb
 		const hand = createSculptedHand(side, skinM, outlineM);
-		hand.position.y = -0.615;
+		hand.position.y = -0.565;
 
 		arm.add(sleeve, cuffStripe, forearm, hand);
 		torsoGroup.add(arm);
@@ -1014,116 +1015,113 @@ export function buildSculptedAnimeCourier(
 		headGroup.add(ear);
 	});
 
-	// 5. Sculpted Layered Anime Hair (Snug Organic Cap + Swept Curved Fringe + Flared Nape Strands!)
-	const hairCapGeo = new THREE.SphereGeometry(0.272, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56);
+	// 5. Smooth Sculpted Layered Anime Hair (Snug 24x16 Cap + Asymmetrical Parted Bangs + Sleek Side Locks!)
+	const hairCapGeo = new THREE.SphereGeometry(0.268, 24, 16, 0, Math.PI * 2, 0, Math.PI * 0.56);
 	const hcPos = hairCapGeo.attributes.position as THREE.BufferAttribute;
 	for (let i = 0; i < hcPos.count; i++) {
 		let x = hcPos.getX(i);
 		let y = hcPos.getY(i);
 		let z = hcPos.getZ(i);
-		// Slight organic anime crown volume & subtle angular faceting
-		const wave = 1 + Math.sin(Math.atan2(x, z) * 5) * 0.03;
-		x *= 0.99 * wave;
+		x *= 0.99;
 		y *= 1.02;
-		z *= 1.02 * wave;
+		z *= 1.02;
 		hcPos.setXYZ(i, x, y, z);
 	}
 	hairCapGeo.computeVertexNormals();
 
 	const hairCrown = new THREE.Mesh(hairCapGeo, hairM);
 	hairCrown.name = 'hatMeshDome';
-	hairCrown.position.set(0, 0.055, -0.02);
+	hairCrown.position.set(0, 0.052, -0.02);
 	hairCrown.rotation.x = -0.34;
-	addAnimeOutline(hairCrown, 0.012, outlineM);
+	addAnimeOutline(hairCrown, 0.01, outlineM);
 	headGroup.add(hairCrown);
 
-	// Sculpted back hair volume hugging behind skull
+	// Smooth sculpted back hair volume hugging cleanly behind skull
 	const backHairGeo = createLoftedMeshGeometry(
 		[
-			{ y: -0.18, rx: 0.225, rz: 0.15, cz: -0.105, foldAmp: 0.06, foldFreq: 5 },
-			{ y: -0.05, rx: 0.268, rz: 0.185, cz: -0.095, foldAmp: 0.04, foldFreq: 5 },
-			{ y: 0.10, rx: 0.268, rz: 0.19, cz: -0.075 },
-			{ y: 0.21, rx: 0.21, rz: 0.16, cz: -0.045 }
+			{ y: -0.17, rx: 0.22, rz: 0.145, cz: -0.105, foldAmp: 0.035, foldFreq: 5 },
+			{ y: -0.04, rx: 0.262, rz: 0.18, cz: -0.095, foldAmp: 0.02, foldFreq: 5 },
+			{ y: 0.10, rx: 0.262, rz: 0.185, cz: -0.075 },
+			{ y: 0.20, rx: 0.205, rz: 0.155, cz: -0.045 }
 		],
-		12,
+		18,
 		true,
 		true
 	);
 	const backHair = new THREE.Mesh(backHairGeo, hairM);
 	backHair.name = 'hatMeshBtn';
-	addAnimeOutline(backHair, 0.012, outlineM);
+	addAnimeOutline(backHair, 0.01, outlineM);
 	headGroup.add(backHair);
 
-	// 7 Swept, Tapered Anime Forehead Bangs curving cleanly ABOVE the brows!
+	// 6 Natural Asymmetrical Parted Anime Bangs (softly swept with varied widths — zero barcode look!)
 	const bangSpecs: Array<{ x0: number; x1: number; tipY: number; w: number; zOut: number }> = [
-		{ x0: -0.19, x1: -0.21, tipY: 0.085, w: 0.052, zOut: 0.145 },
-		{ x0: -0.125, x1: -0.135, tipY: 0.135, w: 0.058, zOut: 0.21 },
-		{ x0: -0.055, x1: -0.062, tipY: 0.148, w: 0.06, zOut: 0.24 },
-		{ x0: 0.01, x1: 0.018, tipY: 0.13, w: 0.062, zOut: 0.246 },
-		{ x0: 0.078, x1: 0.09, tipY: 0.145, w: 0.058, zOut: 0.23 },
-		{ x0: 0.14, x1: 0.158, tipY: 0.125, w: 0.054, zOut: 0.195 },
-		{ x0: 0.195, x1: 0.215, tipY: 0.08, w: 0.05, zOut: 0.135 }
+		{ x0: -0.19, x1: -0.215, tipY: 0.065, w: 0.056, zOut: 0.14 },
+		{ x0: -0.115, x1: -0.145, tipY: 0.12, w: 0.068, zOut: 0.215 },
+		{ x0: -0.035, x1: -0.065, tipY: 0.145, w: 0.062, zOut: 0.242 },
+		{ x0: 0.035, x1: 0.075, tipY: 0.115, w: 0.074, zOut: 0.244 },
+		{ x0: 0.125, x1: 0.155, tipY: 0.105, w: 0.062, zOut: 0.205 },
+		{ x0: 0.19, x1: 0.215, tipY: 0.06, w: 0.054, zOut: 0.14 }
 	];
 	for (const b of bangSpecs) {
 		const strandGeo = createHairStrandGeometry(
 			[
-				new THREE.Vector3(b.x0 * 0.72, 0.28, b.zOut * 0.45),
-				new THREE.Vector3(b.x0, 0.21, b.zOut * 0.92),
-				new THREE.Vector3(b.x1, b.tipY, b.zOut + 0.012)
+				new THREE.Vector3(b.x0 * 0.68, 0.275, b.zOut * 0.45),
+				new THREE.Vector3(b.x0, 0.205, b.zOut * 0.92),
+				new THREE.Vector3(b.x1, b.tipY, b.zOut + 0.01)
 			],
 			b.w,
-			0.036,
-			6
+			0.032,
+			7
 		);
 		const strand = new THREE.Mesh(strandGeo, hairM);
 		strand.name = 'hatMeshDome';
-		addAnimeOutline(strand, 0.011, outlineM);
+		addAnimeOutline(strand, 0.008, outlineM);
 		headGroup.add(strand);
 	}
 
 	// 6 Flared Spiky Anime Nape Tufts curving outward at the back/sides (iconic Messenger profile!)
 	const napeSpecs: Array<{ x0: number; x1: number; z0: number; z1: number; y1: number; w: number }> = [
-		{ x0: -0.23, x1: -0.31, z0: -0.09, z1: -0.15, y1: -0.17, w: 0.062 },
-		{ x0: -0.15, x1: -0.22, z0: -0.18, z1: -0.29, y1: -0.21, w: 0.068 },
-		{ x0: -0.05, x1: -0.08, z0: -0.22, z1: -0.33, y1: -0.22, w: 0.07 },
-		{ x0: 0.05, x1: 0.08, z0: -0.22, z1: -0.33, y1: -0.22, w: 0.07 },
-		{ x0: 0.15, x1: 0.22, z0: -0.18, z1: -0.29, y1: -0.21, w: 0.068 },
-		{ x0: 0.23, x1: 0.31, z0: -0.09, z1: -0.15, y1: -0.17, w: 0.062 }
+		{ x0: -0.22, x1: -0.28, z0: -0.09, z1: -0.14, y1: -0.16, w: 0.056 },
+		{ x0: -0.14, x1: -0.20, z0: -0.18, z1: -0.27, y1: -0.20, w: 0.062 },
+		{ x0: -0.045, x1: -0.07, z0: -0.21, z1: -0.30, y1: -0.21, w: 0.064 },
+		{ x0: 0.045, x1: 0.07, z0: -0.21, z1: -0.30, y1: -0.21, w: 0.064 },
+		{ x0: 0.14, x1: 0.20, z0: -0.18, z1: -0.27, y1: -0.20, w: 0.062 },
+		{ x0: 0.22, x1: 0.28, z0: -0.09, z1: -0.14, y1: -0.16, w: 0.056 }
 	];
 	for (const n of napeSpecs) {
 		const tuftGeo = createHairStrandGeometry(
 			[
-				new THREE.Vector3(n.x0 * 0.9, 0.05, n.z0 * 0.85),
+				new THREE.Vector3(n.x0 * 0.9, 0.04, n.z0 * 0.85),
 				new THREE.Vector3(n.x0, -0.09, n.z0 * 1.05),
 				new THREE.Vector3(n.x1, n.y1, n.z1)
 			],
 			n.w,
-			0.042,
+			0.038,
 			6
 		);
 		const tuft = new THREE.Mesh(tuftGeo, hairM);
 		tuft.name = 'hatMeshBtn';
-		addAnimeOutline(tuft, 0.011, outlineM);
+		addAnimeOutline(tuft, 0.008, outlineM);
 		headGroup.add(tuft);
 	}
 
-	// Style A: Shaggy Messenger Bob (swept curved side-locks framing ears)
+	// Style A: Sleek Cheek-Hugging Messenger Bob (curves smoothly inward along jawline, never sticking out!)
 	const styleBob = new THREE.Group();
 	styleBob.name = 'style-bob';
 	([-1, 1] as const).forEach((side) => {
 		const lockGeo = createHairStrandGeometry(
 			[
-				new THREE.Vector3(side * 0.235, 0.12, 0.04),
-				new THREE.Vector3(side * 0.275, -0.02, 0.025),
-				new THREE.Vector3(side * 0.245, -0.16, 0.065)
+				new THREE.Vector3(side * 0.225, 0.12, 0.03),
+				new THREE.Vector3(side * 0.245, -0.01, 0.035),
+				new THREE.Vector3(side * 0.205, -0.15, 0.055)
 			],
-			0.058,
-			0.036,
-			6
+			0.052,
+			0.03,
+			7
 		);
 		const lock = new THREE.Mesh(lockGeo, hairM);
 		lock.name = 'hatMeshDome';
-		addAnimeOutline(lock, 0.01, outlineM);
+		addAnimeOutline(lock, 0.008, outlineM);
 		styleBob.add(lock);
 	});
 	headGroup.add(styleBob);
