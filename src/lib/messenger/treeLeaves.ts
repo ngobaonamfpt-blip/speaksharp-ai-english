@@ -15,9 +15,9 @@ export function createTreeLeavesMaterial(
 		depthWrite: true,
 		uniforms: {
 			tTrees: { value: leavesTexture },
-			uColor1: { value: new Color('#5aa86a') },
-			uColor2: { value: new Color('#4f9c63') },
-			uColor3: { value: new Color('#3f8a5c') },
+			uColor1: { value: new Color('#54b070') },
+			uColor2: { value: new Color('#48a166') },
+			uColor3: { value: new Color('#3c8f5e') },
 			uTime: { value: 0 },
 			uScale: { value: 0.28 },
 			uLightPosition: { value: lightPosition.clone() }

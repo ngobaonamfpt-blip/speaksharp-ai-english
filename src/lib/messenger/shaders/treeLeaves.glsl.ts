@@ -2,20 +2,22 @@ export const treeLeavesVertexShader = /* glsl */ `
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
-varying float vRand;
 
 uniform float uTime;
 uniform float uScale;
 
 void main() {
 	vUv = uv;
-	vRand = fract(sin(dot(position.xyz, vec3(12.9898, 78.233, 45.164))) * 43758.5453);
 	vNormal = normalize(normalMatrix * normal);
 
+	// Soft organic scalloped canopy puffiness + gentle breeze sway (fluffy anime silhouette, zero holes!)
 	vec3 pos = position;
-	float sway = sin(uTime * 0.75 + pos.x * 3.0 + pos.z * 2.0) * 0.04 * vRand;
+	float puff = (sin(pos.x * 8.5 + pos.y * 6.5) + cos(pos.z * 8.0 - pos.y * 5.5)) * 0.022;
+	pos += normalize(normal) * puff;
+
+	float sway = sin(uTime * 1.1 + pos.x * 2.2 + pos.z * 1.8) * 0.026;
 	pos.x += sway;
-	pos.z += sway * 0.5;
+	pos.z += sway * 0.55;
 
 	vec4 worldPosition = modelMatrix * vec4(pos, 1.0);
 	vWorldPosition = worldPosition.xyz;
@@ -35,29 +37,44 @@ uniform vec3 uLightPosition;
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vWorldPosition;
-varying float vRand;
 
-void main() {
-	// Fluffy anime canopy matching reference: 3-tone emerald cel shading + hand-inked leaf stipple dots
-	vec3 tint = mix(uColor1, uColor2, vRand);
-	tint = mix(tint, uColor3, step(0.6, vRand));
-
-	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
-	float shade = dot(normalize(vNormal), lightDir);
-	vec3 lit = tint * 1.22 + vec3(0.03, 0.06, 0.01);
-	vec3 mid = tint * 0.96;
-	vec3 dark = tint * vec3(0.62, 0.76, 0.78);
-	vec3 color = mix(dark, mid, smoothstep(-0.08, 0.02, shade));
-	color = mix(color, lit, smoothstep(0.38, 0.46, shade));
-
-	// Hand-drawn organic curved anime leaf-cluster loops inside the foliage (not blocky pixels!)
-	vec2 p = vWorldPosition.xy * 7.5 + vec2(vWorldPosition.z * 5.2, -vWorldPosition.z * 4.1);
+// Sparse, crisp hand-drawn 2-leaf anime cluster ink doodle inside the canopy (like Abeto!)
+float leafDoodle(vec2 p) {
 	vec2 cell = floor(p);
 	vec2 f = fract(p) - 0.5;
-	float cellRand = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-	float dist = length(f);
-	float leafArc = smoothstep(0.28, 0.22, abs(dist - 0.26)) * step(0.0, f.y) * step(0.68, cellRand);
-	color = mix(color, dark * 0.80, leafArc * 0.52);
+	float h = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+	if (h < 0.84) return 0.0;
+	float ang = h * 6.2831;
+	float c = cos(ang), s = sin(ang);
+	vec2 r = vec2(c * f.x - s * f.y, s * f.x + c * f.y);
+	// Two delicate teardrop/oval leaf loops side-by-side
+	float d1 = length((r - vec2(-0.11, 0.03)) * vec2(1.15, 1.7));
+	float d2 = length((r - vec2(0.11, -0.02)) * vec2(1.15, 1.7));
+	float ring1 = 1.0 - smoothstep(0.022, 0.055, abs(d1 - 0.13));
+	float ring2 = 1.0 - smoothstep(0.022, 0.055, abs(d2 - 0.12));
+	return max(ring1, ring2);
+}
+
+void main() {
+	// Plush, solid, airy Abeto emerald-green foliage (matches media_1795599985391_a5c642d7.jpg!)
+	vec3 radialUp = normalize(vWorldPosition);
+	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
+	float shade = dot(normalize(vNormal), lightDir);
+	float crownLift = smoothstep(-0.2, 0.75, dot(normalize(vNormal), radialUp));
+
+	// Subtle organic sunlit color variation across canopy crown
+	float patchNoise = sin(vWorldPosition.x * 2.8 + vWorldPosition.z * 2.4) * 0.5 + 0.5;
+	vec3 litCol = mix(uColor1, uColor2, patchNoise * 0.45);
+	litCol = mix(litCol, litCol * 1.07 + vec3(0.015, 0.025, 0.0), crownLift * 0.55);
+	vec3 shadowCol = uColor3 * vec3(0.76, 0.88, 0.88);
+
+	// Clean, soft 2-tone cel shading (no harsh black undersides, no polygon holes!)
+	vec3 color = mix(shadowCol, litCol, smoothstep(-0.08, 0.14, shade));
+
+	// Sparse hand-inked 2-leaf cluster doodles scattered delicately across the canopy
+	vec3 inkCol = vec3(0.19, 0.30, 0.27);
+	float doodle = leafDoodle(vWorldPosition.xy * 4.2 + vec2(vWorldPosition.z * 3.1, -vWorldPosition.z * 2.4));
+	color = mix(color, inkCol, doodle * 0.58);
 
 	gl_FragColor = vec4(color, 1.0);
 }
