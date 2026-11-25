@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   ClipboardList,
   Compass,
+  MapPin,
   Mic,
   Moon,
   Music,
@@ -20,6 +21,7 @@ import {
   Box3,
   BoxGeometry,
   BufferGeometry,
+  CanvasTexture,
   Color,
   ConeGeometry,
   DirectionalLight,
@@ -35,6 +37,8 @@ import {
   RingGeometry,
   Scene,
   ShadowMaterial,
+  Sprite,
+  SpriteMaterial,
   TextureLoader,
   Vector3,
   WebGLRenderer,
@@ -276,8 +280,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const triggerEmoteRef = useRef<((e: string) => void) | null>(null);
   const triggerInteractRef = useRef<(() => void) | null>(null);
   const completeQuestRef = useRef<((stopId: string, xp: number, label: string) => void) | null>(null);
+  const teleportToStopRef = useRef<((stopId: string) => void) | null>(null);
   const recenterRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<CozyLoFiAudio | null>(null);
+  const liveCompletedStopsRef = useRef<string[]>(completedStops);
+  liveCompletedStopsRef.current = completedStops;
   const toastTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -516,11 +523,59 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     arrowCone.rotation.x = Math.PI / 2;
     compassGroup.add(arrowCone);
 
-    const stopNodes: Array<{ stop: QuestStop; npc: Group; ring: Mesh; surfR: number }> = [];
+    const stopNodes: Array<{
+      stop: QuestStop;
+      npc: Group;
+      ring: Mesh;
+      badge: Sprite;
+      badgeDone: boolean;
+      surfR: number;
+    }> = [];
     const localStops: QuestStop[] = PLANET_QUEST_STOPS.map((s) => ({
       ...s,
       dir: s.dir.clone(),
     }));
+
+    /** Hand-drawn beveled Abeto 3D speech/quest badge hovering above each NPC */
+    const makeBadgeTex = (done: boolean) => {
+      const c = document.createElement('canvas');
+      c.width = 128;
+      c.height = 128;
+      const ctx = c.getContext('2d')!;
+      ctx.clearRect(0, 0, 128, 128);
+      // Drop shadow
+      ctx.fillStyle = '#24323c';
+      ctx.beginPath();
+      ctx.roundRect(22, 22, 88, 76, 22);
+      ctx.fill();
+      // Main pill card
+      ctx.fillStyle = done ? '#4ade80' : '#ffd859';
+      ctx.strokeStyle = '#24323c';
+      ctx.lineWidth = 7;
+      ctx.beginPath();
+      ctx.roundRect(18, 16, 88, 76, 22);
+      ctx.fill();
+      ctx.stroke();
+      // Little speech pointer triangle
+      ctx.beginPath();
+      ctx.moveTo(52, 90);
+      ctx.lineTo(62, 110);
+      ctx.lineTo(74, 90);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+      // Crisp icon (! or checkmark)
+      ctx.fillStyle = '#1f2b34';
+      ctx.font = '900 50px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(done ? '✓' : '!', 62, 55);
+      const tex = new CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    };
+    const badgeTexTodo = makeBadgeTex(false);
+    const badgeTexDone = makeBadgeTex(true);
 
     const confettiPool: Array<{ mesh: Mesh; life: number; vel: Vector3; normal: Vector3 }> = [];
     const confColors = [0xf5bd33, 0xef4444, 0x38bdf8, 0x4ade80, 0xf472b6, 0xa855f7];
@@ -694,6 +749,37 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         completedNow: false,
       });
       speakEnglish(quest.promptEn);
+    };
+
+    teleportToStopRef.current = (stopId: string) => {
+      const node = stopNodes.find((n) => n.stop.id === stopId);
+      if (!node) return;
+      audio.init();
+      // Place courier cleanly ~2.4m in front of the landmark NPC, facing them
+      const tSide = new Vector3(1, 0, 0).cross(node.stop.dir);
+      if (tSide.lengthSq() < 0.01) tSide.set(0, 0, 1).cross(node.stop.dir);
+      tSide.normalize();
+      const arrivalDir = node.stop.dir.clone().addScaledVector(tSide, 0.085).normalize();
+      const arrivalSpot = findStreetSpot(arrivalDir, 0.14);
+      pState.posDir.copy(arrivalSpot.dir);
+      pState.groundR = arrivalSpot.r;
+      pState.jumpH = 0;
+      pState.jumpVel = 0;
+      const toNpc = node.stop.dir.clone().sub(pState.posDir);
+      toNpc.addScaledVector(pState.posDir, -toNpc.dot(pState.posDir));
+      if (toNpc.lengthSq() > 0.0001) {
+        toNpc.normalize();
+        pState.forward.copy(toNpc);
+        pState.camForward.copy(toNpc);
+      }
+      const idx = localStops.findIndex((s) => s.id === stopId);
+      if (idx >= 0) targetIdx = idx;
+      spawnConfetti(pState.posDir, pState.groundR);
+      setChecklistOpen(false);
+      setZoneBanner(node.stop.landmark.toUpperCase());
+      setToast(`🧭 Đã dịch chuyển tới ${node.stop.landmark}!`);
+      window.setTimeout(() => setZoneBanner(''), 2600);
+      window.setTimeout(() => setToast(''), 2600);
     };
 
     const codes: Record<string, boolean> = {};
@@ -970,7 +1056,19 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               rh.quaternion.setFromUnitVectors(UP, stop.dir);
               scene.add(rh);
 
-              stopNodes.push({ stop, npc, ring, surfR });
+              const isDoneInit = liveCompletedStopsRef.current.includes(stop.id);
+              const badge = new Sprite(
+                new SpriteMaterial({
+                  map: isDoneInit ? badgeTexDone : badgeTexTodo,
+                  transparent: true,
+                  depthWrite: false,
+                })
+              );
+              badge.scale.set(0.16, 0.16, 1);
+              badge.position.copy(stop.dir).multiplyScalar(surfR + 0.44);
+              scene.add(badge);
+
+              stopNodes.push({ stop, npc, ring, badge, badgeDone: isDoneInit, surfR });
             })
           );
 
@@ -1187,11 +1285,25 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         const activeTarget = localStops[targetIdx];
         stopNodes.forEach((node, idx) => {
           const isTarget = idx === targetIdx;
-          (node.ring.material as MeshBasicMaterial).color.setHex(isTarget ? 0xf5bd33 : 0xffffff);
+          const isDone = liveCompletedStopsRef.current.includes(node.stop.id);
+          (node.ring.material as MeshBasicMaterial).color.setHex(
+            isDone ? 0x4ade80 : isTarget ? 0xf5bd33 : 0xffffff
+          );
           (node.ring.material as MeshBasicMaterial).opacity = isTarget
             ? 0.55 + Math.sin(elapsed * 5) * 0.3
-            : 0.2;
+            : 0.22;
           node.ring.scale.setScalar(isTarget ? 1 + Math.sin(elapsed * 4) * 0.15 : 0.85);
+
+          // Animate floating 3D quest speech badge above NPC head
+          if (node.badgeDone !== isDone) {
+            node.badgeDone = isDone;
+            (node.badge.material as SpriteMaterial).map = isDone ? badgeTexDone : badgeTexTodo;
+            node.badge.material.needsUpdate = true;
+          }
+          const bob = Math.sin(elapsed * 3.4 + idx * 1.1) * 0.028;
+          node.badge.position.copy(node.stop.dir).multiplyScalar(node.surfR + 0.44 + bob);
+          const sc = isTarget ? 0.175 + Math.sin(elapsed * 5) * 0.014 : 0.145;
+          node.badge.scale.set(sc, sc, 1);
         });
 
         const arcDist = pState.posDir.angleTo(activeTarget.dir) * 28;
@@ -1705,6 +1817,29 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                 >
                   <span>{done ? '✅' : '⬜'}</span>
                   <span style={{ flex: 1 }}>{q.checklistTitle}</span>
+                  {mode === 'gameplay' && (
+                    <button
+                      onClick={() => teleportToStopRef.current?.(q.stopId)}
+                      title="Dịch chuyển nhanh tới địa điểm 3D này"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 3,
+                        border: '1.5px solid #1d2a33',
+                        background: '#fffdf7',
+                        color: '#1d2a33',
+                        fontSize: 10.5,
+                        fontWeight: 900,
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        cursor: 'pointer',
+                        textDecoration: 'none',
+                      }}
+                    >
+                      <MapPin size={11} strokeWidth={2.5} />
+                      Đi tới
+                    </button>
+                  )}
                 </div>
               );
             })}
