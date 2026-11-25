@@ -520,7 +520,7 @@ function createSculptedSneaker(
 	addAnimeOutline(tongueMesh, 0.01, outlineM);
 	group.add(tongueMesh);
 
-	// 3. Thick beveled rubber sole
+	// 3. Thick beveled rubber sole + stepped toe bumper ridge
 	const soleGeo = createLoftedMeshGeometry(
 		[
 			{ y: -0.495, rx: 0.092, rz: 0.156, cz: 0.05, flatZ: 0.18 },
@@ -531,13 +531,15 @@ function createSculptedSneaker(
 		true
 	);
 	const soleMesh = new THREE.Mesh(soleGeo, inkM);
-	group.add(soleMesh);
+	const heelStep = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.022, 0.07), inkM);
+	heelStep.position.set(0, -0.458, -0.068);
+	group.add(soleMesh, heelStep);
 
-	// 4. Crisp white diagonal sneaker accents (front laces + outer side)
-	const lace1 = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.016, 0.022), creamM);
+	// 4. Crisp white diagonal sneaker accents (front laces + outer side + vertical back heel tab!)
+	const lace1 = new THREE.Mesh(new THREE.BoxGeometry(0.058, 0.017, 0.022), creamM);
 	lace1.position.set(0, -0.405, 0.148);
 	lace1.rotation.x = 0.45;
-	const lace2 = new THREE.Mesh(new THREE.BoxGeometry(0.052, 0.016, 0.022), creamM);
+	const lace2 = new THREE.Mesh(new THREE.BoxGeometry(0.054, 0.017, 0.022), creamM);
 	lace2.position.set(0, -0.435, 0.175);
 	lace2.rotation.x = 0.45;
 
@@ -548,7 +550,11 @@ function createSculptedSneaker(
 	sideStripe2.position.set(side * 0.086, -0.435, 0.028);
 	sideStripe2.rotation.x = 0.42;
 
-	group.add(lace1, lace2, sideStripe1, sideStripe2);
+	// Vertical cream heel-tab stripe on the back of each sneaker (matches Abeto back view!)
+	const heelTab = new THREE.Mesh(new THREE.BoxGeometry(0.024, 0.088, 0.018), creamM);
+	heelTab.position.set(0, -0.395, -0.085);
+
+	group.add(lace1, lace2, sideStripe1, sideStripe2, heelTab);
 	return group;
 }
 
@@ -783,13 +789,30 @@ export function buildSculptedAnimeCourier(
 		coatDetails.add(pocket);
 	});
 
-	// 4 Crisp Hexagonal Anime Coat Buttons down front placket
+	// 4 Crisp Hexagonal Anime Coat Buttons + subtle diagonal bottom tack stitch
 	([0.23, 0.07, -0.08, -0.21] as const).forEach((by, bi) => {
 		const btn = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.018, 6), creamM);
 		btn.rotation.x = Math.PI / 2;
 		btn.position.set(bi === 3 ? -0.038 : 0.0, by, 0.188 + (0.23 - by) * 0.065);
 		coatDetails.add(btn);
 	});
+	const tackStitch = new THREE.Mesh(new THREE.BoxGeometry(0.048, 0.014, 0.016), creamM);
+	tackStitch.position.set(-0.042, -0.255, 0.218);
+	tackStitch.rotation.z = 0.48;
+	coatDetails.add(tackStitch);
+
+	// Crisp red-white-red inner accent pinstripe just above the cream hem band
+	const hemAccentGeo = createLoftedMeshGeometry(
+		[
+			{ y: -0.352, rx: 0.34, rz: 0.238, foldAmp: 0.031, foldFreq: 6, frontSplit: 0.28 },
+			{ y: -0.338, rx: 0.337, rz: 0.236, foldAmp: 0.03, foldFreq: 6, frontSplit: 0.26 }
+		],
+		14,
+		false,
+		false
+	);
+	const hemAccent = new THREE.Mesh(hemAccentGeo, creamM);
+	coatDetails.add(hemAccent);
 
 	// Sporty Tee trim group (gold neckline + athletic chest stripe)
 	const teeDetails = new THREE.Group();
@@ -846,9 +869,13 @@ export function buildSculptedAnimeCourier(
 	const strapMesh = new THREE.Mesh(strapGeo, strapM);
 	strapMesh.name = 'bagStrap';
 	addAnimeOutline(strapMesh, 0.008, outlineM);
-	torsoGroup.add(strapMesh);
+	// Crisp silver/cream strap adjuster buckle on chest strap
+	const buckle = new THREE.Mesh(new THREE.BoxGeometry(0.068, 0.036, 0.036), creamM);
+	buckle.position.set(0.04, 0.17, 0.212);
+	buckle.rotation.z = -0.62;
+	torsoGroup.add(strapMesh, buckle);
 
-	// Sculpted Soft-Sided Messenger Pouch on left hip
+	// Sculpted Soft-Sided Messenger Pouch on left hip with iconic white clasp bar
 	const bagGroup = new THREE.Group();
 	bagGroup.position.set(-0.285, -0.16, 0.05);
 	bagGroup.rotation.set(0.06, 0.26, 0.16);
@@ -869,9 +896,11 @@ export function buildSculptedAnimeCourier(
 	bagMesh.name = 'bagMesh';
 	addAnimeOutline(bagMesh, 0.011, outlineM);
 
-	const bagAccent = new THREE.Mesh(new THREE.BoxGeometry(0.164, 0.02, 0.24), creamM);
+	const bagAccent = new THREE.Mesh(new THREE.BoxGeometry(0.164, 0.018, 0.24), creamM);
 	bagAccent.position.y = -0.065;
-	bagGroup.add(bagMesh, bagAccent);
+	const bagClasp = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.022, 0.068), creamM);
+	bagClasp.position.set(-0.076, -0.085, 0.055);
+	bagGroup.add(bagMesh, bagAccent, bagClasp);
 
 	const letter = new THREE.Mesh(new THREE.BoxGeometry(0.028, 0.14, 0.20), creamM);
 	letter.name = 'carriedLetter';
@@ -1147,18 +1176,21 @@ export function buildSculptedAnimeCourier(
 	styleCap.visible = false;
 	headGroup.add(styleCap);
 
-	// Style D: Cozy Retro Headphones
+	// Style D: Iconic Abeto Cream-White Over-Ear Headphones (matches final_step_356.png!)
 	const styleHeadphones = new THREE.Group();
 	styleHeadphones.name = 'style-headphones';
-	const band = new THREE.Mesh(new THREE.TorusGeometry(0.315, 0.028, 6, 18, Math.PI), creamM);
-	band.position.y = 0.085;
-	addAnimeOutline(band, 0.009, outlineM);
+	const band = new THREE.Mesh(new THREE.TorusGeometry(0.30, 0.032, 6, 18, Math.PI), creamM);
+	band.position.y = 0.07;
+	addAnimeOutline(band, 0.01, outlineM);
 	([-1, 1] as const).forEach((side) => {
-		const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.092, 0.068, 10), goldM);
-		cup.rotation.z = Math.PI / 2;
-		cup.position.set(side * 0.315, 0.01, 0);
-		addAnimeOutline(cup, 0.009, outlineM);
-		styleHeadphones.add(cup);
+		const cupOuter = new THREE.Mesh(new THREE.SphereGeometry(0.095, 10, 8), creamM);
+		cupOuter.scale.set(0.55, 1.18, 0.92);
+		cupOuter.position.set(side * 0.295, -0.01, -0.01);
+		addAnimeOutline(cupOuter, 0.01, outlineM);
+		const pad = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.035, 10), strapM);
+		pad.rotation.z = Math.PI / 2;
+		pad.position.set(side * 0.262, -0.01, -0.01);
+		styleHeadphones.add(cupOuter, pad);
 	});
 	styleHeadphones.add(band);
 	styleHeadphones.visible = false;

@@ -216,6 +216,40 @@ function makePlanter(
   return g;
 }
 
+/** Build a broad-leaf anime fern / agave rosette sprouting beside meadow rocks (like Abeto!) */
+function makeFernRosette(leafMat: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const bladeGeo = new THREE.ConeGeometry(0.036, 0.16, 4);
+  bladeGeo.scale(1.2, 1.0, 0.28);
+  bladeGeo.translate(0, 0.08, 0);
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + (i % 2) * 0.25;
+    const frond = new THREE.Mesh(bladeGeo, leafMat);
+    frond.rotation.y = a;
+    frond.rotation.x = 0.62 + (i % 2) * 0.22;
+    g.add(frond);
+  }
+  return g;
+}
+
+/** Build a weathered wooden 3-rail coastal guardrail (matching final_step_356.png!) */
+function makeWoodenGuardrail(woodMat: THREE.Material): THREE.Group {
+  const g = new THREE.Group();
+  const postGeo = new THREE.BoxGeometry(0.034, 0.28, 0.034);
+  const railGeo = new THREE.BoxGeometry(0.56, 0.028, 0.018);
+  ([-0.24, 0.24] as const).forEach((px) => {
+    const post = new THREE.Mesh(postGeo, woodMat);
+    post.position.set(px, 0.14, 0);
+    g.add(post);
+  });
+  ([0.09, 0.17, 0.245] as const).forEach((ry) => {
+    const rail = new THREE.Mesh(railGeo, woodMat);
+    rail.position.set(0, ry, 0.015);
+    g.add(rail);
+  });
+  return g;
+}
+
 /**
  * Generates living animated world details snapped cleanly onto the real BVH planet surface:
  * - Wind-swaying anime grass tufts (240) & wildflowers (72)
@@ -309,6 +343,78 @@ export function createWorldDetails(
   flowerInst.instanceMatrix.needsUpdate = true;
   if (flowerInst.instanceColor) flowerInst.instanceColor.needsUpdate = true;
   root.add(grassInst, flowerInst);
+
+  // 2b. Flat Faceted Coastal Pebbles & Mossy Stepping Stones (~85 stones = 1 draw call!)
+  const pebbleGeo = new THREE.DodecahedronGeometry(0.048, 0);
+  pebbleGeo.scale(1.35, 0.42, 1.05);
+  const pebbleMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient });
+  const MAX_PEBBLES = 85;
+  const pebbleInst = new THREE.InstancedMesh(pebbleGeo, pebbleMat, MAX_PEBBLES);
+  pebbleInst.frustumCulled = false;
+  const pebblePalette = [
+    new THREE.Color(0xc8c2b4),
+    new THREE.Color(0xb2ac9e),
+    new THREE.Color(0xd6d1c3),
+    new THREE.Color(0x9ea89e),
+  ];
+  let pIdx = 0;
+  for (let i = 0; i < 320 && pIdx < MAX_PEBBLES; i++) {
+    const u = rand() * 2 - 1;
+    const theta = rand() * Math.PI * 2;
+    const s = Math.sqrt(Math.max(0, 1 - u * u));
+    dir.set(s * Math.cos(theta), u, s * Math.sin(theta)).normalize();
+    const hit = sampleSurface(dir);
+    if (!hit) continue;
+    // Favor sandy shorelines & gentle meadow edges
+    if (hit.radius < 6.45 || hit.radius > 7.45 || hit.normal.dot(dir) < 0.72) continue;
+    quat.setFromUnitVectors(UP, dir);
+    spinQ.setFromAxisAngle(UP, rand() * Math.PI * 2);
+    dummy.position.copy(hit.point).addScaledVector(dir, 0.012);
+    dummy.quaternion.copy(quat).multiply(spinQ);
+    const sc = 0.65 + rand() * 1.15;
+    dummy.scale.set(sc, sc * (0.7 + rand() * 0.5), sc * (0.8 + rand() * 0.4));
+    dummy.updateMatrix();
+    pebbleInst.setMatrixAt(pIdx, dummy.matrix);
+    pebbleInst.setColorAt(pIdx, pebblePalette[pIdx % pebblePalette.length]);
+    pIdx++;
+  }
+  pebbleInst.count = pIdx;
+  pebbleInst.instanceMatrix.needsUpdate = true;
+  if (pebbleInst.instanceColor) pebbleInst.instanceColor.needsUpdate = true;
+  root.add(pebbleInst);
+
+  // 2c. Broad-Leaf Anime Fern Rosettes on grassy hillside spots
+  const fernLeafMat = toon(0x3e8c58);
+  applyWindSway(fernLeafMat, windTime, 0.11);
+  meadowSpots.slice(0, 14).forEach((spot, idx) => {
+    const fern = makeFernRosette(fernLeafMat);
+    fern.position.copy(spot.point);
+    quat.setFromUnitVectors(UP, spot.up);
+    spinQ.setFromAxisAngle(UP, idx * 1.3);
+    fern.quaternion.copy(quat).multiply(spinQ);
+    fern.scale.setScalar(0.85 + (idx % 3) * 0.25);
+    root.add(fern);
+  });
+
+  // 2d. Weathered Wooden 3-Rail Coastal Guardrails at scenic overlooks
+  const guardrailMat = toon(0x9a8f7c);
+  const railAnchors = [
+    new THREE.Vector3(-0.52, 0.74, 0.42),
+    new THREE.Vector3(0.71, 0.20, -0.66),
+    new THREE.Vector3(-0.42, -0.71, 0.56),
+    new THREE.Vector3(0.28, -0.84, -0.46),
+  ];
+  railAnchors.forEach((ra, idx) => {
+    const upDir = ra.clone().normalize();
+    const hit = sampleSurface(upDir);
+    if (!hit || hit.radius < 6.85 || hit.normal.dot(upDir) < 0.74) return;
+    const rail = makeWoodenGuardrail(guardrailMat);
+    rail.position.copy(hit.point);
+    quat.setFromUnitVectors(UP, upDir);
+    spinQ.setFromAxisAngle(UP, idx * 1.15);
+    rail.quaternion.copy(quat).multiply(spinQ);
+    root.add(rail);
+  });
 
   // 3. Cozy Japanese Town Props + Swaying Shop Banners & Hanging Paper Lanterns
   const poleMat = toon(0x3a464e);

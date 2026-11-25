@@ -85,26 +85,37 @@ void main() {
 	vec3 color = baseAtlas;
 	if (isTerrain) {
 		float edgeNoise = (triplanarNoise.r - 0.5) * 0.55 + (triplanarNoise.g - 0.5) * 0.25;
-		// Lush flat anime meadow green on hilltops & gentle slopes
-		float grassMask = step(0.42, upness + edgeNoise * 0.35);
-		// Painterly scalloped sandy dirt bank right along the water shoreline (worldR ~ 6.4-6.7)
-		float shoreBank = 1.0 - step(6.62, worldR + edgeNoise * 0.32);
-		// Small sandy dirt specks right beside the water bank
-		float dirtSpeck = step(0.76, triplanarNoise.r) * (1.0 - step(6.95, worldR));
+		// Lush flat anime meadow green on hilltops & stepped cliff ledges (like final_step_356.png!)
+		float grassSignal = upness + edgeNoise * 0.42;
+		float grassMask = step(0.41, grassSignal);
+		// Delicate hand-inked dark olive transition rim right at the jagged grass-to-cliff border!
+		float grassRim = (1.0 - smoothstep(0.0, 0.026, abs(grassSignal - 0.41))) * step(6.66, worldR);
 
-		vec3 grassLit = vec3(0.35, 0.67, 0.44);   // #59ab70 airy coastal meadow green
-		vec3 grassVar = vec3(0.32, 0.62, 0.41);   // subtle sunlit patch
-		vec3 sandBank = vec3(0.82, 0.77, 0.62);   // #d1c49e warm sunlit sand bank
-		vec3 cliffEarth = vec3(0.76, 0.73, 0.63); // airy warm cream-stone cliff
+		// Painterly scalloped sandy dirt bank + damp waterline rim right along the shore
+		float shoreSignal = worldR + edgeNoise * 0.32;
+		float shoreBank = 1.0 - step(6.62, shoreSignal);
+		float wetSand = 1.0 - step(6.48, shoreSignal);
+		float dirtSpeck = step(0.75, triplanarNoise.r) * (1.0 - step(6.98, worldR));
+
+		vec3 grassLit = vec3(0.35, 0.67, 0.44);    // #59ab70 airy coastal meadow green
+		vec3 grassVar = vec3(0.31, 0.61, 0.40);    // subtle sunlit turf patch
+		vec3 sandBank = vec3(0.82, 0.77, 0.62);    // #d1c49e warm sunlit sand bank
+		vec3 wetSandCol = vec3(0.68, 0.62, 0.49);  // subtle damp shoreline sand
+		vec3 cliffEarth = vec3(0.77, 0.74, 0.63);  // airy warm cream-stone cliff
 
 		vec3 meadow = mix(grassLit, grassVar, step(0.55, triplanarNoise.g));
 		color = mix(cliffEarth, meadow, grassMask);
+		color = mix(color, vec3(0.18, 0.27, 0.22), grassRim * 0.58);
 		color = mix(color, sandBank, clamp(shoreBank + dirtSpeck, 0.0, 1.0));
+		color = mix(color, wetSandCol, wetSand * 0.65);
 
-		// Hand-drawn rock/cliff contour flecks on vertical cliff faces (like Abeto!)
+		// Sparse broken hand-drawn horizontal cliff strata lines + subtle rock flecks (like Abeto!)
 		float cliffMask = 1.0 - grassMask;
-		float rockFleck = smoothstep(0.76, 0.84, triplanarNoise.b) * cliffMask;
-		color = mix(color, color * 0.88, rockFleck * 0.55);
+		float strataWave = fract(worldR * 2.2 + triplanarNoise.r * 0.45);
+		float strataLine = (1.0 - smoothstep(0.0, 0.032, abs(strataWave - 0.5))) * step(0.54, triplanarNoise.g) * cliffMask;
+		float rockFleck = smoothstep(0.77, 0.85, triplanarNoise.b) * cliffMask;
+		color = mix(color, color * 0.72, strataLine * 0.52);
+		color = mix(color, color * 0.88, rockFleck * 0.5);
 	} else {
 		// Subtle hand-illustrated surface details for wooden docks, crates, boat hull & walls!
 		vec4 fineNoise = triplanar(tNoise, wNormal, wPos * 0.28, 1.0);

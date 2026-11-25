@@ -57,19 +57,24 @@ void main() {
 	// Organic flat-edged darker currents
 	color = mix(color, deepTeal, step(0.58, n1));
 	// Organic flat-edged lighter reflection pools
-	color = mix(color, lightTeal, step(0.62, n2));
-	// Crisp small white anime shimmer streaks
-	float shimmer = step(0.84, n1 * 0.55 + n3 * 0.65);
-	color = mix(color, foamWhite, shimmer * 0.92);
+	color = mix(color, lightTeal, step(0.60, n2));
+	// Elongated hand-drawn anime water foam ribbons & shimmer streaks (like final_step_356.png!)
+	float ribbonSignal = n1 * 0.5 + n3 * 0.5 + sin(vWorldPosition.x * 2.8 + vWorldPosition.z * 2.1 + uTime * 1.1) * 0.08;
+	float ribbon = step(0.78, ribbonSignal) * (1.0 - step(0.85, ribbonSignal));
+	float shimmer = step(0.86, n1 * 0.55 + n3 * 0.65);
+	color = mix(color, foamWhite, clamp(ribbon * 0.78 + shimmer * 0.92, 0.0, 1.0));
 
-	// Crisp white shoreline foam band where water meets sandy banks
+	// Crisp white shoreline foam band with delicate dark-teal ink outline where water meets sandy banks
 	if (uUseSceneDepth > 0.5) {
 		vec2 screenUv = gl_FragCoord.xy / uResolution;
 		float sceneDepth = linearizeDepth(texture2D(tSceneDepth, screenUv).x);
 		float waterDepth = linearizeDepth(0.5 * vHighPrecisionZW.x / vHighPrecisionZW.y + 0.5);
 		float diff = sceneDepth - waterDepth;
-		float shoreEdge = 1.0 - step(0.055 + n2 * 0.03, diff);
-		color = mix(color, foamWhite, shoreEdge * 0.85);
+		float shoreThresh = 0.06 + n2 * 0.032;
+		float shoreEdge = 1.0 - step(shoreThresh, diff);
+		float shoreInk = step(shoreThresh, diff) * (1.0 - step(shoreThresh + 0.016, diff));
+		color = mix(color, deepTeal * 0.72, shoreInk * 0.65);
+		color = mix(color, foamWhite, shoreEdge * 0.88);
 	}
 
 	float shade = max(dot(normalize(vNormal), normalize(uLightPosition - vWorldPosition)), 0.0);

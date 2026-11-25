@@ -228,7 +228,6 @@ const SKIP_INFO_NAMES = new Set([
   'ChimneySmoke',
   'AnimeButterflies',
   'SoaringBirds',
-  'bodyRoot',
 ]);
 
 export class AnimeInkPass {

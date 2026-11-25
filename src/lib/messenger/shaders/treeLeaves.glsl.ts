@@ -50,11 +50,14 @@ void main() {
 	vec3 color = mix(dark, mid, smoothstep(-0.08, 0.02, shade));
 	color = mix(color, lit, smoothstep(0.38, 0.46, shade));
 
-	// Hand-drawn organic dark-green leaf stipple clusters inside the foliage
-	vec2 cell = floor(vWorldPosition.xy * 11.0 + vWorldPosition.z * 7.0);
-	float dotRand = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
-	float stipple = step(0.84, dotRand);
-	color = mix(color, dark * 0.78, stipple * 0.7);
+	// Hand-drawn organic curved anime leaf-cluster loops inside the foliage (not blocky pixels!)
+	vec2 p = vWorldPosition.xy * 7.5 + vec2(vWorldPosition.z * 5.2, -vWorldPosition.z * 4.1);
+	vec2 cell = floor(p);
+	vec2 f = fract(p) - 0.5;
+	float cellRand = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+	float dist = length(f);
+	float leafArc = smoothstep(0.28, 0.22, abs(dist - 0.26)) * step(0.0, f.y) * step(0.68, cellRand);
+	color = mix(color, dark * 0.72, leafArc * 0.65);
 
 	gl_FragColor = vec4(color, 1.0);
 }
