@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Maximize2, Minimize2, Sparkles } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Globe2, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { MessengerProWorld } from './MessengerProWorld';
 
 interface World3DProps {
@@ -16,7 +16,9 @@ export const World3D: React.FC<World3DProps> = ({
   onEnterDebateArena,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [worldEngine, setWorldEngine] = useState<'native3d' | 'multiplayer'>('native3d');
   const [xpBanner, setXpBanner] = useState('');
 
   const handleEarnXp = useCallback(
@@ -27,6 +29,23 @@ export const World3D: React.FC<World3DProps> = ({
     },
     [onEarnXp]
   );
+
+  const multiplayerUrl = useMemo(() => {
+    const params = new URLSearchParams();
+    if (userName) params.set('name', userName);
+    return `/messenger-game.html?${params.toString()}`;
+  }, [userName]);
+
+  // Listen for XP rewards from World 2 (Multiplayer Planet)
+  useEffect(() => {
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.data && ev.data.type === 'speaksharp-xp' && typeof ev.data.xp === 'number') {
+        handleEarnXp(ev.data.xp, ev.data.reason);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [handleEarnXp]);
 
   useEffect(() => {
     const onFsChange = () => {
@@ -60,11 +79,27 @@ export const World3D: React.FC<World3DProps> = ({
         border: isFullscreen ? 'none' : '2px solid rgba(20, 21, 23, 0.1)',
       }}
     >
-      <MessengerProWorld
-        userName={userName}
-        onEarnXp={handleEarnXp}
-        onEnterDebateArena={onEnterDebateArena}
-      />
+      {worldEngine === 'native3d' ? (
+        <MessengerProWorld
+          userName={userName}
+          onEarnXp={handleEarnXp}
+          onEnterDebateArena={onEnterDebateArena}
+        />
+      ) : (
+        <iframe
+          ref={iframeRef}
+          src={multiplayerUrl}
+          title="SpeakSharp Thế giới 2 — Hành tinh Online"
+          allow="autoplay; clipboard-write; fullscreen"
+          onLoad={() => iframeRef.current?.contentWindow?.focus()}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            display: 'block',
+          }}
+        />
+      )}
 
       {/* Live XP Sync Toast to SpeakSharp Profile */}
       {xpBanner && (
@@ -93,7 +128,57 @@ export const World3D: React.FC<World3DProps> = ({
         </div>
       )}
 
-      {/* Bottom-Left Fullscreen Control (Single Unified Global Online World — no room codes!) */}
+      {/* Abeto-Style Square World-Switcher Button (Top-Right below Checklist, matching right HUD style!) */}
+      <button
+        className="abeto-btn"
+        onClick={() => setWorldEngine((w) => (w === 'native3d' ? 'multiplayer' : 'native3d'))}
+        title={
+          worldEngine === 'native3d'
+            ? 'Đổi sang Thế giới 2 (Hành tinh Multiplayer Online)'
+            : 'Quay về Thế giới 1 (Thị trấn Anime 3D Online)'
+        }
+        style={{
+          position: 'absolute',
+          top: 70,
+          right: 14,
+          zIndex: 35,
+          width: 46,
+          height: 46,
+          borderRadius: 12,
+          border: '2px solid #243038',
+          background:
+            worldEngine === 'multiplayer'
+              ? '#ffd859'
+              : 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
+          color: '#243038',
+          cursor: 'pointer',
+          display: 'grid',
+          placeItems: 'center',
+          boxShadow: '3px 4px 0 rgba(36, 48, 56, 0.28), 0 0 0 1px rgba(255,255,255,0.6) inset',
+          transition: 'all 0.14s ease',
+        }}
+      >
+        <Globe2 size={21} strokeWidth={2.2} />
+        <span
+          style={{
+            position: 'absolute',
+            bottom: -5,
+            right: -5,
+            background: '#243038',
+            color: '#fffdf7',
+            fontSize: 9.5,
+            fontWeight: 900,
+            padding: '1px 5px',
+            borderRadius: 999,
+            border: '1.5px solid #fffdf7',
+            lineHeight: 1.2,
+          }}
+        >
+          {worldEngine === 'native3d' ? '1' : '2'}
+        </span>
+      </button>
+
+      {/* Bottom-Left Fullscreen Control */}
       <div
         style={{
           position: 'absolute',

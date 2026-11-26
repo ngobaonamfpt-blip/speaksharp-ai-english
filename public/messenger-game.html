@@ -258,35 +258,18 @@
     <button id="btn-recenter" class="ink-btn sq-btn" title="Recenter Camera">🧭</button>
   </div>
 
-  <!-- Real-Time Multiplayer Panel (PeerJS WebRTC + Local Multi-Tab Auto-Sync) -->
+  <!-- Single Global Online Server Panel (Zero Room Codes!) -->
   <div id="mp-panel" class="ink-card">
     <div style="display:flex;align-items:center;justify-content:space-between;">
-      <span style="font-size:14px;font-weight:900;">🌐 Live Multiplayer</span>
-      <span class="mp-status" id="mp-status-pill">● Ready</span>
+      <span style="font-size:14px;font-weight:900;">🌐 Server Online Chung</span>
+      <span class="mp-status" id="mp-status-pill">● Đang kết nối...</span>
     </div>
     <div>
-      <div class="outfit-row-label">Your Name</div>
+      <div class="outfit-row-label">Tên hiển thị của bạn</div>
       <input id="mp-name-input" class="mp-input" maxlength="16" value="Courier" />
     </div>
-    <div>
-      <div class="outfit-row-label">Your Room Code (PeerJS)</div>
-      <div class="mp-row">
-        <input id="mp-my-id" class="mp-input" readonly value="Connecting..." />
-        <button id="btn-copy-id" class="ink-btn mp-mini-btn" title="Copy Room Code">📋</button>
-      </div>
-      <button id="btn-copy-link" class="ink-btn mp-mini-btn" style="width:100%;margin-top:6px;background:#fef3c7;">
-        🔗 Copy Invite Link (?join=...)
-      </button>
-    </div>
-    <div>
-      <div class="outfit-row-label">Join Friend's Room Code</div>
-      <div class="mp-row">
-        <input id="mp-join-input" class="mp-input" placeholder="e.g. PLANET-1234" />
-        <button id="btn-join-peer" class="ink-btn mp-mini-btn" style="background:#f5bd33;">Join</button>
-      </div>
-    </div>
-    <div style="font-size:11.5px;font-weight:700;color:#52606d;line-height:1.35;">
-      💡 Tip: Open this file in 2 browser tabs to auto-sync instantly, or share your Room Code / Invite Link with a friend!
+    <div style="font-size:12px;font-weight:700;color:#2c524a;background:#ecfdf5;border:1.5px solid #86efac;border-radius:10px;padding:8px 10px;line-height:1.4;">
+      ✅ <strong>1 Server duy nhất</strong> — Tự động kết nối với tất cả mọi người trên hành tinh này mà không cần nhập mã phòng!
     </div>
   </div>
 
@@ -2161,11 +2144,9 @@
     };
 
     // =========================================================================
-    // 7B. REAL-TIME MULTIPLAYER ENGINE (PeerJS WebRTC + Local BroadcastChannel)
+    // 7B. SINGLE GLOBAL ONLINE SERVER (WebSocket /ws?world=planet2 — ZERO ROOM CODES!)
     // =========================================================================
-    const myShortCode = 'PLANET-' + Math.floor(1000 + Math.random() * 9000);
-    const mpMyIdInput = document.getElementById('mp-my-id');
-    const mpJoinInput = document.getElementById('mp-join-input');
+    let myShortCode = 'P2-' + Math.floor(1000 + Math.random() * 9000);
     const mpNameInput = document.getElementById('mp-name-input');
     const mpStatusPill = document.getElementById('mp-status-pill');
     const mpCountDot = document.getElementById('mp-count-dot');
@@ -2181,17 +2162,17 @@
       } catch {}
     }
 
-    const peerConns = new Map();       // peerId -> PeerJS DataConnection
-    const remotePlayers = new Map();   // peerId -> { group, targetPos, targetQuat, moving, sprinting, jumpH, name, lastSeen }
-    let peerInstance = null;
+    const remotePlayers = new Map();
+    let globalWs = null;
+    let wsConnected = false;
     let localChannel = null;
 
     function updateMpBadges() {
       const total = 1 + remotePlayers.size;
       mpCountDot.textContent = String(total);
-      mpStatusPill.textContent = remotePlayers.size > 0
-        ? `● ${total} Online`
-        : (peerInstance && !peerInstance.disconnected ? '● Ready' : '● Local Sync');
+      mpStatusPill.textContent = wsConnected
+        ? `● ${total} Online (Server chung)`
+        : '● Đang kết nối lại...';
     }
 
     function applyRemoteOutfit(grp, outfit) {
@@ -2226,7 +2207,7 @@
       };
       remotePlayers.set(id, rp);
       updateMpBadges();
-      showToast(`👋 ${rp.name} joined your planet!`);
+      showToast(`👋 ${rp.name} đã vào Thế giới 2!`);
       audio.playEmote();
       return rp;
     }
@@ -2237,11 +2218,27 @@
       scene.remove(rp.group);
       remotePlayers.delete(id);
       updateMpBadges();
-      showToast(`👋 ${rp.name} left the planet`);
     }
 
     function handleIncomingMpPacket(pkt) {
-      if (!pkt || !pkt.id || pkt.id === myShortCode) return;
+      if (!pkt) return;
+      if (pkt.type === 'welcome' && pkt.id) {
+        myShortCode = pkt.id;
+        if (Array.isArray(pkt.players)) {
+          pkt.players.forEach((p) => {
+            if (p && p.id && p.id !== myShortCode) {
+              handleIncomingMpPacket({ type: 'state', ...p });
+            }
+          });
+        }
+        updateMpBadges();
+        return;
+      }
+      if (pkt.type === 'player' && pkt.player) {
+        handleIncomingMpPacket({ type: 'state', ...pkt.player });
+        return;
+      }
+      if (!pkt.id || pkt.id === myShortCode) return;
       if (pkt.type === 'leave') {
         removeRemotePlayer(pkt.id);
         return;
@@ -2270,11 +2267,9 @@
     }
 
     function broadcastMp(pkt) {
-      peerConns.forEach((conn) => {
-        if (conn.open) {
-          try { conn.send(pkt); } catch {}
-        }
-      });
+      if (globalWs && globalWs.readyState === WebSocket.OPEN) {
+        try { globalWs.send(JSON.stringify(pkt)); } catch {}
+      }
       if (localChannel) {
         try { localChannel.postMessage(pkt); } catch {}
       }
@@ -2289,75 +2284,39 @@
       });
     }
 
-    // 1) Instant Zero-Config Same-Browser Multi-Tab Sync via BroadcastChannel
+    // 1) Auto-Connect to Single Global WebSocket Server (/ws?world=planet2 — ZERO ROOM CODES!)
+    function connectGlobalPlanet2() {
+      try {
+        const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const ws = new WebSocket(`${proto}//${window.location.host}/ws?world=planet2`);
+        globalWs = ws;
+        ws.onopen = () => {
+          wsConnected = true;
+          updateMpBadges();
+          broadcastOutfit();
+        };
+        ws.onmessage = (ev) => {
+          try { handleIncomingMpPacket(JSON.parse(ev.data)); } catch {}
+        };
+        ws.onclose = () => {
+          wsConnected = false;
+          globalWs = null;
+          updateMpBadges();
+          window.setTimeout(connectGlobalPlanet2, 2500);
+        };
+        ws.onerror = () => {};
+      } catch {}
+    }
+    connectGlobalPlanet2();
+
+    // 2) Same-Browser Instant Multi-Tab Sync via BroadcastChannel
     if ('BroadcastChannel' in window) {
-      localChannel = new BroadcastChannel('messenger-planet-mp-v1');
+      localChannel = new BroadcastChannel('messenger-planet-mp-v2');
       localChannel.onmessage = (ev) => handleIncomingMpPacket(ev.data);
       window.addEventListener('beforeunload', () => {
         try { localChannel.postMessage({ type: 'leave', id: myShortCode }); } catch {}
       });
     }
-
-    // 2) Cross-Device WebRTC P2P Sync via PeerJS
-    function attachPeerConnection(conn) {
-      conn.on('open', () => {
-        peerConns.set(conn.peer, conn);
-        broadcastOutfit();
-        showToast(`🌐 Connected to ${conn.peer}!`);
-      });
-      conn.on('data', (data) => handleIncomingMpPacket(data));
-      conn.on('close', () => {
-        peerConns.delete(conn.peer);
-        removeRemotePlayer(conn.peer);
-      });
-      conn.on('error', () => {
-        peerConns.delete(conn.peer);
-      });
-    }
-
-    if (typeof window.Peer !== 'undefined') {
-      try {
-        peerInstance = new window.Peer(myShortCode);
-        peerInstance.on('open', (id) => {
-          mpMyIdInput.value = id;
-          updateMpBadges();
-          // Auto-join if ?join=PLANET-XXXX is in the URL!
-          const params = new URLSearchParams(window.location.search);
-          const joinTarget = params.get('join');
-          if (joinTarget && joinTarget !== id) {
-            mpJoinInput.value = joinTarget;
-            attachPeerConnection(peerInstance.connect(joinTarget));
-          }
-        });
-        peerInstance.on('connection', (conn) => attachPeerConnection(conn));
-        peerInstance.on('error', () => {
-          mpMyIdInput.value = myShortCode;
-          updateMpBadges();
-        });
-      } catch {
-        mpMyIdInput.value = myShortCode;
-      }
-    } else {
-      mpMyIdInput.value = myShortCode;
-    }
-
-    document.getElementById('btn-join-peer').onclick = () => {
-      const targetId = mpJoinInput.value.trim().toUpperCase();
-      if (!targetId || targetId === myShortCode || !peerInstance) return;
-      showToast(`🌐 Connecting to ${targetId}...`);
-      attachPeerConnection(peerInstance.connect(targetId));
-    };
-
-    document.getElementById('btn-copy-id').onclick = () => {
-      navigator.clipboard?.writeText(mpMyIdInput.value);
-      showToast(`📋 Copied Room Code: ${mpMyIdInput.value}`);
-    };
-
-    document.getElementById('btn-copy-link').onclick = () => {
-      const url = `${window.location.origin}${window.location.pathname}?join=${encodeURIComponent(mpMyIdInput.value)}`;
-      navigator.clipboard?.writeText(url);
-      showToast('🔗 Invite link copied! Send it to a friend!');
-    };
 
     const btnAudio = document.getElementById('btn-audio');
     btnAudio.onclick = () => {
