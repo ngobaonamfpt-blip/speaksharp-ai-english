@@ -68,6 +68,7 @@ uniform sampler2D tColor;
 uniform sampler2D tDepth;
 uniform sampler2D tInfo;
 uniform vec2 uResolution;
+uniform vec2 uInfoResolution;
 uniform float uNear;
 uniform float uFar;
 uniform float uTime;
@@ -83,115 +84,82 @@ float hash(vec2 p) {
   return fract(p.x * p.y);
 }
 
-float linearDepth(vec2 uv) {
-  float d = texture2D(tDepth, uv).x;
+float linearizeRawDepth(float d) {
   float z = d * 2.0 - 1.0;
   return (2.0 * uNear * uFar) / (uFar + uNear - z * (uFar - uNear));
 }
 
 float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
 
-vec3 sampleColor(vec2 uv) { return texture2D(tColor, uv).rgb; }
-
-vec3 rgb2hsv(vec3 c) {
-  vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-  vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-  vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-  float d = q.x - min(q.w, q.y);
-  float e = 1.0e-10;
-  return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c) {
-  vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-  vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-  return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
 void main() {
-  vec2 texel = 1.0 / uResolution;
-  vec2 o = texel * uLineWidth;
+  vec3 col = texture2D(tColor, vUv).rgb;
+  float rawDepth = texture2D(tDepth, vUv).x;
 
-  // --- 1. Depth Sobel (outer silhouettes of buildings, boats, characters, cliffs) ---
-  float dC = linearDepth(vUv);
-  float d00 = linearDepth(vUv + vec2(-o.x, -o.y));
-  float d10 = linearDepth(vUv + vec2(0.0, -o.y));
-  float d20 = linearDepth(vUv + vec2(o.x, -o.y));
-  float d01 = linearDepth(vUv + vec2(-o.x, 0.0));
-  float d21 = linearDepth(vUv + vec2(o.x, 0.0));
-  float d02 = linearDepth(vUv + vec2(-o.x, o.y));
-  float d12 = linearDepth(vUv + vec2(0.0, o.y));
-  float d22 = linearDepth(vUv + vec2(o.x, o.y));
-  float gx = (d20 + 2.0 * d21 + d22) - (d00 + 2.0 * d01 + d02);
-  float gy = (d02 + 2.0 * d12 + d22) - (d00 + 2.0 * d10 + d20);
-  float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
-  depthEdge = smoothstep(0.062, 0.165, depthEdge);
+  // Fast early-out for sky pixels (~35-45% of screen): only 2 texture reads total!
+  float ink = 0.0;
+  if (rawDepth <= 0.99995) {
+    vec2 texel = 1.0 / uResolution;
+    vec2 o = texel * uLineWidth;
 
-  // --- 2. View-Space Normal + SurfaceId/ElementId Crease Detection (Abeto tInfo style!) ---
-  vec4 iC = texture2D(tInfo, vUv);
-  vec4 iL = texture2D(tInfo, vUv + vec2(-texel.x, 0.0));
-  vec4 iR = texture2D(tInfo, vUv + vec2(texel.x, 0.0));
-  vec4 iU = texture2D(tInfo, vUv + vec2(0.0, texel.y));
-  vec4 iD = texture2D(tInfo, vUv + vec2(0.0, -texel.y));
+    // --- 1. 4-tap Roberts Cross Depth Edge (crisp 1px silhouettes, 4 reads instead of 9!) ---
+    float dC = linearizeRawDepth(rawDepth);
+    float dR = linearizeRawDepth(texture2D(tDepth, vUv + vec2(o.x, 0.0)).x);
+    float dU = linearizeRawDepth(texture2D(tDepth, vUv + vec2(0.0, o.y)).x);
+    float dRU = linearizeRawDepth(texture2D(tDepth, vUv + o).x);
+    float gx = dC - dRU;
+    float gy = dR - dU;
+    float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
+    depthEdge = smoothstep(0.014, 0.040, depthEdge);
 
-  vec3 nC = iC.rgb * 2.0 - 1.0;
-  vec3 nL = iL.rgb * 2.0 - 1.0;
-  vec3 nR = iR.rgb * 2.0 - 1.0;
-  vec3 nU = iU.rgb * 2.0 - 1.0;
-  vec3 nD = iD.rgb * 2.0 - 1.0;
+    // --- 2. 3-tap Normal + SurfaceId/ElementId Crease Detection (1:1 crisp, 3 reads instead of 5!) ---
+    vec2 infoTexel = 1.0 / uInfoResolution;
+    vec4 iC = texture2D(tInfo, vUv);
+    vec4 iR = texture2D(tInfo, vUv + vec2(infoTexel.x, 0.0));
+    vec4 iU = texture2D(tInfo, vUv + vec2(0.0, infoTexel.y));
 
-  // Guard against sky/empty info pixels (cleared to black -> length(iC.rgb) == 0)
-  float hasInfo = step(0.05, dot(iC.rgb, vec3(1.0)));
-  float nDiffH = length(nR - nL);
-  float nDiffV = length(nU - nD);
-  float normalGrad = sqrt(nDiffH * nDiffH + nDiffV * nDiffV);
-  float normalEdge = smoothstep(0.42, 0.86, normalGrad) * hasInfo;
+    float hasInfo = step(0.05, iC.r + iC.g + iC.b);
+    vec3 nC = iC.rgb * 2.0 - 1.0;
+    vec3 nR = iR.rgb * 2.0 - 1.0;
+    vec3 nU = iU.rgb * 2.0 - 1.0;
+    float nDiffH = length(nR - nC);
+    float nDiffV = length(nU - nC);
+    float normalEdge = smoothstep(0.20, 0.44, max(nDiffH, nDiffV)) * hasInfo;
 
-  // Flat panel seam detection via surfaceId/elementId hash (wooden deck planks, crates, boat panels!)
-  float idDiff = max(
-    max(abs(iC.a - iL.a), abs(iC.a - iR.a)),
-    max(abs(iC.a - iU.a), abs(iC.a - iD.a))
-  );
-  float idEdge = step(0.032, idDiff) * hasInfo;
+    float idDiff = max(abs(iC.a - iR.a), abs(iC.a - iU.a));
+    float idEdge = step(0.032, idDiff) * hasInfo;
 
-  // --- 3. Colour Sobel for painted decals, boat lettering, cone stripes & window frames ---
-  float l00 = luma(sampleColor(vUv + vec2(-o.x, -o.y)));
-  float l10 = luma(sampleColor(vUv + vec2(0.0, -o.y)));
-  float l20 = luma(sampleColor(vUv + vec2(o.x, -o.y)));
-  float l01 = luma(sampleColor(vUv + vec2(-o.x, 0.0)));
-  float l21 = luma(sampleColor(vUv + vec2(o.x, 0.0)));
-  float l02 = luma(sampleColor(vUv + vec2(-o.x, o.y)));
-  float l12 = luma(sampleColor(vUv + vec2(0.0, o.y)));
-  float l22 = luma(sampleColor(vUv + vec2(o.x, o.y)));
-  float cx = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
-  float cy = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
-  float colorEdge = smoothstep(0.28, 0.54, sqrt(cx * cx + cy * cy));
+    // --- 3. 3-tap Colour Edge (reuses center col -> only 2 extra reads instead of 8!) ---
+    float lC = luma(col);
+    float lR = luma(texture2D(tColor, vUv + vec2(o.x, 0.0)).rgb);
+    float lU = luma(texture2D(tColor, vUv + vec2(0.0, o.y)).rgb);
+    float colorGrad = abs(lC - lR) + abs(lC - lU);
+    float colorEdge = smoothstep(0.065, 0.145, colorGrad);
 
-  bool isSky = texture2D(tDepth, vUv).x > 0.99995;
-  float nearDetailFade = 1.0 - smoothstep(12.0, 32.0, dC);
-  float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
+    float nearDetailFade = 1.0 - smoothstep(12.0, 32.0, dC);
+    float distFade = 1.0 - smoothstep(32.0, 82.0, dC);
 
-  float interiorCrease = max(normalEdge * 0.72, idEdge * 0.58) * nearDetailFade;
-  float ink = max(max(depthEdge, colorEdge * 0.44), interiorCrease) * distFade;
-  if (isSky) ink = 0.0;
+    float interiorCrease = max(normalEdge * 0.72, idEdge * 0.58) * nearDetailFade;
+    ink = max(max(depthEdge, colorEdge * 0.44), interiorCrease) * distFade;
+  }
 
-  // --- Dreamy, luminous, soothing Abeto / Studio Ghibli coastal pastel grading ---
-  vec3 col = sampleColor(vUv);
-  vec3 hsv = rgb2hsv(col);
-  // Gentle pastel saturation & lifted bright sunlit values (never dark or muddy!)
-  hsv.y = clamp(hsv.y * 0.90, 0.0, 1.0);
-  hsv.z = mix(hsv.z, pow(max(hsv.z, 0.0), 0.78), 0.32);
-  col = hsv2rgb(hsv);
+  // --- Exact Abeto pastel grading without rgb2hsv/hsv2rgb (preserves crisp contrast, zero haze!) ---
+  float maxC = max(col.r, max(col.g, col.b));
+  if (maxC > 0.0001) {
+    // 10% pastel saturation soften around maxC (exact HSV S*0.90 equivalent)
+    col = mix(vec3(maxC), col, 0.90);
+    // Exact HSV V -> mix(V, V^0.78, 0.32) lift via single scalar scale (zero color washout!)
+    float liftedV = mix(maxC, pow(maxC, 0.78), 0.32);
+    col *= (liftedV / maxC);
+  }
 
   float L = luma(col);
-  // Soft aqua-sky bounce in shadows + warm sunlit cream glow on highlights
   col = mix(col, col + vec3(0.045, 0.068, 0.072), (1.0 - smoothstep(0.10, 0.62, L)) * 0.62);
   col = mix(col, col + vec3(0.035, 0.032, 0.018), smoothstep(0.55, 0.95, L) * 0.58);
 
   // --- Delicate, soothing slate-teal charcoal ink (56% opacity, airy like Abeto!) ---
   col = mix(col, uInkColor, clamp(ink, 0.0, 1.0) * 0.56);
 
-  // Whisper-light paper warmth (no dark vignette!)
+  // Whisper-light paper warmth
   float grain = hash(vUv * uResolution) - 0.5;
   col += grain * 0.008;
 
@@ -230,7 +198,10 @@ const SKIP_INFO_NAMES = new Set([
   'AnimeButterflies',
   'SoaringBirds',
   'AnimatedNpc',
+  'AnimeWorldDetails',
 ]);
+
+const INFO_SCALE = 1.0;
 
 export class AnimeInkPass {
   private target: WebGLRenderTarget;
@@ -250,6 +221,8 @@ export class AnimeInkPass {
 
   constructor(width: number, height: number, camera: Camera) {
     const cam = camera as PerspectiveCamera;
+    const iw = Math.max(1, Math.floor(width * INFO_SCALE));
+    const ih = Math.max(1, Math.floor(height * INFO_SCALE));
     const depthTexture = new DepthTexture(width, height);
     depthTexture.type = UnsignedIntType;
     this.target = new WebGLRenderTarget(width, height, {
@@ -258,7 +231,7 @@ export class AnimeInkPass {
       depthBuffer: true,
     });
 
-    this.infoTarget = new WebGLRenderTarget(width, height, {
+    this.infoTarget = new WebGLRenderTarget(iw, ih, {
       type: UnsignedByteType,
       minFilter: NearestFilter,
       magFilter: NearestFilter,
@@ -296,6 +269,7 @@ export class AnimeInkPass {
         tDepth: { value: depthTexture },
         tInfo: { value: this.infoTarget.texture },
         uResolution: { value: new Vector2(width, height) },
+        uInfoResolution: { value: new Vector2(iw, ih) },
         uNear: { value: cam.near ?? 0.1 },
         uFar: { value: cam.far ?? 400 },
         uTime: { value: 0 },
@@ -315,21 +289,29 @@ export class AnimeInkPass {
   setSize(width: number, height: number) {
     const w = Math.max(1, Math.floor(width));
     const h = Math.max(1, Math.floor(height));
+    const iw = Math.max(1, Math.floor(w * INFO_SCALE));
+    const ih = Math.max(1, Math.floor(h * INFO_SCALE));
     this.target.setSize(w, h);
-    this.infoTarget.setSize(w, h);
+    this.infoTarget.setSize(iw, ih);
     this.material.uniforms.uResolution.value.set(w, h);
+    this.material.uniforms.uInfoResolution.value.set(iw, ih);
     this.material.uniforms.uLineWidth.value = h > 950 ? 1.15 : 0.95;
   }
 
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, time: number) {
     this.material.uniforms.uTime.value = time;
 
-    // 1. Render full colour + depth pass
+    // 1. Render full colour + depth pass (shadow map updates ONCE here if autoUpdate is on)
     renderer.setRenderTarget(this.target);
     renderer.clear();
     renderer.render(scene, camera);
 
-    // 2. Render lightweight View-Space Normal + SurfaceId/ElementId pass (cached traversal — zero per-frame GC!)
+    // 2. Render lightweight 0.75x View-Space Normal + SurfaceId/ElementId pass
+    // CRITICAL: Disable shadowMap.autoUpdate during Info + Occlusion passes so the Shadow Map
+    // is NOT redundantly re-rendered 3 times per frame!
+    const prevShadowAuto = renderer.shadowMap.autoUpdate;
+    renderer.shadowMap.autoUpdate = false;
+
     if (
       scene.children.length !== this.cachedSceneChildCount ||
       ++this.cacheRefreshTick % 90 === 1
@@ -416,6 +398,7 @@ export class AnimeInkPass {
     scene.overrideMaterial = prevOverride;
     scene.background = prevBg;
     renderer.setClearColor(this.savedClearColor, prevClearAlpha);
+    renderer.shadowMap.autoUpdate = prevShadowAuto;
     if (playerRoot) playerRoot.visible = savedPlayerVis;
     for (let i = 0; i < restoredMask.length; i++) {
       restoredMask[i].visible = true;

@@ -241,7 +241,7 @@ function createSculptedAnimeHeadGeometry(): THREE.BufferGeometry {
  * - Crisp, clean almond anime eyes, expressive brows, subtle nose accent, gentle smile
  */
 function createAnimeFaceTexture(blink: boolean): THREE.CanvasTexture {
-	const size = 1024;
+	const size = 512;
 	const canvas = document.createElement('canvas');
 	canvas.width = size;
 	canvas.height = size;

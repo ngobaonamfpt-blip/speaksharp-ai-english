@@ -342,6 +342,7 @@ export default function App() {
             }}
             onOpenPricing={() => setActiveTab('pricing')}
             onOpenDashboard={() => setActiveTab('dashboard')}
+            onOpenWorld3D={() => setActiveTab('world')}
           />
         </>
       ) : (

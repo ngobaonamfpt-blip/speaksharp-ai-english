@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   Gavel,
   GraduationCap,
+  Globe,
   HeartHandshake,
   Mic,
   Play,
@@ -23,6 +24,7 @@ interface LandingPageProps {
   onSelectCategory: (cat: TopicCategory) => void;
   onOpenPricing: () => void;
   onOpenDashboard: () => void;
+  onOpenWorld3D?: () => void;
 }
 
 const PHONE_SAMPLES = [
@@ -45,6 +47,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
   onSelectCategory,
   onOpenPricing,
   onOpenDashboard,
+  onOpenWorld3D,
 }) => {
   const [sampleIdx, setSampleIdx] = useState(0);
   const [scrollY, setScrollY] = useState(0);
@@ -75,21 +78,72 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <section className="mango-hero">
         <div className="mango-hero-grid">
           <div>
+            <div
+              className="hero-enter"
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 7,
+                padding: '5px 13px',
+                borderRadius: 999,
+                background: 'rgba(245, 189, 51, 0.14)',
+                border: '1px solid rgba(245, 189, 51, 0.35)',
+                color: '#fde68a',
+                fontSize: 12.5,
+                fontWeight: 700,
+                marginBottom: 16,
+              }}
+            >
+              <Sparkles size={13} />
+              <span>Cố Đô Cyber 75 · Thế giới 3D Anime & AI Luyện Nói Tiếng Anh</span>
+            </div>
+
             <h1 className="mango-hero-title hero-enter">
               Hãy nói <span className="gold">tiếng Anh</span> một cách tự nhiên.
             </h1>
 
             <p className="mango-hero-sub hero-enter hero-enter-d1">
-              Luyện nói & phản biện 1-1 cùng AI 24/7. Giải quyết nỗi sợ sai ngữ pháp với chấm điểm phát âm chuẩn IPA và gợi ý diễn đạt tự nhiên tức thì.
+              Luyện nói & phản biện 1-1 cùng AI 24/7 kết hợp Thế giới 3D Anime Online 2 hành tinh. Giải quyết nỗi sợ nói tiếng Anh cho học sinh THCS & THPT qua nhập vai giao thư, chấm phát âm IPA và đấu trường phản biện trực tiếp.
             </p>
 
-            <div className="mango-hero-cta hero-enter hero-enter-d2">
+            <div className="mango-hero-cta hero-enter hero-enter-d2" style={{ flexWrap: 'wrap' }}>
+              {onOpenWorld3D && (
+                <button
+                  className="btn-gold"
+                  style={{
+                    padding: '13px 24px',
+                    fontSize: 15,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 8,
+                  }}
+                  onClick={onOpenWorld3D}
+                >
+                  <Globe size={17} />
+                  Vào Thế giới 3D Online
+                </button>
+              )}
+
               <button
-                className="btn-gold"
-                style={{ padding: '13px 26px', fontSize: 15 }}
+                className={onOpenWorld3D ? undefined : 'btn-gold'}
+                style={
+                  onOpenWorld3D
+                    ? {
+                        padding: '12px 22px',
+                        fontSize: 14.5,
+                        fontWeight: 700,
+                        borderRadius: 12,
+                        border: '1.5px solid rgba(255,255,255,0.28)',
+                        background: 'rgba(255,255,255,0.08)',
+                        color: '#ffffff',
+                        cursor: 'pointer',
+                        fontFamily: 'inherit',
+                      }
+                    : { padding: '13px 26px', fontSize: 15 }
+                }
                 onClick={() => onStartPractice('buddy')}
               >
-                Bắt đầu miễn phí
+                Luyện nói AI 1-1
               </button>
 
               <button
@@ -120,7 +174,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
                 >
                   <Play size={13} fill="white" color="white" />
                 </span>
-                Thử phản biện với Giám khảo AI
+                Phản biện Giám khảo AI
               </button>
             </div>
           </div>

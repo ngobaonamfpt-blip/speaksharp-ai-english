@@ -41,21 +41,6 @@ varying vec3 vWorldPosition;
 varying float vSurfaceId;
 flat varying int vElementId;
 
-vec3 rgb2hsv(vec3 c) {
-	vec4 K = vec4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-	vec4 p = mix(vec4(c.bg, K.wz), vec4(c.gb, K.xy), step(c.b, c.g));
-	vec4 q = mix(vec4(p.xyw, c.r), vec4(c.r, p.yzx), step(p.x, c.r));
-	float d = q.x - min(q.w, q.y);
-	float e = 1.0e-10;
-	return vec3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-}
-
-vec3 hsv2rgb(vec3 c) {
-	vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-	vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);
-	return c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);
-}
-
 vec4 triplanar(sampler2D tex, vec3 normal, vec3 pos, float scale) {
 	vec3 blend = abs(normal);
 	blend = normalize(max(blend, 0.00001));
@@ -75,11 +60,13 @@ void main() {
 	float worldR = length(vWorldPosition);
 
 	vec3 baseAtlas = texture2D(tColors, vUv).rgb;
-	vec3 baseHsv = rgb2hsv(baseAtlas);
+	float maxC = max(baseAtlas.r, max(baseAtlas.g, baseAtlas.b));
+	float minC = min(baseAtlas.r, min(baseAtlas.g, baseAtlas.b));
+	float baseSat = (maxC - minC) / max(maxC, 0.0001);
 
 	// Detect natural hillside ground (elementId==1 OR warm beige/tan upward-facing terrain)
 	bool isTanHill = (baseAtlas.r > 0.56 && baseAtlas.g > 0.52 && baseAtlas.b > 0.36
-		&& (baseAtlas.r - baseAtlas.b) > 0.03 && baseHsv.y < 0.32 && upness > 0.52);
+		&& (baseAtlas.r - baseAtlas.b) > 0.03 && baseSat < 0.32 && upness > 0.52);
 	bool isTerrain = (vElementId == 1) || isTanHill;
 
 	vec3 color = baseAtlas;
@@ -124,9 +111,7 @@ void main() {
 		color = mix(color, color * 0.82, strataLine * 0.42);
 		color = mix(color, color * 0.92, rockFleck * 0.42);
 	} else {
-		// Subtle hand-illustrated surface details for wooden docks, crates, boat hull & walls!
-		vec4 fineNoise = triplanar(tNoise, wNormal, wPos * 0.28, 1.0);
-		// Warm wooden deck / dock platform surfaces get crisp subtle plank seams & wood tone variation
+		// Reuse triplanarNoise (saves 3 texture reads/pixel on buildings, docks & boats!)
 		bool isWoodDeck = (upness > 0.65 && baseAtlas.r > 0.46 && baseAtlas.g > 0.42 && baseAtlas.b < 0.68 && (baseAtlas.r - baseAtlas.b) > 0.035);
 		if (isWoodDeck) {
 			float plankCoord = fract(dot(wPos.xz, vec2(4.2, 1.4)));
@@ -135,17 +120,12 @@ void main() {
 			color = mix(color, color * 0.80, plankLine * 0.48);
 			color *= (1.0 - plankTone);
 		}
-		// Subtle concrete/plaster weathering speckles on buildings, boxes & boat hull
-		float speck = smoothstep(0.80, 0.88, fineNoise.r);
+		float speck = smoothstep(0.80, 0.88, triplanarNoise.b);
 		color = mix(color, color * 0.94, speck * 0.28);
 	}
 
-	// Luminous sunlit 2-step anime cel shading with super airy sky-tinted shadows (never dark!)
-	vec3 colorShadow = rgb2hsv(color);
-	colorShadow.r += 0.02;
-	colorShadow.y = min(1.0, colorShadow.y * 1.03);
-	colorShadow.z *= 0.88;
-	colorShadow = hsv2rgb(colorShadow);
+	// Luminous sunlit 2-step anime cel shading with super airy sky-tinted shadows (zero HSV math!)
+	vec3 colorShadow = color * vec3(0.85, 0.88, 0.92);
 
 	vec3 lightDir = normalize(uLightPosition - vWorldPosition);
 	float shade = max(dot(worldNormal, lightDir), 0.0);

@@ -71,7 +71,6 @@ import {
   updateMessengerMaterials,
   type MessengerMaterialSet,
 } from '../lib/messenger/materials';
-import type { MessengerComposer } from '../lib/messenger/postProcessing';
 import {
   createSceneDepthTarget,
   resizeSceneDepthTarget,
@@ -215,7 +214,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [playMode, setPlayMode] = useState(true);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [soundMuted, setSoundMuted] = useState(false);
-  const [outlineFx, setOutlineFx] = useState(true);
+  const [outlineFx, setOutlineFx] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('speaksharp_3d_gfx_v1');
+      if (saved === 'eco') return false;
+      if (saved === 'high') return true;
+    } catch {
+      // ignore
+    }
+    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
+    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    return !isMobile && cores > 4;
+  });
 
   // Minimalist Abeto-style drawers (all closed by default -> >90% pure 3D viewport!)
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -375,13 +385,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       alpha: false,
       powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
     renderer.setSize(host.clientWidth, host.clientHeight);
-    // Soft-edged 3D directional shadows — manual autoUpdate=false avoids redundant GPU shadow passes every frame
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = PCFSoftShadowMap;
+    // Soft-edged 3D directional shadows (throttled & auto-disabled in Eco mode for weak GPUs!)
+    renderer.shadowMap.enabled = liveOutlineFxRef.current;
     renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = true;
+    renderer.shadowMap.needsUpdate = liveOutlineFxRef.current;
+    renderer.shadowMap.type = PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -396,18 +406,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const sun = new DirectionalLight(0xfff4e2, mode === 'npcs' ? 1.8 : 1.55);
     sun.position.set(14, 20, 10);
     sun.castShadow = true;
-    // 1024px tight-frustum soft shadow map = 4x faster GPU shadow pass with identical crisp soft anime shadows
+    // Balanced 1024px soft shadow map (4x faster fill-rate than 2048px on integrated GPUs!)
     sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 36;
-    const frustum = mode === 'npcs' ? 10 : 3.8;
+    sun.shadow.camera.far = 38;
+    const frustum = mode === 'npcs' ? 10 : 4.2;
     sun.shadow.camera.left = -frustum;
     sun.shadow.camera.right = frustum;
     sun.shadow.camera.top = frustum;
     sun.shadow.camera.bottom = -frustum;
-    sun.shadow.bias = -0.0002;
-    sun.shadow.normalBias = 0.045;
-    sun.shadow.radius = 2.4;
+    sun.shadow.bias = -0.00015;
+    sun.shadow.normalBias = 0.042;
+    sun.shadow.radius = 2.6;
     scene.add(sun);
     scene.add(sun.target);
 
@@ -421,9 +431,10 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     audioRef.current = audio;
 
     const runtime = {
-      composer: null as MessengerComposer | null,
       sceneGroup: null as Group | null,
       terrainChunks: [] as Array<{ mesh: Mesh; box: Box3 }>,
+      terrainMeshes: [] as Mesh[],
+      shadowReceivers: [] as Mesh[],
       materials: null as MessengerMaterialSet | null,
       terrainMaterial: null as ShaderMaterial | null,
       treeLeavesMaterial: null as ShaderMaterial | null,
@@ -443,25 +454,23 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const MIN_SURFACE_R = 4.5;
 
     const sampleTerrainRadius = (dir: Vector3, fallback = 6.8): number => {
-      if (runtime.terrainChunks.length === 0) return fallback;
+      if (runtime.terrainMeshes.length === 0) return fallback;
       const origin = dir.clone().multiplyScalar(16);
       const inward = dir.clone().negate();
       raycaster.set(origin, inward);
       raycaster.far = 16;
-      const meshes = runtime.terrainChunks.map((c) => c.mesh);
-      const hits = raycaster.intersectObjects(meshes, false);
+      const hits = raycaster.intersectObjects(runtime.terrainMeshes, false);
       if (hits.length > 0) return Math.max(MIN_SURFACE_R, hits[0].point.length());
       return fallback;
     };
 
     const sampleLocalGround = (dir: Vector3, refR: number, headroom = 0.28): number | null => {
-      if (runtime.terrainChunks.length === 0) return null;
+      if (runtime.terrainMeshes.length === 0) return null;
       const origin = dir.clone().multiplyScalar(refR + headroom);
       const inward = dir.clone().negate();
       raycaster.set(origin, inward);
       raycaster.far = 8.0;
-      const meshes = runtime.terrainChunks.map((c) => c.mesh);
-      const hits = raycaster.intersectObjects(meshes, false);
+      const hits = raycaster.intersectObjects(runtime.terrainMeshes, false);
       if (hits.length > 0) return Math.max(MIN_SURFACE_R, hits[0].point.length());
       return null;
     };
@@ -497,13 +506,12 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const wallOrigin = new Vector3();
     const wallNormal = new Vector3();
     const checkWallSlide = (posDir: Vector3, moveDir: Vector3, curR: number): Vector3 | null => {
-      if (runtime.terrainChunks.length === 0) return moveDir;
+      if (runtime.terrainMeshes.length === 0) return moveDir;
       // Cast at chest height (+0.22) so low curbs, steps & sidewalks NEVER block walking!
       wallOrigin.copy(posDir).multiplyScalar(curR + 0.22);
       raycaster.set(wallOrigin, moveDir);
       raycaster.far = 0.13;
-      const meshes = runtime.terrainChunks.map((c) => c.mesh);
-      const hits = raycaster.intersectObjects(meshes, false);
+      const hits = raycaster.intersectObjects(runtime.terrainMeshes, false);
       if (hits.length === 0) return moveDir;
       const hit = hits[0];
       if (!hit.face) return moveDir;
@@ -1084,7 +1092,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       resizeSceneDepthTarget(sceneDepthTarget, dw, dh);
       animeInk.setSize(clientWidth, clientHeight);
       waterDepthCaptured = false;
-      runtime.composer?.resize(clientWidth, clientHeight);
       if (runtime.gameplayWaterMaterial) {
         setGameplayWaterDepth(
           runtime.gameplayWaterMaterial,
@@ -1103,12 +1110,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       setStatus('loading');
       try {
         if (mode === 'gameplay') {
-          const [{ createGameplaySceneGroup }, { createMessengerComposer }, { loadRealPlanetNpc }] =
-            await Promise.all([
-              import('../lib/messenger/createGameplayScene'),
-              import('../lib/messenger/postProcessing'),
-              import('../lib/messenger/createNpcGallery'),
-            ]);
+          const { createGameplaySceneGroup } = await import('../lib/messenger/createGameplayScene');
           const bundle = await createGameplaySceneGroup(renderer);
           if (cancelled) return;
           runtime.sceneGroup = bundle.group;
@@ -1156,11 +1158,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               const sr = new Mesh(m.geometry, groundShadowMat);
               sr.receiveShadow = true;
               sr.castShadow = false;
+              sr.visible = liveOutlineFxRef.current;
               sr.renderOrder = 2;
               shadowReceivers.push(sr);
             }
           });
           shadowReceivers.forEach((sr) => terrainObj.add(sr));
+          runtime.shadowReceivers = shadowReceivers;
 
           // Let trees cast leafy shadows onto grassy hills & boulders too!
           const leavesObj = bundle.group.getObjectByName('TreeLeaves');
@@ -1168,9 +1172,10 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             if ((o as Mesh).isMesh) o.castShadow = true;
           });
           runtime.terrainChunks = chunks;
+          runtime.terrainMeshes = chunks.map((c) => c.mesh);
 
           // Scatter living animated world details: swaying grass/flowers, banners, lanterns, butterflies, wind streaks, petals & chimney smoke
-          const chunkMeshes = chunks.map((c) => c.mesh);
+          const chunkMeshes = runtime.terrainMeshes;
           const worldDetailsBundle = createWorldDetails(toonGradient, (dir) => {
             const origin = dir.clone().multiplyScalar(16);
             const inward = dir.clone().negate();
@@ -1186,20 +1191,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             return { point: hit.point.clone(), normal, radius: hit.point.length() };
           });
           updateWorldDetails = worldDetailsBundle.update;
-          const worldDetails = worldDetailsBundle.group;
-          const vfxNoShadow = new Set(['AnimeWindStreaks', 'ChimneySmoke', 'AnimeButterflies']);
-          worldDetails.traverse((o) => {
-            if ((o as Mesh).isMesh) {
-              const parentName = o.parent?.name ?? '';
-              const grandParentName = o.parent?.parent?.name ?? '';
-              const mMat = (o as Mesh).material;
-              const isTransp = !Array.isArray(mMat) && Boolean(mMat?.transparent);
-              if (!vfxNoShadow.has(parentName) && !vfxNoShadow.has(grandParentName) && !isTransp) {
-                o.castShadow = true;
-              }
-            }
-          });
-          scene.add(worldDetails);
+          // Do NOT enable castShadow on 450+ tiny worldDetails props (saves ~450 shadow draw calls/frame!)
+          scene.add(worldDetailsBundle.group);
 
           const spawnSpot = findStreetSpot(pState.posDir, 0.24);
           pState.posDir.copy(spawnSpot.dir);
@@ -1465,8 +1458,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           });
 
           if (cancelled) return;
-          runtime.composer = createMessengerComposer(renderer, scene, camera, bundle.lut);
-          runtime.composer.resize(host.clientWidth, host.clientHeight);
         } else if (mode === 'npcs') {
           const { createNpcGalleryGroup } = await import('../lib/messenger/createNpcGallery');
           const bundle = await createNpcGalleryGroup(renderer);
@@ -1510,7 +1501,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const camDesired = new Vector3();
     const camLook = new Vector3();
     const sunDirOffset = new Vector3(10, 14, 7);
-    const fixedSideTmp = new Vector3();
 
     let fpsFrames = 0;
     let lastFpsT = performance.now();
@@ -1539,8 +1529,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
       // Update 5 strolling NPCs smoothly along their multi-waypoint street & coastal routes!
       if (strollingNpcs.length > 0 && runtime.ready) {
+        const isPlay = mode === 'gameplay' && livePlayModeRef.current;
         for (let i = 0; i < strollingNpcs.length; i++) {
           const s = strollingNpcs[i];
+          const nearPlayer = !isPlay || s.posDir.dot(pState.posDir) > -0.15;
+          s.group.visible = nearPlayer;
           const targetWp = s.waypoints[s.wpIdx];
           let isWalking = false;
 
@@ -1562,8 +1555,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
                 s.forward.addScaledVector(s.posDir, -s.forward.dot(s.posDir)).normalize();
               }
 
-              // Resample BVH ground height every 3 frames so feet stay glued to streets & slopes
-              if ((frameCount + i) % 3 === 0) {
+              // Resample BVH ground height only when on visible hemisphere (every 5 frames)
+              if (nearPlayer && (frameCount + i) % 5 === 0) {
                 const gHit = sampleLocalGround(s.posDir, s.groundR, 0.35);
                 if (gHit && Math.abs(gHit - s.groundR) < 0.5) {
                   s.groundR += (gHit - s.groundR) * 0.45;
@@ -1572,9 +1565,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
             }
           }
 
-          // Skip animation & BVH raycasts for strolling NPCs on the far hemisphere of the planet!
-          if (s.posDir.dot(pState.posDir) < 0.25) continue;
-
+          if (!nearPlayer) continue;
           s.group.position.copy(s.posDir).multiplyScalar(s.groundR);
           tmpRight.crossVectors(s.posDir, s.forward).normalize();
           tmpMat.makeBasis(tmpRight, s.posDir, s.forward);
@@ -1683,18 +1674,26 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         tmpQ.setFromRotationMatrix(tmpMat);
         player.quaternion.slerp(tmpQ, 0.35);
 
-        // World-locked directional sun + throttled shadow map update (4x faster GPU shadow pass!)
-        const shadowStride = moving || pState.jumpH > 0.01 ? 2 : 6;
-        if (frameCount % shadowStride === 0) {
+        // World-locked directional sun ~55 deg above player's local horizon (throttled to every 3 frames!)
+        const wantShadows = liveOutlineFxRef.current;
+        if (renderer.shadowMap.enabled !== wantShadows) {
+          renderer.shadowMap.enabled = wantShadows;
+          for (let i = 0; i < runtime.shadowReceivers.length; i++) {
+            runtime.shadowReceivers[i].visible = wantShadows;
+          }
+          if (wantShadows) renderer.shadowMap.needsUpdate = true;
+        }
+        if (wantShadows && frameCount % 3 === 0) {
           sun.target.position.copy(player.position);
-          fixedSideTmp.set(0.75, 0.25, 0.61);
-          fixedSideTmp.addScaledVector(pState.posDir, -fixedSideTmp.dot(pState.posDir));
-          if (fixedSideTmp.lengthSq() < 0.01) fixedSideTmp.set(1, 0, 0).cross(pState.posDir);
-          fixedSideTmp.normalize();
+          // Fixed world-space tangent axis so building & character shadows stay physically rock-solid!
+          const fixedSide = new Vector3(0.75, 0.25, 0.61);
+          fixedSide.addScaledVector(pState.posDir, -fixedSide.dot(pState.posDir));
+          if (fixedSide.lengthSq() < 0.01) fixedSide.set(1, 0, 0).cross(pState.posDir);
+          fixedSide.normalize();
           sunDirOffset
             .copy(pState.posDir)
             .multiplyScalar(10.5)
-            .addScaledVector(fixedSideTmp, 6.2);
+            .addScaledVector(fixedSide, 6.2);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
           renderer.shadowMap.needsUpdate = true;
@@ -1733,6 +1732,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
         const activeTarget = localStops[targetIdx];
         stopNodes.forEach((node, idx) => {
+          const onFrontHemisphere = node.stop.dir.dot(pState.posDir) > -0.15;
+          node.npc.visible = onFrontHemisphere;
+          node.badge.visible = onFrontHemisphere;
+          if (!onFrontHemisphere) return;
+
           const isTarget = idx === targetIdx;
           const isDone = liveCompletedStopsRef.current.includes(node.stop.id);
           (node.ring.material as MeshBasicMaterial).color.setHex(
@@ -1754,25 +1758,24 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           const sc = isTarget ? 0.175 + Math.sin(elapsed * 5) * 0.014 : 0.145;
           node.badge.scale.set(sc, sc, 1);
 
-          // Animate Quest NPC only when on the visible hemisphere (saves CPU on far-side NPCs!)
-          if (node.stop.dir.dot(pState.posDir) > 0.25) {
-            const isPlayerClose = currentNearby?.id === node.stop.id;
-            animateChibi(node.npc, {
-              t: elapsed,
-              phase: idx * 1.35,
-              moving: false,
-              emoteAction: isPlayerClose ? 'wave' : null,
-            });
-            if (isPlayerClose) {
-              tmpFwd.copy(pState.posDir).sub(node.stop.dir);
-              tmpFwd.addScaledVector(node.stop.dir, -tmpFwd.dot(node.stop.dir));
-              if (tmpFwd.lengthSq() > 0.0001) {
-                tmpFwd.normalize();
-                tmpRight.crossVectors(node.stop.dir, tmpFwd).normalize();
-                tmpMat.makeBasis(tmpRight, node.stop.dir, tmpFwd);
-                tmpQ.setFromRotationMatrix(tmpMat);
-                node.npc.quaternion.slerp(tmpQ, 0.12);
-              }
+          // Animate Quest NPC (relaxed breathing, eye-blinking & friendly waving when player is close!)
+          const isPlayerClose = currentNearby?.id === node.stop.id;
+          animateChibi(node.npc, {
+            t: elapsed,
+            phase: idx * 1.35,
+            moving: false,
+            emoteAction: isPlayerClose ? 'wave' : null,
+          });
+          if (isPlayerClose) {
+            // Gently turn toward the player when they walk up!
+            tmpFwd.copy(pState.posDir).sub(node.stop.dir);
+            tmpFwd.addScaledVector(node.stop.dir, -tmpFwd.dot(node.stop.dir));
+            if (tmpFwd.lengthSq() > 0.0001) {
+              tmpFwd.normalize();
+              tmpRight.crossVectors(node.stop.dir, tmpFwd).normalize();
+              tmpMat.makeBasis(tmpRight, node.stop.dir, tmpFwd);
+              tmpQ.setFromRotationMatrix(tmpMat);
+              node.npc.quaternion.slerp(tmpQ, 0.12);
             }
           }
         });
@@ -2026,7 +2029,6 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       audio.dispose();
       toonGradient.dispose();
       animeInk.dispose();
-      runtime.composer?.dispose();
       sceneDepthTarget.dispose();
       controls.dispose();
       renderer.dispose();
@@ -2231,7 +2233,37 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           {onlineConnected ? `Online (${onlineCount})` : 'Đang kết nối...'}
         </span>
         <span style={{ color: '#64748b' }}>·</span>
-        <span style={{ color: '#15803d' }}>{questInfo.fps} FPS</span>
+        <span style={{ color: questInfo.fps >= 40 ? '#15803d' : '#b45309' }}>
+          {questInfo.fps} FPS
+        </span>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            setOutlineFx((v) => {
+              const next = !v;
+              try {
+                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
+              } catch {
+                // ignore
+              }
+              showToast(next ? '🎨 Đồ họa Cao: Anime Ink + Bóng 3D' : '⚡ Đồ họa Siêu Mượt (Eco): Tối ưu tối đa cho máy yếu');
+              return next;
+            });
+          }}
+          title="Nhấn để đổi nhanh chế độ đồ họa Cao / Mượt"
+          style={{
+            padding: '1px 6px',
+            borderRadius: 999,
+            fontSize: 10.5,
+            fontWeight: 900,
+            background: outlineFx ? '#e0f2fe' : '#fef3c7',
+            color: outlineFx ? '#0369a1' : '#b45309',
+            border: '1.5px solid #243038',
+            cursor: 'pointer',
+          }}
+        >
+          {outlineFx ? '🎨 Cao' : '⚡ Mượt'}
+        </span>
       </div>
 
       {/* COMPACT GLOBAL SERVER CHAT (Bottom-Left next to Fullscreen — zero room codes!) */}
@@ -2676,11 +2708,16 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
         <button
           className="abeto-btn"
-          title={outlineFx ? 'Phong cách Anime Ink (nhấn để chuyển Mượt)' : 'Chế độ Mượt 165 FPS'}
+          title={outlineFx ? 'Đồ họa Cao (Anime Ink + Bóng 3D) — nhấn để chuyển Siêu Mượt cho máy yếu' : 'Đồ họa Siêu Mượt (Eco) — nhấn để bật Anime Ink + Bóng 3D'}
           onClick={() => {
             setOutlineFx((v) => {
               const next = !v;
-              showToast(next ? '🎨 Đã bật Anime Ink vẽ tay' : '⚡ Đã bật chế độ Mượt 165 FPS');
+              try {
+                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
+              } catch {
+                // ignore
+              }
+              showToast(next ? '🎨 Đồ họa Cao: Anime Ink + Bóng 3D' : '⚡ Đồ họa Siêu Mượt (Eco): Tắt bóng nặng & tối ưu máy yếu');
               return next;
             });
           }}

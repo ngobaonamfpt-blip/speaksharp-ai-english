@@ -571,11 +571,18 @@
 
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.2, 320);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const isLowPowerDevice =
+      (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ||
+      /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+
+    const renderer = new THREE.WebGLRenderer({
+      antialias: !isLowPowerDevice,
+      powerPreference: 'high-performance',
+    });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowPowerDevice ? 1 : 1.25));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.enabled = !isLowPowerDevice;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     wrap.appendChild(renderer.domElement);
 
@@ -762,8 +769,8 @@
 
     const sunLight = new THREE.DirectionalLight(0xfff6dc, 1.45);
     sunLight.position.set(52, 68, 44);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1536, 1536);
+    sunLight.castShadow = !isLowPowerDevice;
+    sunLight.shadow.mapSize.set(1024, 1024);
     sunLight.shadow.camera.near = 10;
     sunLight.shadow.camera.far = 180;
     sunLight.shadow.camera.left = -45;

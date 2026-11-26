@@ -51,12 +51,14 @@ float linearizeDepth(float depth) {
 }
 
 void main() {
-	// Multi-layered Studio Ghibli / Abeto coastal turquoise water!
+	// Multi-layered Studio Ghibli / Abeto coastal turquoise water (2 texture reads instead of 3!)
 	vec2 p1 = vWorldPosition.xz * 0.16 + vec2(uTime * 0.024, -uTime * 0.016);
 	vec2 p2 = vWorldPosition.xy * 0.15 + vec2(-uTime * 0.018, uTime * 0.026);
-	float n1 = texture2D(tNoise, p1).r;
-	float n2 = texture2D(tNoise, p2 * 1.35 + n1 * 0.28).g;
-	float n3 = texture2D(tNoise, p1 * 2.2 - vec2(uTime * 0.032, uTime * 0.022)).b;
+	vec4 s1 = texture2D(tNoise, p1);
+	vec4 s2 = texture2D(tNoise, p2 * 1.35 + s1.r * 0.28);
+	float n1 = s1.r;
+	float n2 = s2.g;
+	float n3 = s2.b;
 
 	vec3 deepOcean   = vec3(0.15, 0.42, 0.49);  // #266b7d deep ocean current
 	vec3 midTeal     = vec3(0.22, 0.56, 0.62);  // #388f9e main vibrant coastal teal
