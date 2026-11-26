@@ -3,10 +3,12 @@ import {
   ClipboardList,
   Compass,
   MapPin,
+  MessageCircle,
   Mic,
   Moon,
   Music,
   Palette,
+  Send,
   Shirt,
   Smile,
   Sun,
@@ -51,6 +53,11 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
 import { createWorldDetails } from '../lib/messenger/worldDetails';
+import {
+  GlobalOnlineClient,
+  type OnlineChatMessage,
+  type RemotePlayerState,
+} from '../lib/messenger/onlineClient';
 import {
   ENGLISH_NPC_QUESTS,
   speakEnglish,
@@ -198,6 +205,7 @@ const PAPER_BTN_STYLE: React.CSSProperties = {
 };
 
 export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
+  userName,
   onEarnXp,
   onEnterDebateArena,
 }) => {
@@ -229,6 +237,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [voiceTranscript, setVoiceTranscript] = useState('');
 
   const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading');
+  const [onlineConnected, setOnlineConnected] = useState(false);
+  const [onlineCount, setOnlineCount] = useState(1);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatInput, setChatInput] = useState('');
+  const [chatMessages, setChatMessages] = useState<OnlineChatMessage[]>([]);
   const [floatingEmotes, setFloatingEmotes] = useState<
     Array<{ id: string; emoji: string; x: number; y: number }>
   >([]);
@@ -281,8 +294,11 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const triggerInteractRef = useRef<(() => void) | null>(null);
   const completeQuestRef = useRef<((stopId: string, xp: number, label: string) => void) | null>(null);
   const teleportToStopRef = useRef<((stopId: string) => void) | null>(null);
+  const sendChatRef = useRef<((text: string) => void) | null>(null);
   const recenterRef = useRef<(() => void) | null>(null);
   const audioRef = useRef<CozyLoFiAudio | null>(null);
+  const liveUserNameRef = useRef(userName);
+  liveUserNameRef.current = userName;
   const liveCompletedStopsRef = useRef<string[]>(completedStops);
   liveCompletedStopsRef.current = completedStops;
   const toastTimerRef = useRef<number | null>(null);
@@ -542,6 +558,154 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       speed: number;
       phase: number;
     }> = [];
+
+    // === SINGLE GLOBAL ONLINE SERVER (Zero room codes! Auto-joins everyone into 1 world) ===
+    const makeNameplateTex = (label: string) => {
+      const c = document.createElement('canvas');
+      c.width = 256;
+      c.height = 64;
+      const ctx = c.getContext('2d')!;
+      ctx.clearRect(0, 0, 256, 64);
+      ctx.fillStyle = 'rgba(255, 253, 247, 0.94)';
+      ctx.strokeStyle = '#24323c';
+      ctx.lineWidth = 5;
+      ctx.beginPath();
+      ctx.roundRect(14, 10, 228, 44, 16);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = '#1d2a33';
+      ctx.font = '800 22px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label.slice(0, 16), 128, 33);
+      const tex = new CanvasTexture(c);
+      tex.needsUpdate = true;
+      return tex;
+    };
+
+    const remotePlayers = new Map<
+      string,
+      {
+        group: Group;
+        nameSprite: Sprite;
+        targetPosDir: Vector3;
+        curPosDir: Vector3;
+        targetFwd: Vector3;
+        curFwd: Vector3;
+        targetR: number;
+        curR: number;
+        jumpH: number;
+        moving: boolean;
+        sprinting: boolean;
+        outfitKey: string;
+        emoteUntil: number;
+        emoteAction: EmoteAction;
+      }
+    >();
+
+    let lastNetSend = 0;
+    const onlineClient =
+      mode === 'gameplay'
+        ? new GlobalOnlineClient({
+            onStatusChange: (connected, count) => {
+              setOnlineConnected(connected);
+              setOnlineCount(count);
+            },
+            onPlayerUpdate: (rp: RemotePlayerState) => {
+              const oKey = JSON.stringify(rp.outfit ?? null);
+              let entry = remotePlayers.get(rp.id);
+              if (!entry || entry.outfitKey !== oKey) {
+                if (entry) {
+                  scene.remove(entry.group, entry.nameSprite);
+                }
+                const o = rp.outfit;
+                const grp = buildChibiCourier(toonGradient, {
+                  hatColor: new Color(o?.hat ?? '#2c3642').getHex(),
+                  shirtColor: new Color(o?.shirt ?? '#3b82f6').getHex(),
+                  pantsColor: new Color(o?.pants ?? '#26313d').getHex(),
+                  shoeColor: new Color(o?.shoe ?? '#1c2128').getHex(),
+                  bagColor: new Color(o?.bag ?? '#36404a').getHex(),
+                  hairStyle: o?.hair ?? 'bob',
+                  topStyle: o?.top ?? 'coat',
+                });
+                grp.name = 'AnimatedNpc';
+                grp.traverse((obj) => {
+                  if ((obj as Mesh).isMesh && !obj.name.endsWith('_outline')) obj.castShadow = true;
+                  const mat = (obj as Mesh).material as Material | Material[] | undefined;
+                  if (mat) {
+                    if (Array.isArray(mat)) mat.forEach(patchMaterialForInk);
+                    else patchMaterialForInk(mat);
+                  }
+                });
+                grp.add(createSoftDropShadow(0.14));
+                scene.add(grp);
+
+                const nameSprite = new Sprite(
+                  new SpriteMaterial({
+                    map: makeNameplateTex(rp.name || 'Courier'),
+                    transparent: true,
+                    depthWrite: false,
+                  })
+                );
+                nameSprite.scale.set(0.36, 0.09, 1);
+                scene.add(nameSprite);
+
+                const initPos = new Vector3(...rp.pos).normalize();
+                const initFwd = new Vector3(...rp.fwd).normalize();
+                entry = {
+                  group: grp,
+                  nameSprite,
+                  targetPosDir: initPos.clone(),
+                  curPosDir: initPos.clone(),
+                  targetFwd: initFwd.clone(),
+                  curFwd: initFwd.clone(),
+                  targetR: rp.r,
+                  curR: rp.r,
+                  jumpH: rp.jumpH,
+                  moving: rp.moving,
+                  sprinting: rp.sprinting,
+                  outfitKey: oKey,
+                  emoteUntil: 0,
+                  emoteAction: null,
+                };
+                remotePlayers.set(rp.id, entry);
+              } else {
+                entry.targetPosDir.set(...rp.pos).normalize();
+                entry.targetFwd.set(...rp.fwd).normalize();
+                entry.targetR = rp.r;
+                entry.jumpH = rp.jumpH;
+                entry.moving = rp.moving;
+                entry.sprinting = rp.sprinting;
+              }
+            },
+            onPlayerLeave: (id: string) => {
+              const entry = remotePlayers.get(id);
+              if (entry) {
+                scene.remove(entry.group, entry.nameSprite);
+                remotePlayers.delete(id);
+              }
+            },
+            onPlayerEmote: (id: string, emoji: string) => {
+              const entry = remotePlayers.get(id);
+              if (!entry) return;
+              entry.emoteAction = emoji === '👋' ? 'wave' : emoji === '✨' ? 'spin' : 'cheer';
+              entry.emoteUntil = performance.now() + 1400;
+            },
+            onChat: (msg) => {
+              setChatMessages((prev) => [...prev.slice(-14), msg]);
+            },
+          })
+        : null;
+
+    sendChatRef.current = (text: string) => {
+      const clean = text.trim();
+      if (!clean || !onlineClient) return;
+      onlineClient.sendChat(clean);
+      setChatMessages((prev) => [
+        ...prev.slice(-14),
+        { id: 'me', name: liveUserNameRef.current || 'Bạn', text: clean, ts: Date.now() },
+      ]);
+    };
     const localStops: QuestStop[] = PLANET_QUEST_STOPS.map((s) => ({
       ...s,
       dir: s.dir.clone(),
@@ -1742,6 +1906,58 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
       if (runtime.materials) updateMessengerMaterials(runtime.materials, elapsed);
       if (runtime.treeLeavesMaterial) updateTreeLeavesMaterial(runtime.treeLeavesMaterial, elapsed);
+
+      // Sync local player state to Single Global Online Server (~15 Hz) & animate remote players!
+      if (onlineClient && mode === 'gameplay' && runtime.ready) {
+        if (now - lastNetSend > 66) {
+          lastNetSend = now;
+          const movingNow = Boolean(
+            codes['KeyW'] ||
+              codes['KeyS'] ||
+              codes['KeyA'] ||
+              codes['KeyD'] ||
+              codes['ArrowUp'] ||
+              codes['ArrowDown'] ||
+              codes['ArrowLeft'] ||
+              codes['ArrowRight']
+          );
+          onlineClient.sendState({
+            name: liveUserNameRef.current || 'Courier',
+            pos: [pState.posDir.x, pState.posDir.y, pState.posDir.z],
+            fwd: [pState.forward.x, pState.forward.y, pState.forward.z],
+            r: pState.groundR,
+            jumpH: pState.jumpH,
+            moving: movingNow,
+            sprinting: Boolean(codes['ShiftLeft'] || codes['ShiftRight']),
+            outfit: liveOutfitRef.current,
+          });
+        }
+
+        remotePlayers.forEach((rp) => {
+          rp.curPosDir.lerp(rp.targetPosDir, 0.22).normalize();
+          rp.curFwd.lerp(rp.targetFwd, 0.22);
+          rp.curFwd.addScaledVector(rp.curPosDir, -rp.curFwd.dot(rp.curPosDir));
+          if (rp.curFwd.lengthSq() > 0.0001) rp.curFwd.normalize();
+          rp.curR += (rp.targetR - rp.curR) * 0.25;
+
+          rp.group.position.copy(rp.curPosDir).multiplyScalar(rp.curR + rp.jumpH);
+          tmpRight.crossVectors(rp.curPosDir, rp.curFwd).normalize();
+          tmpMat.makeBasis(tmpRight, rp.curPosDir, rp.curFwd);
+          tmpQ.setFromRotationMatrix(tmpMat);
+          rp.group.quaternion.slerp(tmpQ, 0.25);
+
+          rp.nameSprite.position.copy(rp.curPosDir).multiplyScalar(rp.curR + rp.jumpH + 0.42);
+          const emActive = now < rp.emoteUntil ? rp.emoteAction : null;
+          animateChibi(rp.group, {
+            t: elapsed,
+            moving: rp.moving,
+            sprinting: rp.sprinting,
+            jumpH: rp.jumpH,
+            emoteAction: emActive,
+            emoteProgress: emActive ? 1 - (rp.emoteUntil - now) / 1400 : 0,
+          });
+        });
+      }
       if (runtime.gameplayWaterMaterial) {
         updateGameplayWaterMaterial(runtime.gameplayWaterMaterial, elapsed);
       }
@@ -1798,6 +2014,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       dom.removeEventListener('pointercancel', onPtrUp);
       dom.removeEventListener('wheel', onWheel);
       resizeObserver.disconnect();
+      onlineClient?.dispose();
       audio.dispose();
       toonGradient.dispose();
       animeInk.dispose();
@@ -1985,8 +2202,177 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         <span style={{ color: '#64748b' }}>·</span>
         <span>{questInfo.landmark} ({questInfo.distM}m)</span>
         <span style={{ color: '#64748b' }}>·</span>
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            color: onlineConnected ? '#0f766e' : '#b45309',
+          }}
+          title="1 Server Online duy nhất — tự động kết nối không cần mã phòng"
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: onlineConnected ? '#22c55e' : '#f59e0b',
+              display: 'inline-block',
+            }}
+          />
+          {onlineConnected ? `Online (${onlineCount})` : 'Đang kết nối...'}
+        </span>
+        <span style={{ color: '#64748b' }}>·</span>
         <span style={{ color: '#15803d' }}>{questInfo.fps} FPS</span>
       </div>
+
+      {/* COMPACT GLOBAL SERVER CHAT (Bottom-Left next to Fullscreen — zero room codes!) */}
+      {!activeDialog && mode === 'gameplay' && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            left: 146,
+            zIndex: 31,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-start',
+            gap: 6,
+          }}
+        >
+          {chatOpen && (
+            <div
+              className="abeto-card"
+              style={{
+                width: 'min(290px, calc(100vw - 170px))',
+                background: 'rgba(255, 253, 247, 0.96)',
+                border: '2px solid #243038',
+                boxShadow: '4px 5px 0 rgba(36, 48, 56, 0.28)',
+                borderRadius: 14,
+                padding: '9px 10px',
+              }}
+            >
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: 6,
+                  fontSize: 11.5,
+                  fontWeight: 900,
+                  color: '#243038',
+                }}
+              >
+                <span>🌐 Chat Server Chung ({onlineCount} Online)</span>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    color: '#465a67',
+                    cursor: 'pointer',
+                    padding: 2,
+                  }}
+                >
+                  <X size={14} strokeWidth={2.6} />
+                </button>
+              </div>
+              <div
+                style={{
+                  maxHeight: 120,
+                  overflowY: 'auto',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 4,
+                  marginBottom: 7,
+                  fontSize: 11.5,
+                }}
+              >
+                {chatMessages.length === 0 ? (
+                  <div style={{ color: '#64748b', fontStyle: 'italic' }}>
+                    Chào mọi người bằng tiếng Anh hoặc tiếng Việt nhé!
+                  </div>
+                ) : (
+                  chatMessages.map((m, idx) => (
+                    <div key={`${m.ts}-${idx}`} style={{ color: '#1d2a33', lineHeight: 1.35 }}>
+                      <strong style={{ color: m.id === 'me' ? '#0f766e' : '#b45309' }}>{m.name}: </strong>
+                      <span>{m.text}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!chatInput.trim()) return;
+                  sendChatRef.current?.(chatInput);
+                  setChatInput('');
+                }}
+                style={{ display: 'flex', gap: 5 }}
+              >
+                <input
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  placeholder="Nhắn tin lên server..."
+                  style={{
+                    flex: 1,
+                    border: '1.5px solid #94a3b8',
+                    borderRadius: 8,
+                    padding: '4px 8px',
+                    fontSize: 11.5,
+                    fontFamily: 'inherit',
+                    background: '#fff',
+                    color: '#1d2a33',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="submit"
+                  style={{
+                    border: '2px solid #243038',
+                    background: '#ffd859',
+                    color: '#243038',
+                    borderRadius: 8,
+                    padding: '4px 8px',
+                    cursor: 'pointer',
+                    display: 'grid',
+                    placeItems: 'center',
+                  }}
+                >
+                  <Send size={13} strokeWidth={2.5} />
+                </button>
+              </form>
+            </div>
+          )}
+
+          <button
+            className="abeto-btn"
+            onClick={() => setChatOpen((v) => !v)}
+            title="Chat với mọi người trên server chung"
+            style={{
+              border: '2px solid #243038',
+              background: chatOpen
+                ? '#ffd859'
+                : 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
+              color: '#243038',
+              padding: '7px 12px',
+              borderRadius: 12,
+              fontSize: 12,
+              fontWeight: 800,
+              fontFamily: 'inherit',
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 5,
+              boxShadow: '3px 4px 0 rgba(36, 48, 56, 0.28)',
+              transition: 'all 0.14s ease',
+            }}
+          >
+            <MessageCircle size={14} strokeWidth={2.4} />
+            <span>Chat ({onlineCount})</span>
+          </button>
+        </div>
+      )}
 
       {/* ZONE ENTRY NAMEPLATE (Abeto-style minimal district banner) */}
       {zoneBanner && !activeDialog && (
