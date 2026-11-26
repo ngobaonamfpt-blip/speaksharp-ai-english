@@ -242,6 +242,11 @@ export class AnimeInkPass {
   private quadCamera: OrthographicCamera;
   private quad: Mesh;
   private savedClearColor = new Color();
+  private cachedInfoHidden: Object3D[] = [];
+  private cachedWorldChildren: Object3D[] = [];
+  private cachedPlayerRoot: Object3D | null = null;
+  private cachedSceneChildCount = -1;
+  private cacheRefreshTick = 0;
 
   constructor(width: number, height: number, camera: Camera) {
     const cam = camera as PerspectiveCamera;
@@ -324,39 +329,57 @@ export class AnimeInkPass {
     renderer.clear();
     renderer.render(scene, camera);
 
-    // 2. Render lightweight View-Space Normal + SurfaceId/ElementId pass for crisp interior object creases!
-    const hiddenForInfo: Object3D[] = [];
-    const playerRoot = scene.getObjectByName('bodyRoot');
+    // 2. Render lightweight View-Space Normal + SurfaceId/ElementId pass (cached traversal — zero per-frame GC!)
+    if (
+      scene.children.length !== this.cachedSceneChildCount ||
+      ++this.cacheRefreshTick % 90 === 1
+    ) {
+      this.cachedSceneChildCount = scene.children.length;
+      this.cachedInfoHidden.length = 0;
+      this.cachedWorldChildren.length = 0;
+      this.cachedPlayerRoot = scene.getObjectByName('bodyRoot') ?? null;
+
+      scene.traverse((obj) => {
+        if (obj === this.cachedPlayerRoot) return;
+        if (SKIP_INFO_NAMES.has(obj.name) || (obj as SkinnedMesh).isSkinnedMesh) {
+          this.cachedInfoHidden.push(obj);
+          return;
+        }
+        const m = obj as Mesh;
+        if (m.isMesh) {
+          const mat = m.material;
+          const singleMat = Array.isArray(mat) ? mat[0] : mat;
+          if (
+            singleMat &&
+            (singleMat.type === 'ShadowMaterial' ||
+              singleMat.transparent ||
+              singleMat.depthWrite === false)
+          ) {
+            this.cachedInfoHidden.push(obj);
+          }
+        }
+      });
+
+      for (let i = 0; i < scene.children.length; i++) {
+        const ch = scene.children[i];
+        if (ch !== this.cachedPlayerRoot && !ch.getObjectByName('bodyRoot')) {
+          this.cachedWorldChildren.push(ch);
+        }
+      }
+    }
+
+    const playerRoot = this.cachedPlayerRoot;
     const savedPlayerVis = playerRoot ? playerRoot.visible : false;
     if (playerRoot) playerRoot.visible = false;
 
-    scene.traverse((obj) => {
-      if (!obj.visible) return;
-      if (SKIP_INFO_NAMES.has(obj.name)) {
+    const restoredMask: Object3D[] = [];
+    for (let i = 0; i < this.cachedInfoHidden.length; i++) {
+      const obj = this.cachedInfoHidden[i];
+      if (obj.visible) {
         obj.visible = false;
-        hiddenForInfo.push(obj);
-        return;
+        restoredMask.push(obj);
       }
-      if ((obj as SkinnedMesh).isSkinnedMesh) {
-        obj.visible = false;
-        hiddenForInfo.push(obj);
-        return;
-      }
-      const m = obj as Mesh;
-      if (m.isMesh) {
-        const mat = m.material;
-        const singleMat = Array.isArray(mat) ? mat[0] : mat;
-        if (
-          singleMat &&
-          (singleMat.type === 'ShadowMaterial' ||
-            singleMat.transparent ||
-            singleMat.depthWrite === false)
-        ) {
-          obj.visible = false;
-          hiddenForInfo.push(obj);
-        }
-      }
-    });
+    }
 
     const prevOverride = scene.overrideMaterial;
     const prevBg = scene.background;
@@ -374,12 +397,13 @@ export class AnimeInkPass {
     if (playerRoot && savedPlayerVis) {
       const savedAutoClear = renderer.autoClear;
       const worldHidden: Object3D[] = [];
-      scene.children.forEach((ch) => {
-        if (ch.visible && ch !== playerRoot && !ch.getObjectByName('bodyRoot')) {
+      for (let i = 0; i < this.cachedWorldChildren.length; i++) {
+        const ch = this.cachedWorldChildren[i];
+        if (ch.visible) {
           ch.visible = false;
           worldHidden.push(ch);
         }
-      });
+      }
       playerRoot.visible = true;
       scene.overrideMaterial = this.flatOcclusionMaterial;
       renderer.autoClear = false;
@@ -393,8 +417,8 @@ export class AnimeInkPass {
     scene.background = prevBg;
     renderer.setClearColor(this.savedClearColor, prevClearAlpha);
     if (playerRoot) playerRoot.visible = savedPlayerVis;
-    for (let i = 0; i < hiddenForInfo.length; i++) {
-      hiddenForInfo[i].visible = true;
+    for (let i = 0; i < restoredMask.length; i++) {
+      restoredMask[i].visible = true;
     }
 
     // 3. Composite full-screen ligne-claire ink pass

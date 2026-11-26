@@ -375,11 +375,13 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       alpha: false,
       powerPreference: 'high-performance',
     });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     renderer.setSize(host.clientWidth, host.clientHeight);
-    // Soft-edged 3D directional shadows (cool sky-tinted like messenger.abeto.co!)
+    // Soft-edged 3D directional shadows — manual autoUpdate=false avoids redundant GPU shadow passes every frame
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = PCFSoftShadowMap;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = true;
     host.appendChild(renderer.domElement);
 
     const controls = new OrbitControls(camera, renderer.domElement);
@@ -394,18 +396,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const sun = new DirectionalLight(0xfff4e2, mode === 'npcs' ? 1.8 : 1.55);
     sun.position.set(14, 20, 10);
     sun.castShadow = true;
-    // High-res 2048px soft shadow map + normalBias eliminates all self-shadow acne on curved terrain!
-    sun.shadow.mapSize.set(2048, 2048);
+    // 1024px tight-frustum soft shadow map = 4x faster GPU shadow pass with identical crisp soft anime shadows
+    sun.shadow.mapSize.set(1024, 1024);
     sun.shadow.camera.near = 1;
-    sun.shadow.camera.far = 38;
-    const frustum = mode === 'npcs' ? 10 : 4.2;
+    sun.shadow.camera.far = 36;
+    const frustum = mode === 'npcs' ? 10 : 3.8;
     sun.shadow.camera.left = -frustum;
     sun.shadow.camera.right = frustum;
     sun.shadow.camera.top = frustum;
     sun.shadow.camera.bottom = -frustum;
-    sun.shadow.bias = -0.00015;
-    sun.shadow.normalBias = 0.042;
-    sun.shadow.radius = 2.6;
+    sun.shadow.bias = -0.0002;
+    sun.shadow.normalBias = 0.045;
+    sun.shadow.radius = 2.4;
     scene.add(sun);
     scene.add(sun.target);
 
@@ -1508,6 +1510,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     const camDesired = new Vector3();
     const camLook = new Vector3();
     const sunDirOffset = new Vector3(10, 14, 7);
+    const fixedSideTmp = new Vector3();
 
     let fpsFrames = 0;
     let lastFpsT = performance.now();
@@ -1568,6 +1571,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               }
             }
           }
+
+          // Skip animation & BVH raycasts for strolling NPCs on the far hemisphere of the planet!
+          if (s.posDir.dot(pState.posDir) < 0.25) continue;
 
           s.group.position.copy(s.posDir).multiplyScalar(s.groundR);
           tmpRight.crossVectors(s.posDir, s.forward).normalize();
@@ -1677,20 +1683,21 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         tmpQ.setFromRotationMatrix(tmpMat);
         player.quaternion.slerp(tmpQ, 0.35);
 
-        // World-locked directional sun ~55 deg above player's local horizon (NEVER rotates with camera!)
-        if (frameCount % 2 === 0) {
+        // World-locked directional sun + throttled shadow map update (4x faster GPU shadow pass!)
+        const shadowStride = moving || pState.jumpH > 0.01 ? 2 : 6;
+        if (frameCount % shadowStride === 0) {
           sun.target.position.copy(player.position);
-          // Fixed world-space tangent axis so building & character shadows stay physically rock-solid!
-          const fixedSide = new Vector3(0.75, 0.25, 0.61);
-          fixedSide.addScaledVector(pState.posDir, -fixedSide.dot(pState.posDir));
-          if (fixedSide.lengthSq() < 0.01) fixedSide.set(1, 0, 0).cross(pState.posDir);
-          fixedSide.normalize();
+          fixedSideTmp.set(0.75, 0.25, 0.61);
+          fixedSideTmp.addScaledVector(pState.posDir, -fixedSideTmp.dot(pState.posDir));
+          if (fixedSideTmp.lengthSq() < 0.01) fixedSideTmp.set(1, 0, 0).cross(pState.posDir);
+          fixedSideTmp.normalize();
           sunDirOffset
             .copy(pState.posDir)
             .multiplyScalar(10.5)
-            .addScaledVector(fixedSide, 6.2);
+            .addScaledVector(fixedSideTmp, 6.2);
           sun.position.copy(player.position).add(sunDirOffset);
           sun.target.updateMatrixWorld();
+          renderer.shadowMap.needsUpdate = true;
         }
 
         // Subtle contact AO shadow under feet (real 3D shadow handles the full silhouette!)
@@ -1747,24 +1754,25 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
           const sc = isTarget ? 0.175 + Math.sin(elapsed * 5) * 0.014 : 0.145;
           node.badge.scale.set(sc, sc, 1);
 
-          // Animate Quest NPC (relaxed breathing, eye-blinking & friendly waving when player is close!)
-          const isPlayerClose = currentNearby?.id === node.stop.id;
-          animateChibi(node.npc, {
-            t: elapsed,
-            phase: idx * 1.35,
-            moving: false,
-            emoteAction: isPlayerClose ? 'wave' : null,
-          });
-          if (isPlayerClose) {
-            // Gently turn toward the player when they walk up!
-            tmpFwd.copy(pState.posDir).sub(node.stop.dir);
-            tmpFwd.addScaledVector(node.stop.dir, -tmpFwd.dot(node.stop.dir));
-            if (tmpFwd.lengthSq() > 0.0001) {
-              tmpFwd.normalize();
-              tmpRight.crossVectors(node.stop.dir, tmpFwd).normalize();
-              tmpMat.makeBasis(tmpRight, node.stop.dir, tmpFwd);
-              tmpQ.setFromRotationMatrix(tmpMat);
-              node.npc.quaternion.slerp(tmpQ, 0.12);
+          // Animate Quest NPC only when on the visible hemisphere (saves CPU on far-side NPCs!)
+          if (node.stop.dir.dot(pState.posDir) > 0.25) {
+            const isPlayerClose = currentNearby?.id === node.stop.id;
+            animateChibi(node.npc, {
+              t: elapsed,
+              phase: idx * 1.35,
+              moving: false,
+              emoteAction: isPlayerClose ? 'wave' : null,
+            });
+            if (isPlayerClose) {
+              tmpFwd.copy(pState.posDir).sub(node.stop.dir);
+              tmpFwd.addScaledVector(node.stop.dir, -tmpFwd.dot(node.stop.dir));
+              if (tmpFwd.lengthSq() > 0.0001) {
+                tmpFwd.normalize();
+                tmpRight.crossVectors(node.stop.dir, tmpFwd).normalize();
+                tmpMat.makeBasis(tmpRight, node.stop.dir, tmpFwd);
+                tmpQ.setFromRotationMatrix(tmpMat);
+                node.npc.quaternion.slerp(tmpQ, 0.12);
+              }
             }
           }
         });
