@@ -822,6 +822,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       groundR: 8.2,
       jumpH: 0,
       jumpVel: 0,
+      wasJumpHeld: false,
       squash: 1,
       forward: startFwd.clone(),
       camForward: startFwd.clone(),
@@ -1648,7 +1649,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         }
 
         const jumpHeld = !liveDialogOpenRef.current && !liveWardrobeRef.current && Boolean(codes['Space']);
-        if (jumpHeld && pState.jumpH <= 0.008 && pState.jumpVel <= 0) {
+        const jumpPressedNow = jumpHeld && !pState.wasJumpHeld;
+        pState.wasJumpHeld = jumpHeld;
+        if (jumpPressedNow && pState.jumpH <= 0.008 && pState.jumpVel <= 0) {
           pState.jumpVel = 0.068;
           pState.squash = 1.26;
           audio.playJump();

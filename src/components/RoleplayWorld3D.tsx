@@ -554,8 +554,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     // Controls (supports WASD, Arrow keys, Vietnamese IME/Unikey, & on-screen D-pad!)
     const codes: Record<string, boolean> = {};
+    let jumpQueued = false;
     virtualKeyRef.current = (code: string, down: boolean) => {
       codes[code] = down;
+      if (code === 'Space' && down) jumpQueued = true;
     };
     const normalizeMoveCode = (e: KeyboardEvent): string => {
       if (e.code) return e.code;
@@ -584,6 +586,9 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         if (activeEl && activeEl.tagName === 'BUTTON') activeEl.blur();
       }
       codes[code] = true;
+      if (code === 'Space' && !e.repeat && !liveDialogOpenRef.current) {
+        jumpQueued = true;
+      }
       if (code === 'KeyE' && !liveDialogOpenRef.current) interactRef.current?.();
       if (code === 'Escape') {
         setActiveDialog(null);
@@ -760,9 +765,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         pState.yaw += diff * Math.min(1, 12 * delta);
       }
 
-      if (!liveDialogOpenRef.current && codes['Space'] && pState.y <= 0.01) {
+      if (jumpQueued && !liveDialogOpenRef.current && pState.y <= 0.01) {
         pState.vy = 5.4;
       }
+      jumpQueued = false;
       if (pState.y > 0 || pState.vy > 0) {
         pState.vy -= 16 * delta;
         pState.y = Math.max(0, pState.y + pState.vy * delta);
