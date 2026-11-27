@@ -65,11 +65,32 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
   const argAvg = avg('argumentScore') || 80;
   const overallAvg = Math.round((ipaAvg + grammarAvg + fluencyAvg + argAvg) / 4);
 
+  const readCount = (key: string): number => {
+    try {
+      const raw = localStorage.getItem(key);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed.length : 0;
+    } catch {
+      return 0;
+    }
+  };
+  const world3DStats = [
+    { icon: '🏝️', name: 'Thị trấn Anime 3D', done: readCount('speaksharp_courier_quests_v1'), total: 5, color: '#0ea5e9' },
+    { icon: '✈️', name: 'Sân bay Quốc tế', done: readCount('speaksharp_roleplay_airport_v1'), total: 4, color: '#2563eb' },
+    { icon: '🛒', name: 'Siêu thị Fresh Mart', done: readCount('speaksharp_roleplay_supermarket_v1'), total: 4, color: '#16a34a' },
+  ];
+  const total3DDone = world3DStats.reduce((s, w) => s + w.done, 0);
+
   const achievements = [
     {
       title: 'Khởi đầu tự tin',
       desc: 'Hoàn thành lượt nói tiếng Anh đầu tiên',
       unlocked: history.length >= 1,
+    },
+    {
+      title: 'Nhà thám hiểm 3D',
+      desc: 'Hoàn thành ít nhất 1 nhiệm vụ giao tiếp trong Thế giới 3D',
+      unlocked: total3DDone >= 1,
     },
     {
       title: 'Chuỗi 7 ngày lửa',
@@ -195,6 +216,47 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({
           </div>
         </div>
       </div>
+
+      {/* 3D World Roleplay Progress Strip */}
+      <Reveal variant="fade-up" delay={40}>
+        <div className="card" style={{ padding: '18px 22px', marginBottom: 18 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12, flexWrap: 'wrap', gap: 8 }}>
+            <div>
+              <h3 className="display-font" style={{ fontSize: 15.5, fontWeight: 800 }}>
+                🌍 Tiến độ Nhập vai Thế giới 3D Online
+              </h3>
+              <p style={{ fontSize: 12.5, color: 'var(--text-muted)' }}>
+                Hoàn thành nhiệm vụ giao tiếp tiếng Anh thực tế tại các bản đồ 3D để nhận thêm XP
+              </p>
+            </div>
+            <span className="badge badge-indigo tabular">{total3DDone}/13 nhiệm vụ 3D</span>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+            {world3DStats.map((w) => {
+              const pct = Math.min(100, Math.round((w.done / w.total) * 100));
+              return (
+                <div
+                  key={w.name}
+                  style={{
+                    background: 'var(--bg-subtle, #f8fafc)',
+                    border: '1.5px solid var(--border-subtle, #e2e8f0)',
+                    borderRadius: 12,
+                    padding: '11px 13px',
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, fontSize: 13, fontWeight: 700 }}>
+                    <span>{w.icon} {w.name}</span>
+                    <span className="tabular" style={{ color: w.color }}>{w.done}/{w.total}</span>
+                  </div>
+                  <div className="metric-track" style={{ height: 7 }}>
+                    <div className="metric-fill" style={{ width: `${pct}%`, background: w.color }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </Reveal>
 
       {/* Skill Breakdown + Personalized Roadmap + Achievements */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 18, marginBottom: 18 }}>

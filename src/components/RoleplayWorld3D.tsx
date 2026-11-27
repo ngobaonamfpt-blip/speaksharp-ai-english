@@ -7,10 +7,12 @@ import {
   Mic,
   Send,
   Volume2,
+  VolumeX,
   X,
 } from 'lucide-react';
 import {
   AmbientLight,
+  BoxGeometry,
   CanvasTexture,
   Color,
   DirectionalLight,
@@ -40,6 +42,7 @@ import {
   type GraphicsQuality,
   saveGraphicsQuality,
 } from '../lib/messenger/perfOptimizer';
+import { RoleplaySfx } from '../lib/messenger/roleplayAudio';
 import { speakEnglish } from '../lib/messenger/englishQuests';
 import { GlobalOnlineClient, type OnlineChatMessage, type RemotePlayerState } from '../lib/messenger/onlineClient';
 import {
@@ -184,7 +187,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
   const [toast, setToast] = useState('');
   const [fps, setFps] = useState(60);
   const [gfxQuality, setGfxQuality] = useState<GraphicsQuality>(() => detectInitialGraphicsQuality());
+  const [soundMuted, setSoundMuted] = useState(false);
   const userLockedGfxRef = useRef(false);
+  const sfxRef = useRef<RoleplaySfx | null>(null);
+  const spawnConfettiRef = useRef<((x: number, z: number) => void) | null>(null);
   const [onlineConnected, setOnlineConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
   const [chatOpen, setChatOpen] = useState(false);
@@ -273,6 +279,33 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       sun.shadow.bias = -0.0004;
     }
     scene.add(sun);
+
+    const sfx = new RoleplaySfx();
+    sfx.setMuted(soundMuted);
+    sfxRef.current = sfx;
+
+    // 3D Celebration Confetti Pool (reused zero-allocation burst on quest completion!)
+    const confettiPool: Array<{ mesh: Mesh; life: number; vx: number; vy: number; vz: number }> = [];
+    const confColors = [0xf5bd33, 0xef4444, 0x38bdf8, 0x4ade80, 0xf472b6, 0xa855f7];
+    const confGeo = new BoxGeometry(0.14, 0.14, 0.04);
+    for (let i = 0; i < 28; i++) {
+      const m = new Mesh(confGeo, new MeshBasicMaterial({ color: confColors[i % confColors.length] }));
+      m.visible = false;
+      scene.add(m);
+      confettiPool.push({ mesh: m, life: 0, vx: 0, vy: 0, vz: 0 });
+    }
+    spawnConfettiRef.current = (cx: number, cz: number) => {
+      for (const c of confettiPool) {
+        c.mesh.position.set(cx, 1.85, cz);
+        c.mesh.visible = true;
+        c.life = 1.1 + Math.random() * 0.45;
+        const a = Math.random() * Math.PI * 2;
+        const sp = 1.2 + Math.random() * 2.2;
+        c.vx = Math.cos(a) * sp;
+        c.vz = Math.sin(a) * sp;
+        c.vy = 2.8 + Math.random() * 2.4;
+      }
+    };
 
     const toonGradient = createToonGradient();
     const updateMapProps = mapCfg.buildScene(scene, toonGradient);
@@ -543,6 +576,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       );
       camera.lookAt(pState.x, 1.1, pState.z);
       setChecklistOpen(false);
+      sfx.playTeleport();
       showToast(`🧭 Đã dịch chuyển tới ${target.landmark}!`);
     };
 
@@ -696,6 +730,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     let lowFpsStreak = 0;
     let appliedGfx: GraphicsQuality | null = null;
     let lastNetSend = 0;
+    let lastDialogRender = 0;
     let frameCount = 0;
     const lookTarget = new Vector3();
     const camGoal = new Vector3();
@@ -715,6 +750,11 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       frameId = requestAnimationFrame(tick);
       if (document.hidden) return;
       const now = performance.now();
+      // Throttle 3D rendering to ~18 FPS while NPC English dialogue is open (keeps mic smooth & laptop cool!)
+      if (liveDialogOpenRef.current) {
+        if (now - lastDialogRender < 55) return;
+        lastDialogRender = now;
+      }
       const delta = Math.min(0.05, (now - lastT) / 1000);
       lastT = now;
       const elapsed = (now - startT) / 1000;
@@ -791,14 +831,33 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         pState.yaw += diff * Math.min(1, 12 * delta);
       }
 
+      if (moving && pState.y <= 0.02 && frameCount % (sprinting ? 14 : 20) === 0) {
+        sfx.playStep();
+      }
+
       if (jumpQueued && !liveDialogOpenRef.current && pState.y <= 0.01) {
         pState.vy = 5.4;
+        sfx.playJump();
       }
       jumpQueued = false;
       if (pState.y > 0 || pState.vy > 0) {
         pState.vy -= 16 * delta;
         pState.y = Math.max(0, pState.y + pState.vy * delta);
         if (pState.y <= 0) pState.vy = 0;
+      }
+
+      // Animate 3D celebration confetti burst
+      for (const c of confettiPool) {
+        if (c.life <= 0) continue;
+        c.life -= delta;
+        c.vy -= 7.5 * delta;
+        c.mesh.position.x += c.vx * delta;
+        c.mesh.position.y = Math.max(0.08, c.mesh.position.y + c.vy * delta);
+        c.mesh.position.z += c.vz * delta;
+        c.mesh.rotation.x += 5.5 * delta;
+        c.mesh.rotation.y += 4.2 * delta;
+        c.mesh.scale.setScalar(Math.max(0.01, Math.min(1, c.life)));
+        if (c.life <= 0) c.mesh.visible = false;
       }
 
       player.position.set(pState.x, pState.y, pState.z);
@@ -852,9 +911,15 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         });
       });
 
-      // Animate Strolling Background NPCs
+      // Animate Strolling Background NPCs (reduce active strollers in Eco mode for low-end CPUs!)
+      const isEco = liveGfxRef.current === 'eco';
       for (let i = 0; i < strollers.length; i++) {
         const s = strollers[i];
+        if (isEco && i >= 2) {
+          s.group.visible = false;
+          continue;
+        }
+        s.group.visible = true;
         const wp = s.waypoints[s.wpIdx];
         let walking = false;
         if (elapsed >= s.pauseUntil) {
@@ -941,6 +1006,9 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       dom.removeEventListener('wheel', onWheel);
       ro.disconnect();
       onlineClient.dispose();
+      sfx.dispose();
+      sfxRef.current = null;
+      spawnConfettiRef.current = null;
       animeInk.dispose();
       toonGradient.dispose();
       badgeTodo.dispose();
@@ -960,9 +1028,18 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       return;
     }
     const npcId = activeDialog.npc.id;
-    setCompletedIds((prev) => (prev.includes(npcId) ? prev : [...prev, npcId]));
-    onEarnXpRef.current(choice.xp, `Hội thoại tại ${activeDialog.npc.landmark}`);
-    showToast(`✨ Hội thoại tuyệt vời tại ${activeDialog.npc.landmark}! +${choice.xp} XP`);
+    const isNewComplete = !completedIds.includes(npcId);
+    const nextCompleted = isNewComplete ? [...completedIds, npcId] : completedIds;
+    setCompletedIds(nextCompleted);
+    sfxRef.current?.playQuestComplete();
+    spawnConfettiRef.current?.(activeDialog.npc.x, activeDialog.npc.z);
+    if (isNewComplete && nextCompleted.length === cfg.npcs.length) {
+      onEarnXpRef.current(choice.xp + 50, `Hoàn thành 100% ${cfg.title}!`);
+      showToast(`🏆 Hoàn thành 100% ${cfg.title}! +${choice.xp + 50} XP thưởng!`);
+    } else {
+      onEarnXpRef.current(choice.xp, `Hội thoại tại ${activeDialog.npc.landmark}`);
+      showToast(`✨ Hội thoại tuyệt vời tại ${activeDialog.npc.landmark}! +${choice.xp} XP`);
+    }
     setActiveDialog({ ...activeDialog, feedback: choice.npcFeedback, completedNow: true });
   };
 
@@ -1247,12 +1324,40 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
             </button>
           </div>
           <button
+            type="button"
+            className="abeto-btn"
+            title="Nhảy (Space)"
+            onPointerDown={(e) => {
+              e.preventDefault();
+              virtualKeyRef.current?.('Space', true);
+            }}
+            onPointerUp={() => virtualKeyRef.current?.('Space', false)}
+            onPointerLeave={() => virtualKeyRef.current?.('Space', false)}
+            style={{ ...PAPER_BTN_STYLE, width: 42, height: 42, fontSize: 11, fontWeight: 900 }}
+          >
+            Nhảy
+          </button>
+          <button
+            className="abeto-btn"
+            title={soundMuted ? 'Bật âm thanh 3D' : 'Tắt âm thanh 3D'}
+            onClick={() => {
+              setSoundMuted((m) => {
+                const next = !m;
+                sfxRef.current?.setMuted(next);
+                return next;
+              });
+            }}
+            style={{ ...PAPER_BTN_STYLE, width: 42, height: 42 }}
+          >
+            {soundMuted ? <VolumeX size={18} strokeWidth={2.3} /> : <Volume2 size={18} strokeWidth={2.3} />}
+          </button>
+          <button
             className="abeto-btn"
             title="Đặt lại góc camera"
             onClick={() => recenterRef.current?.()}
-            style={{ ...PAPER_BTN_STYLE }}
+            style={{ ...PAPER_BTN_STYLE, width: 42, height: 42 }}
           >
-            <Compass size={20} strokeWidth={2.3} />
+            <Compass size={19} strokeWidth={2.3} />
           </button>
         </div>
       )}
@@ -1352,7 +1457,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           onClick={() => interactRef.current?.()}
           style={{
             position: 'absolute',
-            bottom: 72,
+            bottom: 102,
             left: '50%',
             transform: 'translateX(-50%)',
             zIndex: 22,

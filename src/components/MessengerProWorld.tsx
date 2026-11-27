@@ -1505,12 +1505,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     let fpsFrames = 0;
     let lastFpsT = performance.now();
+    let lastDialogRender = 0;
     let fpsVal = 60;
     let frameCount = 0;
 
     const tick = () => {
       runtime.frame = requestAnimationFrame(tick);
+      if (document.hidden) return;
       const now = performance.now();
+      if (liveDialogOpenRef.current) {
+        if (now - lastDialogRender < 55) return;
+        lastDialogRender = now;
+      }
       const delta = Math.min(0.05, (now - runtime.lastFrame) / 1000);
       runtime.lastFrame = now;
       const elapsed = (now - startedAt) / 1000;

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Globe2, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { MessengerProWorld } from './MessengerProWorld';
 import { RoleplayWorld3D } from './RoleplayWorld3D';
+import { detectInitialGraphicsQuality } from '../lib/messenger/perfOptimizer';
 
 type WorldEngineMode = 'native3d' | 'multiplayer' | 'airport' | 'supermarket';
 
@@ -44,6 +45,7 @@ export const World3D: React.FC<World3DProps> = ({
   const multiplayerUrl = useMemo(() => {
     const params = new URLSearchParams();
     if (userName) params.set('name', userName);
+    params.set('gfx', detectInitialGraphicsQuality());
     return `/messenger-game.html?${params.toString()}`;
   }, [userName]);
 

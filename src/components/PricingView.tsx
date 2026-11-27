@@ -42,12 +42,27 @@ export const PricingView: React.FC<PricingViewProps> = ({
   onOpenDashboard,
 }) => {
   const [billing, setBilling] = useState<'monthly' | 'quarterly'>('quarterly');
-  const [ownedItems, setOwnedItems] = useState<string[]>([]);
+  const [ownedItems, setOwnedItems] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem('speaksharp_shop_owned_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
 
   const handleRedeem = (id: string, cost: number) => {
     if (ownedItems.includes(id) || totalXp < cost) return;
     onSpendXp?.(cost);
-    setOwnedItems((prev) => [...prev, id]);
+    setOwnedItems((prev) => {
+      const next = [...prev, id];
+      try {
+        localStorage.setItem('speaksharp_shop_owned_v1', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
   };
 
   return (
@@ -137,17 +152,17 @@ export const PricingView: React.FC<PricingViewProps> = ({
 
           <div className="tabular">
             <span style={{ fontSize: 32, fontWeight: 700 }}>
-              {billing === 'quarterly' ? '99.000đ' : '149.000đ'}
+              {billing === 'quarterly' ? '69.000đ' : '99.000đ'}
             </span>
             <span style={{ fontSize: 13, color: 'var(--text-muted)' }}> / tháng</span>
           </div>
 
           <ul style={{ listStyle: 'none', display: 'grid', gap: 9, fontSize: 13.5 }}>
             {[
-              'Không giới hạn thời lượng tranh biện 24/7',
-              'Toàn bộ chủ đề IELTS, TOEFL, WSDC, Du học',
-              'Báo cáo phân tích ngữ điệu & lỗi sai chi tiết',
-              'Lưu không giới hạn Sổ tay Better Expressions',
+              'Không giới hạn thời lượng luyện nói & phản biện 24/7',
+              'Mở khóa trọn bộ 4 bản đồ 3D Online (Thị trấn, Hành tinh, Sân bay, Siêu thị)',
+              'Toàn bộ 12+ chủ đề THCS, IELTS, WSDC & Shark Tank',
+              'Lưu không giới hạn Sổ tay Better Expressions & chấm phát âm IPA',
             ].map((item) => (
               <li key={item} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
                 <Check size={15} style={{ flexShrink: 0, marginTop: 3, color: '#b45309' }} />

@@ -103,7 +103,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </h1>
 
             <p className="mango-hero-sub hero-enter hero-enter-d1">
-              Luyện nói & phản biện 1-1 cùng AI 24/7 kết hợp Thế giới 3D Anime Online 2 hành tinh. Giải quyết nỗi sợ nói tiếng Anh cho học sinh THCS & THPT qua nhập vai giao thư, chấm phát âm IPA và đấu trường phản biện trực tiếp.
+              Luyện nói & phản biện 1-1 cùng AI 24/7 kết hợp 4 bản đồ Thế giới 3D Anime Online (Thị trấn biển, Hành tinh mở, Sân bay Quốc tế & Siêu thị Fresh Mart). Giúp học sinh THCS & THPT vượt qua nỗi sợ nói tiếng Anh qua nhập vai tình huống thực tế và chấm phát âm IPA.
             </p>
 
             <div className="mango-hero-cta hero-enter hero-enter-d2" style={{ flexWrap: 'wrap' }}>
