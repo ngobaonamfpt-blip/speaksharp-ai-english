@@ -1,6 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Globe2, Maximize2, Minimize2, Sparkles } from 'lucide-react';
 import { MessengerProWorld } from './MessengerProWorld';
+import { RoleplayWorld3D } from './RoleplayWorld3D';
+
+type WorldEngineMode = 'native3d' | 'multiplayer' | 'airport' | 'supermarket';
+
+const WORLD_OPTIONS: Array<{ id: WorldEngineMode; badge: string; icon: string; name: string; desc: string }> = [
+  { id: 'native3d', badge: '1', icon: '🏝️', name: 'Thị trấn Anime 3D', desc: 'Giao thư & dạo phố biển' },
+  { id: 'multiplayer', badge: '2', icon: '🪐', name: 'Hành tinh Online', desc: 'Thế giới mở Multiplayer' },
+  { id: 'airport', badge: '3', icon: '✈️', name: 'Sân bay Quốc tế', desc: 'Check-in, An ninh & Gate B12' },
+  { id: 'supermarket', badge: '4', icon: '🛒', name: 'Siêu thị Fresh Mart', desc: 'Mua sắm, Bánh nướng & Thu ngân' },
+];
 
 interface World3DProps {
   userName: string;
@@ -18,7 +28,8 @@ export const World3D: React.FC<World3DProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [worldEngine, setWorldEngine] = useState<'native3d' | 'multiplayer'>('native3d');
+  const [worldEngine, setWorldEngine] = useState<WorldEngineMode>('native3d');
+  const [mapMenuOpen, setMapMenuOpen] = useState(false);
   const [xpBanner, setXpBanner] = useState('');
 
   const handleEarnXp = useCallback(
@@ -85,7 +96,7 @@ export const World3D: React.FC<World3DProps> = ({
           onEarnXp={handleEarnXp}
           onEnterDebateArena={onEnterDebateArena}
         />
-      ) : (
+      ) : worldEngine === 'multiplayer' ? (
         <iframe
           ref={iframeRef}
           src={multiplayerUrl}
@@ -98,6 +109,12 @@ export const World3D: React.FC<World3DProps> = ({
             border: 'none',
             display: 'block',
           }}
+        />
+      ) : (
+        <RoleplayWorld3D
+          mapId={worldEngine}
+          userName={userName}
+          onEarnXp={handleEarnXp}
         />
       )}
 
@@ -128,15 +145,11 @@ export const World3D: React.FC<World3DProps> = ({
         </div>
       )}
 
-      {/* Abeto-Style Square World-Switcher Button (Top-Right below Checklist, matching right HUD style!) */}
+      {/* Abeto-Style 4-Map World Switcher Button + Popover Menu (Top-Right below Checklist!) */}
       <button
         className="abeto-btn"
-        onClick={() => setWorldEngine((w) => (w === 'native3d' ? 'multiplayer' : 'native3d'))}
-        title={
-          worldEngine === 'native3d'
-            ? 'Đổi sang Thế giới 2 (Hành tinh Multiplayer Online)'
-            : 'Quay về Thế giới 1 (Thị trấn Anime 3D Online)'
-        }
+        onClick={() => setMapMenuOpen((v) => !v)}
+        title="Chọn bản đồ 3D (Thị trấn · Hành tinh · Sân bay · Siêu thị)"
         style={{
           position: 'absolute',
           top: 70,
@@ -147,7 +160,7 @@ export const World3D: React.FC<World3DProps> = ({
           borderRadius: 12,
           border: '2px solid #243038',
           background:
-            worldEngine === 'multiplayer'
+            mapMenuOpen || worldEngine !== 'native3d'
               ? '#ffd859'
               : 'linear-gradient(180deg, #ffffff 0%, #f6f2e8 100%)',
           color: '#243038',
@@ -174,9 +187,64 @@ export const World3D: React.FC<World3DProps> = ({
             lineHeight: 1.2,
           }}
         >
-          {worldEngine === 'native3d' ? '1' : '2'}
+          {WORLD_OPTIONS.find((o) => o.id === worldEngine)?.badge ?? '1'}
         </span>
       </button>
+
+      {mapMenuOpen && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 70,
+            right: 70,
+            zIndex: 38,
+            width: 256,
+            background: 'rgba(255, 253, 247, 0.97)',
+            border: '2.5px solid #243038',
+            boxShadow: '5px 6px 0 rgba(36, 48, 56, 0.28)',
+            borderRadius: 16,
+            padding: 10,
+            display: 'grid',
+            gap: 6,
+          }}
+        >
+          <div style={{ fontSize: 11.5, fontWeight: 900, color: '#465a67', padding: '2px 4px' }}>
+            🗺️ CHỌN BẢN ĐỒ 3D ONLINE (4 MAPS)
+          </div>
+          {WORLD_OPTIONS.map((opt) => {
+            const active = worldEngine === opt.id;
+            return (
+              <button
+                key={opt.id}
+                onClick={() => {
+                  setWorldEngine(opt.id);
+                  setMapMenuOpen(false);
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  textAlign: 'left',
+                  padding: '8px 10px',
+                  borderRadius: 11,
+                  border: active ? '2px solid #243038' : '1.5px solid #cbd5e1',
+                  background: active ? '#fef08a' : '#ffffff',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 900, color: '#1d2a33' }}>
+                    {opt.badge}. {opt.name}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#64748b', fontWeight: 600 }}>{opt.desc}</div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       {/* Bottom-Left Fullscreen Control */}
       <div

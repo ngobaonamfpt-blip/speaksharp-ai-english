@@ -40,9 +40,12 @@ export function attachGlobalWorldHub(httpServer) {
     }
   };
 
+  const ALLOWED_WORLDS = new Set(['planet1', 'planet2', 'airport', 'supermarket']);
+
   wss.on('connection', (ws, req) => {
     const parsed = new URL(req.url || '/ws', 'http://localhost');
-    const worldName = parsed.searchParams.get('world') === 'planet2' ? 'planet2' : 'planet1';
+    const rawWorld = parsed.searchParams.get('world') || 'planet1';
+    const worldName = ALLOWED_WORLDS.has(rawWorld) ? rawWorld : 'planet1';
     const players = getWorldMap(worldName);
     const id = `p_${Date.now().toString(36)}_${nextSeq++}`;
     ws._playerId = id;

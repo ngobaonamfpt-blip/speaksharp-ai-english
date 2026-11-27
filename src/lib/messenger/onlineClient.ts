@@ -48,15 +48,17 @@ export class GlobalOnlineClient {
   private closed = false;
   private reconnectTimer: number | null = null;
   private callbacks: GlobalOnlineCallbacks;
+  private worldId: string;
 
-  constructor(callbacks: GlobalOnlineCallbacks) {
+  constructor(callbacks: GlobalOnlineCallbacks, worldId = 'planet1') {
     this.callbacks = callbacks;
+    this.worldId = worldId;
     this.connect();
   }
 
   private getWsUrl(): string {
     const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return `${proto}//${window.location.host}/ws`;
+    return `${proto}//${window.location.host}/ws?world=${encodeURIComponent(this.worldId)}`;
   }
 
   private connect() {
