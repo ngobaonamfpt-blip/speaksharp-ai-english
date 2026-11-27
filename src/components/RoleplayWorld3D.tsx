@@ -18,6 +18,7 @@ import {
   FogExp2,
   Group,
   HemisphereLight,
+  type Material,
   Mesh,
   MeshBasicMaterial,
   PCFSoftShadowMap,
@@ -30,6 +31,7 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
 import { speakEnglish } from '../lib/messenger/englishQuests';
 import { GlobalOnlineClient, type OnlineChatMessage, type RemotePlayerState } from '../lib/messenger/onlineClient';
 import {
@@ -173,6 +175,19 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [toast, setToast] = useState('');
   const [fps, setFps] = useState(60);
+  const [outlineFx, setOutlineFx] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('speaksharp_3d_gfx_v1');
+      if (saved === 'eco') return false;
+      if (saved === 'high') return true;
+    } catch {
+      // ignore
+    }
+    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
+    const isMobile =
+      typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    return !isMobile && cores > 4;
+  });
   const [onlineConnected, setOnlineConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
   const [chatOpen, setChatOpen] = useState(false);
@@ -181,6 +196,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
   const liveDialogOpenRef = useRef(false);
   liveDialogOpenRef.current = Boolean(activeDialog);
+  const liveOutlineFxRef = useRef(outlineFx);
+  liveOutlineFxRef.current = outlineFx;
   const liveCompletedRef = useRef(completedIds);
   liveCompletedRef.current = completedIds;
   const liveUserNameRef = useRef(userName);
@@ -261,6 +278,11 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     const toonGradient = createToonGradient();
     const updateMapProps = mapCfg.buildScene(scene, toonGradient);
+    const animeInk = new AnimeInkPass(
+      Math.max(1, host.clientWidth),
+      Math.max(1, host.clientHeight),
+      camera
+    );
 
     // Build Player Avatar (same sculpted anime character as World 1!)
     const player = buildChibiCourier(toonGradient, {
@@ -314,6 +336,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     mapCfg.npcs.forEach((spec) => {
       const grp = buildChibiCourier(toonGradient, spec.style);
+      grp.name = 'AnimatedNpc';
       grp.scale.setScalar(CHAR_SCALE);
       grp.position.set(spec.x, 0, spec.z);
       grp.rotation.y = spec.facingYaw;
@@ -352,6 +375,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     // Build Strolling Background NPCs
     const strollers = mapCfg.strollers.map((s) => {
       const grp = buildChibiCourier(toonGradient, s.style);
+      grp.name = 'AnimatedNpc';
       grp.scale.setScalar(CHAR_SCALE);
       grp.position.set(s.waypoints[0][0], 0, s.waypoints[0][1]);
       grp.add(createSoftDropShadow(0.16));
@@ -585,12 +609,21 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     dom.addEventListener('pointercancel', onPtrUp);
     dom.addEventListener('wheel', onWheel, { passive: false });
 
+    // Patch all built-in scene materials for sRGB parity inside AnimeInkPass!
+    scene.traverse((obj) => {
+      const mat = (obj as Mesh).material as Material | Material[] | undefined;
+      if (!mat) return;
+      if (Array.isArray(mat)) mat.forEach(patchMaterialForInk);
+      else patchMaterialForInk(mat);
+    });
+
     const resize = () => {
       const w = Math.max(1, host.clientWidth);
       const h = Math.max(1, host.clientHeight);
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
+      animeInk.setSize(w, h);
     };
     const ro = new ResizeObserver(resize);
     ro.observe(host);
@@ -777,7 +810,13 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       lookTarget.set(pState.x, 1.1 + pState.y * 0.3, pState.z);
       camera.lookAt(lookTarget);
 
-      renderer.render(scene, camera);
+      if (liveOutlineFxRef.current) {
+        inkDisplayOutput.value = 1;
+        animeInk.render(renderer, scene, camera, elapsed);
+      } else {
+        inkDisplayOutput.value = 0;
+        renderer.render(scene, camera);
+      }
     };
     tick();
 
@@ -793,6 +832,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       dom.removeEventListener('wheel', onWheel);
       ro.disconnect();
       onlineClient.dispose();
+      animeInk.dispose();
       toonGradient.dispose();
       badgeTodo.dispose();
       badgeDone.dispose();
@@ -903,7 +943,35 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           ● {onlineConnected ? `Online (${onlineCount})` : 'Đang kết nối...'}
         </span>
         <span style={{ color: '#64748b' }}>·</span>
-        <span style={{ color: '#15803d' }}>{fps} FPS</span>
+        <span style={{ color: fps >= 40 ? '#15803d' : '#b45309' }}>{fps} FPS</span>
+        <span
+          onClick={(e) => {
+            e.stopPropagation();
+            setOutlineFx((v) => {
+              const next = !v;
+              try {
+                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
+              } catch {
+                // ignore
+              }
+              showToast(next ? '🎨 Đã bật Anime Ink vẽ tay' : '⚡ Đã bật chế độ Siêu Mượt (Eco)');
+              return next;
+            });
+          }}
+          title="Nhấn để đổi nhanh chế độ đồ họa Anime Ink / Siêu Mượt"
+          style={{
+            padding: '1px 6px',
+            borderRadius: 999,
+            fontSize: 10.5,
+            fontWeight: 900,
+            background: outlineFx ? '#e0f2fe' : '#fef3c7',
+            color: outlineFx ? '#0369a1' : '#b45309',
+            border: '1.5px solid #243038',
+            cursor: 'pointer',
+          }}
+        >
+          {outlineFx ? '🎨 Anime Ink' : '⚡ Mượt'}
+        </span>
       </div>
 
       {/* Top-Right Checklist Button */}
