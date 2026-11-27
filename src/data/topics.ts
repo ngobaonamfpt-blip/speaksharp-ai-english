@@ -211,4 +211,214 @@ export const DEBATE_TOPICS: DebateTopic[] = [
       'Fantastic answer—that sounded very natural and fluent!',
     ],
   },
+  {
+    id: 'thcs-smartphones-school',
+    title: 'Should Smartphones Be Allowed at School?',
+    titleVi: 'Có nên cho học sinh mang điện thoại đến trường?',
+    motion: 'Should middle school students be allowed to bring and use smartphones during school hours?',
+    category: 'THCS & Đời sống',
+    level: 'A2',
+    isPro: false,
+    durationMin: 10,
+    keyVocab: [
+      { word: 'distraction', ipa: '/dɪˈstrækʃən/', meaningVi: 'sự xao nhãng' },
+      { word: 'emergency', ipa: '/ɪˈmɜːrdʒənsi/', meaningVi: 'tình huống khẩn cấp' },
+      { word: 'research', ipa: '/rɪˈsɜːrtʃ/', meaningVi: 'tra cứu, nghiên cứu' },
+      { word: 'responsibility', ipa: '/rɪˌspɒnsəˈbɪləti/', meaningVi: 'trách nhiệm' },
+    ],
+    openingQuestionJudge:
+      'Many schools ban smartphones completely, while others use them for digital learning. Should middle schoolers be allowed to bring phones to school? Give one clear reason.',
+    openingQuestionBuddy:
+      "Hey! Here's a hot school topic: do you think students should be allowed to bring smartphones to school, or should phones stay at home? Tell me what you think!",
+    sampleHints: [
+      'Smartphones are helpful for contacting parents in an emergency and looking up English vocabulary quickly.',
+      'However, phones can be a huge distraction during class if students play games or text friends.',
+      'I think students should bring phones but keep them in a locker until break time.',
+    ],
+    followUpsJudge: [
+      'If students keep phones in lockers, how should teachers handle students who secretly use them during lessons?',
+      'Do you think banning phones helps students talk more to their friends face-to-face during recess?',
+      'What is one clear rule you would design as class president to balance safety and focus?',
+    ],
+    followUpsBuddy: [
+      'That is a super practical idea! Have you ever used your phone to look up a tough word or homework question?',
+      'Nice point! What do your classmates usually do during break time without phones?',
+      'Great job speaking so clearly! Try summing up your rule in one short sentence.',
+    ],
+  },
+  {
+    id: 'thcs-video-games',
+    title: 'Video Games: Brain Training or Time Waster?',
+    titleVi: 'Chơi game: Rèn luyện tư duy hay lãng phí thời gian?',
+    motion: 'Do video games help teenagers develop problem-solving skills, or do they mostly waste study time?',
+    category: 'THCS & Đời sống',
+    level: 'B1',
+    isPro: false,
+    durationMin: 12,
+    keyVocab: [
+      { word: 'teamwork', ipa: '/ˈtiːmwɜːrk/', meaningVi: 'làm việc nhóm' },
+      { word: 'addiction', ipa: '/əˈdɪkʃən/', meaningVi: 'sự nghiện' },
+      { word: 'strategy', ipa: '/ˈstrætədʒi/', meaningVi: 'chiến lược' },
+      { word: 'time management', ipa: '/taɪm ˈmænɪdʒmənt/', meaningVi: 'quản lý thời gian' },
+    ],
+    openingQuestionJudge:
+      'Parents often worry that video games ruin grades, yet gamers argue games teach strategy and English. Which side has the stronger argument?',
+    openingQuestionBuddy:
+      "Let's talk about video games! Do you think playing games helps you learn teamwork and English, or is it mostly a distraction from homework?",
+    sampleHints: [
+      'Strategy and 3D adventure games can improve quick thinking, teamwork, and even English vocabulary.',
+      'On the other hand, playing too late at night leads to addiction and poor sleep before school.',
+      'With good time management, playing for 30 to 45 minutes after finishing homework is healthy.',
+    ],
+    followUpsJudge: [
+      'How can a 7th-grade student prove to their parents that gaming is actually helping their English or logic?',
+      'Should game companies add mandatory daily time limits for players under 16?',
+      'Can educational 3D games like SpeakSharp replace traditional flashcards? Why or why not?',
+    ],
+    followUpsBuddy: [
+      'Love that perspective! Have you ever learned a cool new English word from a game?',
+      'That makes total sense! What is a fair daily screen-time limit on school days vs. weekends?',
+      'Awesome fluency! You balanced both sides really well.',
+    ],
+  },
+  {
+    id: 'hue-heritage-tourists',
+    title: 'Introducing Hue Heritage to Foreign Tourists',
+    titleVi: 'Giới thiệu Di sản Cố Đô Huế cho du khách nước ngoài',
+    motion: 'Act as a young student ambassador introducing Hue Imperial City, Perfume River, and local food to a foreign visitor.',
+    category: 'Giao tiếp hằng ngày',
+    level: 'A2',
+    isPro: false,
+    durationMin: 10,
+    keyVocab: [
+      { word: 'heritage', ipa: '/ˈherɪtɪdʒ/', meaningVi: 'di sản văn hóa' },
+      { word: 'imperial', ipa: '/ɪmˈpɪəriəl/', meaningVi: 'hoàng gia, cố đô' },
+      { word: 'cuisine', ipa: '/kwɪˈziːn/', meaningVi: 'ẩm thực' },
+      { word: 'peaceful', ipa: '/ˈpiːsfəl/', meaningVi: 'yên bình' },
+    ],
+    openingQuestionJudge:
+      'Welcome! Imagine I am visiting Hue for the very first time and only have one day. Convince me which landmark and local dish I must not miss.',
+    openingQuestionBuddy:
+      "Hi! I just arrived in Hue and I'm so excited to explore! As a local student, where should I go first and what delicious Hue food should I try?",
+    sampleHints: [
+      'You should definitely visit the Hue Imperial City to learn about Vietnamese royal history and architecture.',
+      'In the evening, taking a boat ride along the peaceful Perfume River is unforgettable.',
+      'For local cuisine, you must try Bun Bo Hue and sweet Hue desserts!',
+    ],
+    followUpsJudge: [
+      'Why do you think Hue feels more peaceful than bigger cities like Hanoi or Ho Chi Minh City?',
+      'How can young students use technology or English apps to promote Hue tourism worldwide?',
+      'If I do not eat spicy food, how would you recommend a Hue dish for me politely?',
+    ],
+    followUpsBuddy: [
+      'Ooh, that sounds amazing! How would you describe the taste of Bun Bo Hue to someone who has never tried it?',
+      'You make a great tour guide! What is your personal favorite spot in Hue to hang out with friends?',
+      'Super natural English! Any tourist would love chatting with you.',
+    ],
+  },
+  {
+    id: 'wsdc-school-uniforms',
+    title: 'Should Students Wear School Uniforms?',
+    titleVi: 'Học sinh có nên mặc đồng phục khi đến trường?',
+    motion: 'This House believes that mandatory school uniforms promote equality better than free dress codes.',
+    category: 'Hùng biện WSDC',
+    level: 'B1',
+    isPro: false,
+    durationMin: 12,
+    keyVocab: [
+      { word: 'equality', ipa: '/ɪˈkwɒləti/', meaningVi: 'sự bình đẳng' },
+      { word: 'self-expression', ipa: '/ˌself ɪkˈspreʃən/', meaningVi: 'thể hiện cá tính' },
+      { word: 'belonging', ipa: '/bɪˈlɒŋɪŋ/', meaningVi: 'cảm giác thuộc về tập thể' },
+      { word: 'comfort', ipa: '/ˈkʌmfərt/', meaningVi: 'sự thoải mái' },
+    ],
+    openingQuestionJudge:
+      'Welcome to the debate. Motion: "Schools should require all students to wear uniforms." Present your opening claim and explain who benefits most.',
+    openingQuestionBuddy:
+      'What do you think about school uniforms? Do they make mornings easier and fairer for everyone, or do they limit your personal style?',
+    sampleHints: [
+      'Uniforms promote equality so students are not judged by expensive brands or clothes.',
+      'They also save time every morning and create a proud sense of belonging at school.',
+      'However, having one free-dress day per week could still let students enjoy self-expression.',
+    ],
+    followUpsJudge: [
+      'Critics argue uniforms suppress creativity. Does wearing the same shirt really stop students from thinking creatively?',
+      'What if a uniform is uncomfortable in hot summer weather—should students help design their own school uniform?',
+      'Summarize why your side wins the equality vs. freedom trade-off.',
+    ],
+    followUpsBuddy: [
+      'Great argument! If you could redesign your school uniform, what color or style would you pick?',
+      'Very clear explanation! Do you think sports uniforms are more comfortable than formal ones?',
+      'Nice job—you sounded just like a debate team captain!',
+    ],
+  },
+  {
+    id: 'wsdc-student-shark-tank',
+    title: 'Pitching a Student Startup Idea to Sharks',
+    titleVi: 'Thuyết trình gọi vốn Startup học sinh trước Shark Tank',
+    motion: 'Convince a panel of Shark Tank investors why your student-built app deserves their investment.',
+    category: 'Hùng biện WSDC',
+    level: 'B2',
+    isPro: true,
+    durationMin: 15,
+    keyVocab: [
+      { word: 'target market', ipa: '/ˈtɑːrɡɪt ˈmɑːrkɪt/', meaningVi: 'thị trường mục tiêu' },
+      { word: 'competitive advantage', ipa: '/kəmˈpetətɪv ədˈvæntɪdʒ/', meaningVi: 'lợi thế cạnh tranh' },
+      { word: 'scalable', ipa: '/ˈskeɪləbəl/', meaningVi: 'có khả năng mở rộng' },
+      { word: 'investment', ipa: '/ɪnˈvestmənt/', meaningVi: 'khoản đầu tư' },
+    ],
+    openingQuestionJudge:
+      'Hello young founders! Welcome to Shark Tank. You have 60 seconds: what problem does your product solve, and why should I invest in your team today?',
+    openingQuestionBuddy:
+      "Let's rehearse your Shark Tank pitch! Pretend I'm a friendly investor—introduce your project name, your target market, and what makes it special!",
+    sampleHints: [
+      'Our target market is Vietnamese secondary students in Grades 6 to 9 who feel shy speaking English.',
+      'Our competitive advantage is combining an online 3D anime world with an AI debate coach.',
+      'We will use the investment for cloud servers, AI APIs, a custom domain, and our school launch event.',
+    ],
+    followUpsJudge: [
+      'Why would a student choose your app instead of giant free apps like Duolingo or ELSA Speak?',
+      'How do you plan to earn money and break even if middle school students do not have their own credit cards?',
+      'What is the biggest risk for a 7th-grade founding team, and how will you overcome it?',
+    ],
+    followUpsBuddy: [
+      'Whoa, that pitch was super confident! Try emphasizing one real feature you already built and can demo live.',
+      'Awesome answer! Remember to smile and pause for one second before stating your investment ask.',
+      'You are 100% ready for the Shark Tank stage!',
+    ],
+  },
+  {
+    id: 'thcs-online-vs-real-friends',
+    title: 'Online Friends vs. Real-Life Friends',
+    titleVi: 'Bạn bè trên mạng hay Bạn bè ngoài đời thực?',
+    motion: 'Can online friendships formed through games and study apps be just as meaningful as real-life friendships?',
+    category: 'THCS & Đời sống',
+    level: 'B1',
+    isPro: true,
+    durationMin: 12,
+    keyVocab: [
+      { word: 'trustworthy', ipa: '/ˈtrʌstwɜːrði/', meaningVi: 'đáng tin cậy' },
+      { word: 'common interest', ipa: '/ˈkɒmən ˈɪntrəst/', meaningVi: 'sở thích chung' },
+      { word: 'privacy', ipa: '/ˈprɪvəsi/', meaningVi: 'quyền riêng tư' },
+      { word: 'genuine', ipa: '/ˈdʒenjuɪn/', meaningVi: 'chân thành, thật lòng' },
+    ],
+    openingQuestionJudge:
+      'Many teenagers today make friends across the world through online games and learning communities. Can an online friend ever truly replace a real-life classmate?',
+    openingQuestionBuddy:
+      "Here's a thoughtful question: do you think making friends online through games or English clubs is a great way to connect, or are real-life friends always better?",
+    sampleHints: [
+      'Online friends who share a common interest like learning English can be very supportive and inspiring.',
+      'However, we must protect our privacy online because it is harder to know who is truly trustworthy.',
+      'In my view, online communities are wonderful as long as we still spend quality time with real-life friends.',
+    ],
+    followUpsJudge: [
+      'What are two safety rules every middle schooler should follow when chatting with new people online?',
+      'Why do some shy students find it easier to open up and speak English with online friends first?',
+      'How can schools create safe online spaces where classmates collaborate positively?',
+    ],
+    followUpsBuddy: [
+      'That is a very mature answer! Have you ever practiced a hobby or language with someone you met online?',
+      'Great point about online safety! Try using the word "genuine" in your next sentence.',
+      'Super clear and thoughtful—well done!',
+    ],
+  },
 ];

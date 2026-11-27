@@ -483,6 +483,7 @@ export default function App() {
                 key={topicFilterInit}
                 topics={topics}
                 activeTopicId={activeTopic.id}
+                completedTopicIds={completedTopicIds}
                 isPro={isPro}
                 initialCategory={topicFilterInit}
                 onSelectTopic={(t) => {

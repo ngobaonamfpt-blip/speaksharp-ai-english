@@ -3,6 +3,7 @@ export type Persona = 'judge' | 'buddy';
 export type CEFRLevel = 'A2' | 'B1' | 'B2' | 'C1';
 
 export type TopicCategory =
+  | 'THCS & Đời sống'
   | 'IELTS Speaking'
   | 'Hùng biện WSDC'
   | 'Phỏng vấn Du học'
