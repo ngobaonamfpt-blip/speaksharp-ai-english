@@ -2011,9 +2011,14 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     applyGfxRef.current = (q: GraphicsQuality) => {
       const m = GFX_META[q];
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, m.maxDpr));
+      const dpr = Math.min(window.devicePixelRatio || 1, m.maxDpr);
+      renderer.setPixelRatio(dpr);
+      const w = Math.max(1, host.clientWidth);
+      const h = Math.max(1, host.clientHeight);
+      renderer.setSize(w, h);
       renderer.shadowMap.enabled = m.shadows;
       if (m.inkScale > 0) animeInk.setResolutionScale(m.inkScale);
+      animeInk.setSize(Math.floor(w * dpr), Math.floor(h * dpr));
     };
     applyGfxRef.current(liveGfxRef.current);
 

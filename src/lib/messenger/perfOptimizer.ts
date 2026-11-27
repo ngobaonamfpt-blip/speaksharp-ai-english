@@ -74,7 +74,7 @@ export function saveGraphicsQuality(q: GraphicsQuality): void {
   }
 }
 
-/** Detect weak/integrated GPUs or mobile devices so low-end laptops start smooth out-of-the-box */
+/** Detect pure mobile / software renderers; keep desktops & Optimus laptops (e.g. RTX 4050) at full High quality! */
 export function detectInitialGraphicsQuality(): GraphicsQuality {
   const saved = loadSavedGraphicsQuality();
   if (saved) return saved;
@@ -84,9 +84,9 @@ export function detectInitialGraphicsQuality(): GraphicsQuality {
   if (isMobile) return 'eco';
 
   const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
-  if (cores <= 4) return 'medium';
+  if (cores <= 2) return 'medium';
 
-  // Quick WebGL renderer string check for software / weak integrated GPUs
+  // Only downgrade software renderers (never downgrade Intel UHD because RTX Optimus laptops report Intel UHD!)
   try {
     const canvas = document.createElement('canvas');
     const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
@@ -97,20 +97,9 @@ export function detectInitialGraphicsQuality(): GraphicsQuality {
         if (
           rendererStr.includes('swiftshader') ||
           rendererStr.includes('llvmpipe') ||
-          rendererStr.includes('microsoft basic render') ||
-          rendererStr.includes('software')
+          rendererStr.includes('microsoft basic render')
         ) {
           return 'eco';
-        }
-        if (
-          rendererStr.includes('intel(r) hd') ||
-          rendererStr.includes('intel hd') ||
-          rendererStr.includes('intel(r) uhd') ||
-          rendererStr.includes('intel uhd') ||
-          rendererStr.includes('mali-g5') ||
-          rendererStr.includes('adreno (tm) 5')
-        ) {
-          return 'medium';
         }
       }
     }

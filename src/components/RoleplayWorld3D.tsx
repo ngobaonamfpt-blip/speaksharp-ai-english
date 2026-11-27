@@ -617,14 +617,14 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     const resize = () => {
       const w = Math.max(1, host.clientWidth);
       const h = Math.max(1, host.clientHeight);
+      const dpr = renderer.getPixelRatio();
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
       renderer.setSize(w, h);
-      animeInk.setSize(w, h);
+      animeInk.setSize(Math.floor(w * dpr), Math.floor(h * dpr));
     };
     const ro = new ResizeObserver(resize);
     ro.observe(host);
-    resize();
 
     let frameId = 0;
     let lastT = performance.now();
@@ -645,6 +645,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       renderer.shadowMap.enabled = m.shadows;
       if (m.shadows) renderer.shadowMap.needsUpdate = true;
       if (m.inkScale > 0) animeInk.setResolutionScale(m.inkScale);
+      resize();
     };
     applyQuality(liveGfxRef.current);
 
@@ -668,11 +669,11 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         fpsFrames = 0;
         lastFpsT = now;
 
-        // Auto-downgrade on weak devices if FPS stays < 26 for ~3s (and user hasn't manually locked)
-        if (!userLockedGfxRef.current && elapsed > 2.2) {
-          if (curFps < 26) {
+        // Only auto-downgrade on genuinely struggling weak GPUs (< 18 FPS for ~4.5s)
+        if (!userLockedGfxRef.current && elapsed > 3.0) {
+          if (curFps < 18) {
             lowFpsStreak++;
-            if (lowFpsStreak >= 4) {
+            if (lowFpsStreak >= 6) {
               lowFpsStreak = 0;
               if (liveGfxRef.current === 'high') {
                 liveGfxRef.current = 'medium';
