@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { addAirportRichDetails } from './airportDetailsBuilder';
 
 /** Rounded-rectangle 2D shape centered at (0,0) for sleek beveled architectural furniture */
 function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
@@ -1138,9 +1139,12 @@ export function buildStudioAirportScene(
   }
   root.add(carouselGroup);
 
+  const updateRichDetails = addAirportRichDetails(root, toon, woodMat, steelMat, chromeMat);
+
   scene.add(root);
 
   return (elapsed: number) => {
+    updateRichDetails(elapsed);
     radarDish.rotation.y = elapsed * 1.4;
     for (let i = 0; i < clouds.length; i++) {
       const c = clouds[i];
