@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { buildStudioAirportScene } from './airportSceneBuilder';
+import { buildStudioSupermarketScene } from './supermarketSceneBuilder';
 import type { HairStyle, TopStyle } from './playerController';
 
 export type RoleplayMapId = 'airport' | 'supermarket';
@@ -1082,15 +1083,53 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
           topStyle: 'coat',
         },
         waypoints: [
-          [6.5, -0.5],
-          [6.5, 4.8],
-          [0.8, 4.8],
-          [0.8, -2.5],
+          [5.4, -1.2],
+          [5.4, 4.4],
+          [0.8, 4.4],
+          [0.8, -2.2],
         ],
         speed: 1.4,
         phase: 3.7,
       },
+      {
+        style: {
+          hatColor: 0x3b2f2a,
+          shirtColor: 0xf97316,
+          pantsColor: 0x1e293b,
+          shoeColor: 0x111827,
+          bagColor: 0x22c55e,
+          hairStyle: 'strawhat',
+          topStyle: 'tee',
+        },
+        waypoints: [
+          [-9.6, -1.5],
+          [-5.2, -1.5],
+          [-5.2, 3.8],
+          [-9.6, 3.8],
+        ],
+        speed: 1.25,
+        phase: 0.5,
+      },
+      {
+        style: {
+          hatColor: 0x1e3a8a,
+          shirtColor: 0xec4899,
+          pantsColor: 0x334155,
+          shoeColor: 0x1e293b,
+          bagColor: 0xfacc15,
+          hairStyle: 'bob',
+          topStyle: 'coat',
+        },
+        waypoints: [
+          [4.8, -2.6],
+          [9.4, -2.6],
+          [9.4, 2.8],
+          [4.8, 2.8],
+        ],
+        speed: 1.3,
+        phase: 2.1,
+      },
     ],
-    buildScene: buildSupermarketScene,
+    buildScene: buildStudioSupermarketScene,
   },
 };
