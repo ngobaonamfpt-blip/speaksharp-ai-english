@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addAirportRichDetails } from './airportDetailsBuilder';
+import { createToonMaterialCache } from './perfOptimizer';
 
 /** Rounded-rectangle 2D shape centered at (0,0) for sleek beveled architectural furniture */
 function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
@@ -19,6 +20,8 @@ function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
   return s;
 }
 
+const airportBevelCache = new Map<string, THREE.BufferGeometry>();
+
 /** Extruded rounded architectural block standing upright along Y (eliminates raw sharp boxes!) */
 function createBeveledBlock(
   w: number,
@@ -27,18 +30,24 @@ function createBeveledBlock(
   radius = 0.14,
   bevel = 0.03
 ): THREE.BufferGeometry {
+  const isSmall = Math.max(w, h, d) <= 0.7;
+  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const cached = airportBevelCache.get(key);
+  if (cached) return cached;
   const shape = roundedRectShape(w, d, radius);
   const geo = new THREE.ExtrudeGeometry(shape, {
     depth: Math.max(0.02, h - bevel * 2),
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 2,
-    curveSegments: 8,
+    bevelSegments: isSmall ? 1 : 2,
+    curveSegments: isSmall ? 4 : 6,
   });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, bevel, 0);
   geo.computeVertexNormals();
+  geo.userData.__sharedCache = true;
+  airportBevelCache.set(key, geo);
   return geo;
 }
 
@@ -596,7 +605,7 @@ export function buildStudioAirportScene(
   toonGradient: THREE.DataTexture
 ): (elapsed: number) => void {
   const root = new THREE.Group();
-  const toon = (hex: number) => new THREE.MeshToonMaterial({ color: hex, gradientMap: toonGradient });
+  const toon = createToonMaterialCache(toonGradient);
   const woodTex = makeWoodSlatTexture();
   const woodMat = new THREE.MeshToonMaterial({ map: woodTex, gradientMap: toonGradient });
   const steelMat = toon(0x334155);

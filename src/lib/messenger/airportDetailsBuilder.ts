@@ -17,6 +17,8 @@ function roundedRect(w: number, h: number, r: number): THREE.Shape {
   return s;
 }
 
+const airportDetailBevelCache = new Map<string, THREE.BufferGeometry>();
+
 function beveledBox(
   w: number,
   h: number,
@@ -24,17 +26,23 @@ function beveledBox(
   radius = 0.1,
   bevel = 0.025
 ): THREE.BufferGeometry {
+  const isSmall = Math.max(w, h, d) <= 0.7;
+  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const cached = airportDetailBevelCache.get(key);
+  if (cached) return cached;
   const geo = new THREE.ExtrudeGeometry(roundedRect(w, d, radius), {
     depth: Math.max(0.02, h - bevel * 2),
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 2,
-    curveSegments: 6,
+    bevelSegments: isSmall ? 1 : 2,
+    curveSegments: isSmall ? 4 : 6,
   });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, bevel, 0);
   geo.computeVertexNormals();
+  geo.userData.__sharedCache = true;
+  airportDetailBevelCache.set(key, geo);
   return geo;
 }
 

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { addSupermarketRichDetails } from './supermarketDetailsBuilder';
+import { createToonMaterialCache } from './perfOptimizer';
 
 function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
   const s = new THREE.Shape();
@@ -18,6 +19,8 @@ function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
   return s;
 }
 
+const marketBevelCache = new Map<string, THREE.BufferGeometry>();
+
 export function createMarketBeveledBox(
   w: number,
   h: number,
@@ -25,17 +28,23 @@ export function createMarketBeveledBox(
   radius = 0.12,
   bevel = 0.028
 ): THREE.BufferGeometry {
+  const isSmall = Math.max(w, h, d) <= 0.65;
+  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const cached = marketBevelCache.get(key);
+  if (cached) return cached;
   const geo = new THREE.ExtrudeGeometry(roundedRectShape(w, d, radius), {
     depth: Math.max(0.02, h - bevel * 2),
     bevelEnabled: true,
     bevelThickness: bevel,
     bevelSize: bevel,
-    bevelSegments: 2,
-    curveSegments: 6,
+    bevelSegments: isSmall ? 1 : 2,
+    curveSegments: isSmall ? 4 : 6,
   });
   geo.rotateX(-Math.PI / 2);
   geo.translate(0, bevel, 0);
   geo.computeVertexNormals();
+  geo.userData.__sharedCache = true;
+  marketBevelCache.set(key, geo);
   return geo;
 }
 
@@ -305,7 +314,7 @@ export function buildStudioSupermarketScene(
   toonGradient: THREE.DataTexture
 ): (elapsed: number) => void {
   const root = new THREE.Group();
-  const toon = (hex: number) => new THREE.MeshToonMaterial({ color: hex, gradientMap: toonGradient });
+  const toon = createToonMaterialCache(toonGradient);
   const oakTex = makeWarmOakTex();
   const oakMat = new THREE.MeshToonMaterial({ map: oakTex, gradientMap: toonGradient });
   const steelMat = toon(0x334155);
@@ -532,10 +541,9 @@ export function buildStudioSupermarketScene(
     for (let f = 0; f < 6; f++) {
       const fx = cfg.x - 0.26 + (f % 2) * 0.52;
       const fz = -4.85 + Math.floor(f / 2) * 0.45;
-      const fruit = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 1), fMat);
+      const fruit = new THREE.Mesh(new THREE.DodecahedronGeometry(0.16, 0), fMat);
       fruit.scale.set(cfg.scale[0], cfg.scale[1], cfg.scale[2]);
       fruit.position.set(fx, 1.24, fz);
-      fruit.castShadow = true;
       root.add(fruit);
       if (cfg.leaf) {
         const lf = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.03, 0.14), leafMat);
@@ -626,6 +634,14 @@ export function buildStudioSupermarketScene(
   const endcapTex1 = makePromoEndcapTex('20% OFF!', 'ORANGE JUICE');
   const endcapTex2 = makePromoEndcapTex('NEW!', 'ORGANIC SNACKS');
 
+  // Shared InstancedMesh batches for all 168 shelf products (cuts ~200 draw calls -> 3 draw calls!)
+  const instBoxGeo = createMarketBeveledBox(0.28, 0.36, 0.44, 0.03, 0.008);
+  const instBottleGeo = new THREE.CylinderGeometry(0.09, 0.1, 0.36, 8);
+  const instCapGeo = new THREE.CylinderGeometry(0.045, 0.045, 0.06, 6);
+  const instMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: toonGradient });
+  const boxTransforms: Array<{ pos: [number, number, number]; col: number }> = [];
+  const bottleTransforms: Array<{ pos: [number, number, number]; col: number }> = [];
+
   ([-3.0, 3.0] as const).forEach((sx, sIdx) => {
     const gondola = new THREE.Group();
     const base = new THREE.Mesh(createMarketBeveledBox(1.16, 0.26, 5.15, 0.1, 0.02), steelMat);
@@ -636,10 +652,11 @@ export function buildStudioSupermarketScene(
     topCap.position.y = 2.22;
     gondola.add(base, spine, topCap);
 
-    // 3 shelves per side with price rails + varied 3D boxes & bottles!
+    // 3 shelves per side with price rails + varied 3D boxes & bottles (batched via InstancedMesh!)
+    const shelfGeo = new THREE.BoxGeometry(1.12, 0.05, 5.0);
     for (let row = 0; row < 3; row++) {
       const sy = 0.68 + row * 0.56;
-      const shelf = new THREE.Mesh(new THREE.BoxGeometry(1.12, 0.05, 5.0), shelfBaseMat);
+      const shelf = new THREE.Mesh(shelfGeo, shelfBaseMat);
       shelf.position.y = sy;
       gondola.add(shelf);
 
@@ -649,18 +666,9 @@ export function buildStudioSupermarketScene(
           const colHex = prodPalette[(row * 7 + col + sIdx * 3 + sideI * 2) % prodPalette.length];
           const isBottle = (row + col + sIdx) % 3 === 0;
           if (isBottle) {
-            const bottle = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.1, 0.36, 8), toon(colHex));
-            bottle.position.set(sideX, sy + 0.21, pz);
-            const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.06, 6), creamMat);
-            cap.position.set(sideX, sy + 0.41, pz);
-            gondola.add(bottle, cap);
+            bottleTransforms.push({ pos: [sx + sideX, sy + 0.21, 0.8 + pz], col: colHex });
           } else {
-            const box = new THREE.Mesh(
-              createMarketBeveledBox(0.28, 0.36, 0.44, 0.03, 0.008),
-              toon(colHex)
-            );
-            box.position.set(sideX, sy + 0.03, pz);
-            gondola.add(box);
+            boxTransforms.push({ pos: [sx + sideX, sy + 0.03, 0.8 + pz], col: colHex });
           }
         }
       });
@@ -677,6 +685,38 @@ export function buildStudioSupermarketScene(
     gondola.position.set(sx, 0, 0.8);
     root.add(gondola);
   });
+
+  const dummy = new THREE.Object3D();
+  const tmpColor = new THREE.Color();
+  if (boxTransforms.length > 0) {
+    const boxesInst = new THREE.InstancedMesh(instBoxGeo, instMat, boxTransforms.length);
+    boxTransforms.forEach((t, i) => {
+      dummy.position.set(t.pos[0], t.pos[1], t.pos[2]);
+      dummy.updateMatrix();
+      boxesInst.setMatrixAt(i, dummy.matrix);
+      boxesInst.setColorAt(i, tmpColor.setHex(t.col));
+    });
+    boxesInst.instanceMatrix.needsUpdate = true;
+    if (boxesInst.instanceColor) boxesInst.instanceColor.needsUpdate = true;
+    root.add(boxesInst);
+  }
+  if (bottleTransforms.length > 0) {
+    const bottlesInst = new THREE.InstancedMesh(instBottleGeo, instMat, bottleTransforms.length);
+    const capsInst = new THREE.InstancedMesh(instCapGeo, creamMat, bottleTransforms.length);
+    bottleTransforms.forEach((t, i) => {
+      dummy.position.set(t.pos[0], t.pos[1], t.pos[2]);
+      dummy.updateMatrix();
+      bottlesInst.setMatrixAt(i, dummy.matrix);
+      bottlesInst.setColorAt(i, tmpColor.setHex(t.col));
+      dummy.position.set(t.pos[0], t.pos[1] + 0.2, t.pos[2]);
+      dummy.updateMatrix();
+      capsInst.setMatrixAt(i, dummy.matrix);
+    });
+    bottlesInst.instanceMatrix.needsUpdate = true;
+    if (bottlesInst.instanceColor) bottlesInst.instanceColor.needsUpdate = true;
+    capsInst.instanceMatrix.needsUpdate = true;
+    root.add(bottlesInst, capsInst);
+  }
 
   // Hanging Aisle Overhead Sign
   const aisleSign = new THREE.Mesh(

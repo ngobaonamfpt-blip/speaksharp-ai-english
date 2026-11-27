@@ -52,6 +52,14 @@ import {
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
+import {
+  cycleGraphicsQuality,
+  detectInitialGraphicsQuality,
+  disposeObject3D,
+  GFX_META,
+  type GraphicsQuality,
+  saveGraphicsQuality,
+} from '../lib/messenger/perfOptimizer';
 import { createWorldDetails } from '../lib/messenger/worldDetails';
 import {
   GlobalOnlineClient,
@@ -214,18 +222,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const [playMode, setPlayMode] = useState(true);
   const [timeOfDay, setTimeOfDay] = useState<TimeOfDay>('day');
   const [soundMuted, setSoundMuted] = useState(false);
-  const [outlineFx, setOutlineFx] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('speaksharp_3d_gfx_v1');
-      if (saved === 'eco') return false;
-      if (saved === 'high') return true;
-    } catch {
-      // ignore
-    }
-    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
-    const isMobile = typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-    return !isMobile && cores > 4;
-  });
+  const [gfxQuality, setGfxQuality] = useState<GraphicsQuality>(() => detectInitialGraphicsQuality());
 
   // Minimalist Abeto-style drawers (all closed by default -> >90% pure 3D viewport!)
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -282,7 +279,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
   const livePlayModeRef = useRef(playMode);
   const liveTimeRef = useRef(timeOfDay);
   const liveMutedRef = useRef(soundMuted);
-  const liveOutlineFxRef = useRef(outlineFx);
+  const liveGfxRef = useRef<GraphicsQuality>(gfxQuality);
+  const applyGfxRef = useRef<((q: GraphicsQuality) => void) | null>(null);
   const liveWardrobeRef = useRef(wardrobeOpen);
   const liveDialogOpenRef = useRef(Boolean(activeDialog));
   const liveOutfitRef = useRef({
@@ -328,8 +326,9 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     audioRef.current?.setMuted(soundMuted);
   }, [soundMuted]);
   useEffect(() => {
-    liveOutlineFxRef.current = outlineFx;
-  }, [outlineFx]);
+    liveGfxRef.current = gfxQuality;
+    applyGfxRef.current?.(gfxQuality);
+  }, [gfxQuality]);
   useEffect(() => {
     liveWardrobeRef.current = wardrobeOpen;
   }, [wardrobeOpen]);
@@ -388,9 +387,10 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1));
     renderer.setSize(host.clientWidth, host.clientHeight);
     // Soft-edged 3D directional shadows (throttled & auto-disabled in Eco mode for weak GPUs!)
-    renderer.shadowMap.enabled = liveOutlineFxRef.current;
+    const initShadows = GFX_META[liveGfxRef.current].shadows;
+    renderer.shadowMap.enabled = initShadows;
     renderer.shadowMap.autoUpdate = false;
-    renderer.shadowMap.needsUpdate = liveOutlineFxRef.current;
+    renderer.shadowMap.needsUpdate = initShadows;
     renderer.shadowMap.type = PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
@@ -1158,7 +1158,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
               const sr = new Mesh(m.geometry, groundShadowMat);
               sr.receiveShadow = true;
               sr.castShadow = false;
-              sr.visible = liveOutlineFxRef.current;
+              sr.visible = GFX_META[liveGfxRef.current].shadows;
               sr.renderOrder = 2;
               shadowReceivers.push(sr);
             }
@@ -1675,7 +1675,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         player.quaternion.slerp(tmpQ, 0.35);
 
         // World-locked directional sun ~55 deg above player's local horizon (throttled to every 3 frames!)
-        const wantShadows = liveOutlineFxRef.current;
+        const wantShadows = GFX_META[liveGfxRef.current].shadows;
         if (renderer.shadowMap.enabled !== wantShadows) {
           renderer.shadowMap.enabled = wantShadows;
           for (let i = 0; i < runtime.shadowReceivers.length; i++) {
@@ -1999,7 +1999,8 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
       if (atmosphere) atmosphere.skyMat.uniforms.uTime.value = elapsed;
 
-      if (liveOutlineFxRef.current && mode !== 'npcs') {
+      const curQ = liveGfxRef.current;
+      if (curQ !== 'eco' && mode !== 'npcs') {
         inkDisplayOutput.value = 1;
         animeInk.render(renderer, scene, camera, elapsed);
       } else {
@@ -2008,9 +2009,18 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       }
     };
 
+    applyGfxRef.current = (q: GraphicsQuality) => {
+      const m = GFX_META[q];
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, m.maxDpr));
+      renderer.shadowMap.enabled = m.shadows;
+      if (m.inkScale > 0) animeInk.setResolutionScale(m.inkScale);
+    };
+    applyGfxRef.current(liveGfxRef.current);
+
     tick();
 
     return () => {
+      applyGfxRef.current = null;
       cancelled = true;
       cancelAnimationFrame(runtime.frame);
       window.removeEventListener('keydown', onKeyDown, true);
@@ -2031,6 +2041,7 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
       animeInk.dispose();
       sceneDepthTarget.dispose();
       controls.dispose();
+      disposeObject3D(scene);
       renderer.dispose();
       scene.clear();
       if (host.contains(renderer.domElement)) host.removeChild(renderer.domElement);
@@ -2239,30 +2250,26 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
         <span
           onClick={(e) => {
             e.stopPropagation();
-            setOutlineFx((v) => {
-              const next = !v;
-              try {
-                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
-              } catch {
-                // ignore
-              }
-              showToast(next ? '🎨 Đồ họa Cao: Anime Ink + Bóng 3D' : '⚡ Đồ họa Siêu Mượt (Eco): Tối ưu tối đa cho máy yếu');
+            setGfxQuality((v) => {
+              const next = cycleGraphicsQuality(v);
+              saveGraphicsQuality(next);
+              showToast(GFX_META[next].toast);
               return next;
             });
           }}
-          title="Nhấn để đổi nhanh chế độ đồ họa Cao / Mượt"
+          title="Nhấn để đổi 3 mức đồ họa: Cao / Ink Nhẹ / Siêu mượt"
           style={{
             padding: '1px 6px',
             borderRadius: 999,
             fontSize: 10.5,
             fontWeight: 900,
-            background: outlineFx ? '#e0f2fe' : '#fef3c7',
-            color: outlineFx ? '#0369a1' : '#b45309',
+            background: GFX_META[gfxQuality].bg,
+            color: GFX_META[gfxQuality].fg,
             border: '1.5px solid #243038',
             cursor: 'pointer',
           }}
         >
-          {outlineFx ? '🎨 Cao' : '⚡ Mượt'}
+          {GFX_META[gfxQuality].label}
         </span>
       </div>
 
@@ -2708,26 +2715,22 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
         <button
           className="abeto-btn"
-          title={outlineFx ? 'Đồ họa Cao (Anime Ink + Bóng 3D) — nhấn để chuyển Siêu Mượt cho máy yếu' : 'Đồ họa Siêu Mượt (Eco) — nhấn để bật Anime Ink + Bóng 3D'}
+          title={`${GFX_META[gfxQuality].label} — nhấn để đổi 3 mức đồ họa (Cao / Ink Nhẹ / Siêu mượt)`}
           onClick={() => {
-            setOutlineFx((v) => {
-              const next = !v;
-              try {
-                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
-              } catch {
-                // ignore
-              }
-              showToast(next ? '🎨 Đồ họa Cao: Anime Ink + Bóng 3D' : '⚡ Đồ họa Siêu Mượt (Eco): Tắt bóng nặng & tối ưu máy yếu');
+            setGfxQuality((v) => {
+              const next = cycleGraphicsQuality(v);
+              saveGraphicsQuality(next);
+              showToast(GFX_META[next].toast);
               return next;
             });
           }}
           style={{
             ...PAPER_BTN_STYLE,
-            color: outlineFx ? '#357482' : '#d97706',
+            color: gfxQuality === 'eco' ? '#d97706' : gfxQuality === 'medium' ? '#15803d' : '#357482',
             transform: 'rotate(1.4deg)',
           }}
         >
-          {outlineFx ? <Palette size={20} strokeWidth={2.3} /> : <Zap size={20} strokeWidth={2.3} />}
+          {gfxQuality === 'eco' ? <Zap size={20} strokeWidth={2.3} /> : <Palette size={20} strokeWidth={2.3} />}
         </button>
 
         <button

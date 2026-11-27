@@ -218,11 +218,16 @@ export class AnimeInkPass {
   private cachedPlayerRoot: Object3D | null = null;
   private cachedSceneChildCount = -1;
   private cacheRefreshTick = 0;
+  private baseWidth: number;
+  private baseHeight: number;
+  private resolutionScale = 1.0;
 
   constructor(width: number, height: number, camera: Camera) {
     const cam = camera as PerspectiveCamera;
-    const iw = Math.max(1, Math.floor(width * INFO_SCALE));
-    const ih = Math.max(1, Math.floor(height * INFO_SCALE));
+    this.baseWidth = Math.max(1, Math.floor(width));
+    this.baseHeight = Math.max(1, Math.floor(height));
+    const iw = Math.max(1, Math.floor(this.baseWidth * INFO_SCALE));
+    const ih = Math.max(1, Math.floor(this.baseHeight * INFO_SCALE));
     const depthTexture = new DepthTexture(width, height);
     depthTexture.type = UnsignedIntType;
     this.target = new WebGLRenderTarget(width, height, {
@@ -286,9 +291,18 @@ export class AnimeInkPass {
     this.quadScene.add(this.quad);
   }
 
+  setResolutionScale(scale: number) {
+    const clamped = Math.max(0.5, Math.min(1.0, scale));
+    if (Math.abs(clamped - this.resolutionScale) < 0.01) return;
+    this.resolutionScale = clamped;
+    this.setSize(this.baseWidth, this.baseHeight);
+  }
+
   setSize(width: number, height: number) {
-    const w = Math.max(1, Math.floor(width));
-    const h = Math.max(1, Math.floor(height));
+    this.baseWidth = Math.max(1, Math.floor(width));
+    this.baseHeight = Math.max(1, Math.floor(height));
+    const w = Math.max(1, Math.floor(this.baseWidth * this.resolutionScale));
+    const h = Math.max(1, Math.floor(this.baseHeight * this.resolutionScale));
     const iw = Math.max(1, Math.floor(w * INFO_SCALE));
     const ih = Math.max(1, Math.floor(h * INFO_SCALE));
     this.target.setSize(w, h);

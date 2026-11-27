@@ -32,6 +32,14 @@ import {
   WebGLRenderer,
 } from 'three';
 import { AnimeInkPass, inkDisplayOutput, patchMaterialForInk } from '../lib/messenger/animeInkPass';
+import {
+  cycleGraphicsQuality,
+  detectInitialGraphicsQuality,
+  disposeObject3D,
+  GFX_META,
+  type GraphicsQuality,
+  saveGraphicsQuality,
+} from '../lib/messenger/perfOptimizer';
 import { speakEnglish } from '../lib/messenger/englishQuests';
 import { GlobalOnlineClient, type OnlineChatMessage, type RemotePlayerState } from '../lib/messenger/onlineClient';
 import {
@@ -175,19 +183,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
   const [voiceTranscript, setVoiceTranscript] = useState('');
   const [toast, setToast] = useState('');
   const [fps, setFps] = useState(60);
-  const [outlineFx, setOutlineFx] = useState<boolean>(() => {
-    try {
-      const saved = localStorage.getItem('speaksharp_3d_gfx_v1');
-      if (saved === 'eco') return false;
-      if (saved === 'high') return true;
-    } catch {
-      // ignore
-    }
-    const cores = typeof navigator !== 'undefined' ? navigator.hardwareConcurrency || 8 : 8;
-    const isMobile =
-      typeof navigator !== 'undefined' && /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
-    return !isMobile && cores > 4;
-  });
+  const [gfxQuality, setGfxQuality] = useState<GraphicsQuality>(() => detectInitialGraphicsQuality());
+  const userLockedGfxRef = useRef(false);
   const [onlineConnected, setOnlineConnected] = useState(false);
   const [onlineCount, setOnlineCount] = useState(1);
   const [chatOpen, setChatOpen] = useState(false);
@@ -196,8 +193,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
   const liveDialogOpenRef = useRef(false);
   liveDialogOpenRef.current = Boolean(activeDialog);
-  const liveOutlineFxRef = useRef(outlineFx);
-  liveOutlineFxRef.current = outlineFx;
+  const liveGfxRef = useRef<GraphicsQuality>(gfxQuality);
+  liveGfxRef.current = gfxQuality;
   const liveCompletedRef = useRef(completedIds);
   liveCompletedRef.current = completedIds;
   const liveUserNameRef = useRef(userName);
@@ -634,22 +631,63 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     const startT = lastT;
     let fpsFrames = 0;
     let lastFpsT = lastT;
+    let lowFpsStreak = 0;
+    let appliedGfx: GraphicsQuality | null = null;
     let lastNetSend = 0;
     let frameCount = 0;
     const lookTarget = new Vector3();
+    const camGoal = new Vector3();
+
+    const applyQuality = (q: GraphicsQuality) => {
+      appliedGfx = q;
+      const m = GFX_META[q];
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, m.maxDpr));
+      renderer.shadowMap.enabled = m.shadows;
+      if (m.shadows) renderer.shadowMap.needsUpdate = true;
+      if (m.inkScale > 0) animeInk.setResolutionScale(m.inkScale);
+    };
+    applyQuality(liveGfxRef.current);
 
     const tick = () => {
       frameId = requestAnimationFrame(tick);
+      if (document.hidden) return;
       const now = performance.now();
       const delta = Math.min(0.05, (now - lastT) / 1000);
       lastT = now;
       const elapsed = (now - startT) / 1000;
       frameCount++;
       fpsFrames++;
-      if (now - lastFpsT >= 700) {
-        setFps(Math.round((fpsFrames * 1000) / (now - lastFpsT)));
+
+      if (appliedGfx !== liveGfxRef.current) {
+        applyQuality(liveGfxRef.current);
+      }
+
+      if (now - lastFpsT >= 750) {
+        const curFps = Math.round((fpsFrames * 1000) / (now - lastFpsT));
+        setFps(curFps);
         fpsFrames = 0;
         lastFpsT = now;
+
+        // Auto-downgrade on weak devices if FPS stays < 26 for ~3s (and user hasn't manually locked)
+        if (!userLockedGfxRef.current && elapsed > 2.2) {
+          if (curFps < 26) {
+            lowFpsStreak++;
+            if (lowFpsStreak >= 4) {
+              lowFpsStreak = 0;
+              if (liveGfxRef.current === 'high') {
+                liveGfxRef.current = 'medium';
+                setGfxQuality('medium');
+                showToast('⚖️ Tự động chuyển sang Ink Nhẹ để mượt hơn cho máy bạn');
+              } else if (liveGfxRef.current === 'medium') {
+                liveGfxRef.current = 'eco';
+                setGfxQuality('eco');
+                showToast('⚡ Tự động chuyển sang Siêu mượt (Eco) để giữ FPS cao');
+              }
+            }
+          } else {
+            lowFpsStreak = 0;
+          }
+        }
       }
 
       updateMapProps(elapsed);
@@ -806,11 +844,12 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       const camX = pState.x - Math.sin(pState.camYaw) * horiz;
       const camZ = pState.z - Math.cos(pState.camYaw) * horiz;
       const camY = 1.45 + Math.sin(pState.camPitch) * pState.camDist + pState.y * 0.4;
-      camera.position.lerp(new Vector3(camX, camY, camZ), 0.16);
+      camGoal.set(camX, camY, camZ);
+      camera.position.lerp(camGoal, 0.16);
       lookTarget.set(pState.x, 1.1 + pState.y * 0.3, pState.z);
       camera.lookAt(lookTarget);
 
-      if (liveOutlineFxRef.current) {
+      if (liveGfxRef.current !== 'eco') {
         inkDisplayOutput.value = 1;
         animeInk.render(renderer, scene, camera, elapsed);
       } else {
@@ -836,6 +875,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       toonGradient.dispose();
       badgeTodo.dispose();
       badgeDone.dispose();
+      disposeObject3D(scene);
       renderer.dispose();
       scene.clear();
       if (host.contains(renderer.domElement)) host.removeChild(renderer.domElement);
@@ -947,30 +987,27 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         <span
           onClick={(e) => {
             e.stopPropagation();
-            setOutlineFx((v) => {
-              const next = !v;
-              try {
-                localStorage.setItem('speaksharp_3d_gfx_v1', next ? 'high' : 'eco');
-              } catch {
-                // ignore
-              }
-              showToast(next ? '🎨 Đã bật Anime Ink vẽ tay' : '⚡ Đã bật chế độ Siêu Mượt (Eco)');
+            userLockedGfxRef.current = true;
+            setGfxQuality((v) => {
+              const next = cycleGraphicsQuality(v);
+              saveGraphicsQuality(next);
+              showToast(GFX_META[next].toast);
               return next;
             });
           }}
-          title="Nhấn để đổi nhanh chế độ đồ họa Anime Ink / Siêu Mượt"
+          title="Nhấn để đổi 3 mức đồ họa: Cao / Ink Nhẹ / Siêu mượt"
           style={{
             padding: '1px 6px',
             borderRadius: 999,
             fontSize: 10.5,
             fontWeight: 900,
-            background: outlineFx ? '#e0f2fe' : '#fef3c7',
-            color: outlineFx ? '#0369a1' : '#b45309',
+            background: GFX_META[gfxQuality].bg,
+            color: GFX_META[gfxQuality].fg,
             border: '1.5px solid #243038',
             cursor: 'pointer',
           }}
         >
-          {outlineFx ? '🎨 Anime Ink' : '⚡ Mượt'}
+          {GFX_META[gfxQuality].label}
         </span>
       </div>
 
