@@ -554,10 +554,14 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     // Controls (supports WASD, Arrow keys, Vietnamese IME/Unikey, & on-screen D-pad!)
     const codes: Record<string, boolean> = {};
+    const btnCodes: Record<string, boolean> = {};
     let jumpQueued = false;
     virtualKeyRef.current = (code: string, down: boolean) => {
-      codes[code] = down;
+      btnCodes[code] = down;
       if (code === 'Space' && down) jumpQueued = true;
+    };
+    const clearBtnKeys = () => {
+      for (const k in btnCodes) btnCodes[k] = false;
     };
     const normalizeMoveCode = (e: KeyboardEvent): string => {
       if (e.code) return e.code;
@@ -569,19 +573,24 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       if (k === ' ') return 'Space';
       return e.key;
     };
+    const MOVE_KEY_SET = new Set([
+      'ArrowUp',
+      'ArrowDown',
+      'ArrowLeft',
+      'ArrowRight',
+      'Space',
+      'KeyW',
+      'KeyA',
+      'KeyS',
+      'KeyD',
+    ]);
     const onKeyDown = (e: KeyboardEvent) => {
       const activeEl = document.activeElement as HTMLElement | null;
       const tag = (e.target as HTMLElement)?.tagName || activeEl?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       const code = normalizeMoveCode(e);
-      if (
-        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(
-          code
-        )
-      ) {
-        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(code) || e.key === ' ') {
-          e.preventDefault();
-        }
+      if (MOVE_KEY_SET.has(code) || e.key === ' ') {
+        e.preventDefault();
         // Blur any focused UI button so Space/Enter never accidentally re-clicks it!
         if (activeEl && activeEl.tagName === 'BUTTON') activeEl.blur();
       }
@@ -598,10 +607,21 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     const onKeyUp = (e: KeyboardEvent) => {
       const code = normalizeMoveCode(e);
       codes[code] = false;
+      // If Vietnamese IME (Unikey/Telex) swallowed a keyup as 'Process'/'Unidentified', release stuck move keys!
+      if (e.key === 'Process' || e.key === 'Unidentified') {
+        MOVE_KEY_SET.forEach((k) => {
+          codes[k] = false;
+        });
+      }
     };
     const clearKeys = () => {
       for (const k in codes) codes[k] = false;
+      clearBtnKeys();
+      jumpQueued = false;
       pState.dragging = false;
+    };
+    const onVisChange = () => {
+      if (document.hidden) clearKeys();
     };
     // Blur any previously focused map-switcher button when entering this map
     if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'BUTTON') {
@@ -610,6 +630,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', clearKeys);
+    window.addEventListener('contextmenu', clearKeys);
+    window.addEventListener('pointerup', clearBtnKeys);
+    window.addEventListener('pointercancel', clearBtnKeys);
+    document.addEventListener('visibilitychange', onVisChange);
 
     const dom = renderer.domElement;
     const onPtrDown = (e: PointerEvent) => {
@@ -731,14 +755,16 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
       updateMapProps(elapsed);
 
-      // Movement
+      // Movement (merges physical keyboard + on-screen D-pad cleanly without overwriting!)
       let inFwd = 0;
       let inRight = 0;
-      if (!liveDialogOpenRef.current) {
-        if (codes['KeyW'] || codes['ArrowUp']) inFwd += 1;
-        if (codes['KeyS'] || codes['ArrowDown']) inFwd -= 1;
-        if (codes['KeyD'] || codes['ArrowRight']) inRight += 1;
-        if (codes['KeyA'] || codes['ArrowLeft']) inRight -= 1;
+      if (liveDialogOpenRef.current) {
+        clearKeys();
+      } else {
+        if (codes['KeyW'] || codes['ArrowUp'] || btnCodes['KeyW']) inFwd += 1;
+        if (codes['KeyS'] || codes['ArrowDown'] || btnCodes['KeyS']) inFwd -= 1;
+        if (codes['KeyD'] || codes['ArrowRight'] || btnCodes['KeyD']) inRight += 1;
+        if (codes['KeyA'] || codes['ArrowLeft'] || btnCodes['KeyA']) inRight -= 1;
       }
       const moving = inFwd !== 0 || inRight !== 0;
       const sprinting = Boolean(codes['ShiftLeft'] || codes['ShiftRight']);
@@ -904,6 +930,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       window.removeEventListener('keydown', onKeyDown, true);
       window.removeEventListener('keyup', onKeyUp, true);
       window.removeEventListener('blur', clearKeys);
+      window.removeEventListener('contextmenu', clearKeys);
+      window.removeEventListener('pointerup', clearBtnKeys);
+      window.removeEventListener('pointercancel', clearBtnKeys);
+      document.removeEventListener('visibilitychange', onVisChange);
       dom.removeEventListener('pointerdown', onPtrDown);
       dom.removeEventListener('pointermove', onPtrMove);
       dom.removeEventListener('pointerup', onPtrUp);
