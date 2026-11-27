@@ -206,6 +206,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
   const interactRef = useRef<(() => void) | null>(null);
   const recenterRef = useRef<(() => void) | null>(null);
   const sendChatRef = useRef<((text: string) => void) | null>(null);
+  const virtualKeyRef = useRef<((code: string, down: boolean) => void) | null>(null);
   const toastTimerRef = useRef<number | null>(null);
 
   const showToast = (msg: string) => {
@@ -551,34 +552,66 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       pState.camPitch = 0.42;
     };
 
-    // Controls
+    // Controls (supports WASD, Arrow keys, Vietnamese IME/Unikey, & on-screen D-pad!)
     const codes: Record<string, boolean> = {};
+    virtualKeyRef.current = (code: string, down: boolean) => {
+      codes[code] = down;
+    };
+    const normalizeMoveCode = (e: KeyboardEvent): string => {
+      if (e.code) return e.code;
+      const k = e.key.toLowerCase();
+      if (k === 'w' || k === 'ư') return 'KeyW';
+      if (k === 's') return 'KeyS';
+      if (k === 'a') return 'KeyA';
+      if (k === 'd') return 'KeyD';
+      if (k === ' ') return 'Space';
+      return e.key;
+    };
     const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement)?.tagName;
+      const activeEl = document.activeElement as HTMLElement | null;
+      const tag = (e.target as HTMLElement)?.tagName || activeEl?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
-        e.preventDefault();
+      const code = normalizeMoveCode(e);
+      if (
+        ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'KeyW', 'KeyA', 'KeyS', 'KeyD'].includes(
+          code
+        )
+      ) {
+        if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(code) || e.key === ' ') {
+          e.preventDefault();
+        }
+        // Blur any focused UI button so Space/Enter never accidentally re-clicks it!
+        if (activeEl && activeEl.tagName === 'BUTTON') activeEl.blur();
       }
-      codes[e.code] = true;
-      if (e.code === 'KeyE' && !liveDialogOpenRef.current) interactRef.current?.();
-      if (e.code === 'Escape') {
+      codes[code] = true;
+      if (code === 'KeyE' && !liveDialogOpenRef.current) interactRef.current?.();
+      if (code === 'Escape') {
         setActiveDialog(null);
         setChecklistOpen(false);
       }
     };
     const onKeyUp = (e: KeyboardEvent) => {
-      codes[e.code] = false;
+      const code = normalizeMoveCode(e);
+      codes[code] = false;
     };
     const clearKeys = () => {
       for (const k in codes) codes[k] = false;
       pState.dragging = false;
     };
+    // Blur any previously focused map-switcher button when entering this map
+    if (document.activeElement instanceof HTMLElement && document.activeElement.tagName === 'BUTTON') {
+      document.activeElement.blur();
+    }
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', onKeyUp, true);
     window.addEventListener('blur', clearKeys);
 
     const dom = renderer.domElement;
     const onPtrDown = (e: PointerEvent) => {
+      // Release focus from chat input or UI buttons so WASD works immediately on click!
+      if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+        document.activeElement.blur();
+      }
       if (liveDialogOpenRef.current) return;
       pState.dragging = true;
       pState.lastX = e.clientX;
@@ -1096,16 +1129,96 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
         </div>
       )}
 
-      {/* Bottom-Right Recenter Button */}
+      {/* Bottom-Right On-Screen Movement Pad + Recenter Button */}
       {!activeDialog && (
-        <button
-          className="abeto-btn"
-          title="Đặt lại góc camera"
-          onClick={() => recenterRef.current?.()}
-          style={{ ...PAPER_BTN_STYLE, position: 'absolute', bottom: 16, right: 14, zIndex: 18 }}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 16,
+            right: 14,
+            zIndex: 20,
+            display: 'flex',
+            alignItems: 'flex-end',
+            gap: 10,
+          }}
         >
-          <Compass size={20} strokeWidth={2.3} />
-        </button>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '36px 36px 36px',
+              gridTemplateRows: '36px 36px',
+              gap: 4,
+              touchAction: 'none',
+            }}
+          >
+            <div />
+            <button
+              type="button"
+              aria-label="Đi tới"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                virtualKeyRef.current?.('KeyW', true);
+              }}
+              onPointerUp={() => virtualKeyRef.current?.('KeyW', false)}
+              onPointerLeave={() => virtualKeyRef.current?.('KeyW', false)}
+              onPointerCancel={() => virtualKeyRef.current?.('KeyW', false)}
+              style={{ ...PAPER_BTN_STYLE, width: 36, height: 36, borderRadius: 9, fontSize: 15, fontWeight: 900 }}
+            >
+              ↑
+            </button>
+            <div />
+            <button
+              type="button"
+              aria-label="Sang trái"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                virtualKeyRef.current?.('KeyA', true);
+              }}
+              onPointerUp={() => virtualKeyRef.current?.('KeyA', false)}
+              onPointerLeave={() => virtualKeyRef.current?.('KeyA', false)}
+              onPointerCancel={() => virtualKeyRef.current?.('KeyA', false)}
+              style={{ ...PAPER_BTN_STYLE, width: 36, height: 36, borderRadius: 9, fontSize: 15, fontWeight: 900 }}
+            >
+              ←
+            </button>
+            <button
+              type="button"
+              aria-label="Lùi lại"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                virtualKeyRef.current?.('KeyS', true);
+              }}
+              onPointerUp={() => virtualKeyRef.current?.('KeyS', false)}
+              onPointerLeave={() => virtualKeyRef.current?.('KeyS', false)}
+              onPointerCancel={() => virtualKeyRef.current?.('KeyS', false)}
+              style={{ ...PAPER_BTN_STYLE, width: 36, height: 36, borderRadius: 9, fontSize: 15, fontWeight: 900 }}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              aria-label="Sang phải"
+              onPointerDown={(e) => {
+                e.preventDefault();
+                virtualKeyRef.current?.('KeyD', true);
+              }}
+              onPointerUp={() => virtualKeyRef.current?.('KeyD', false)}
+              onPointerLeave={() => virtualKeyRef.current?.('KeyD', false)}
+              onPointerCancel={() => virtualKeyRef.current?.('KeyD', false)}
+              style={{ ...PAPER_BTN_STYLE, width: 36, height: 36, borderRadius: 9, fontSize: 15, fontWeight: 900 }}
+            >
+              →
+            </button>
+          </div>
+          <button
+            className="abeto-btn"
+            title="Đặt lại góc camera"
+            onClick={() => recenterRef.current?.()}
+            style={{ ...PAPER_BTN_STYLE }}
+          >
+            <Compass size={20} strokeWidth={2.3} />
+          </button>
+        </div>
       )}
 
       {/* Global Server Chat (Bottom-Left) */}
