@@ -15,13 +15,16 @@ import {
   Color,
   DirectionalLight,
   DoubleSide,
+  FogExp2,
   Group,
   HemisphereLight,
   Mesh,
   MeshBasicMaterial,
+  PCFSoftShadowMap,
   PerspectiveCamera,
   RingGeometry,
   Scene,
+  SRGBColorSpace,
   Sprite,
   SpriteMaterial,
   Vector3,
@@ -219,18 +222,41 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     const scene = new Scene();
     scene.background = new Color(mapCfg.skyColor);
+    scene.fog = new FogExp2(mapCfg.id === 'airport' ? 0xd9f2f7 : 0xf2fbf7, 0.0055);
 
-    const camera = new PerspectiveCamera(48, 1, 0.1, 140);
-    const renderer = new WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    const camera = new PerspectiveCamera(50, 1, 0.1, 180);
+    const isLowPower =
+      (navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4) ||
+      /Android|iPhone|iPad|Mobile/i.test(navigator.userAgent);
+    const renderer = new WebGLRenderer({
+      antialias: !isLowPower,
+      powerPreference: 'high-performance',
+    });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, isLowPower ? 1 : 1.35));
     renderer.setSize(host.clientWidth, host.clientHeight);
+    renderer.outputColorSpace = SRGBColorSpace;
+    renderer.shadowMap.enabled = !isLowPower;
+    renderer.shadowMap.autoUpdate = false;
+    renderer.shadowMap.needsUpdate = !isLowPower;
+    renderer.shadowMap.type = PCFSoftShadowMap;
     host.appendChild(renderer.domElement);
 
-    // Bright cozy lighting (zero heavy shadow map overhead -> locked 60 FPS on every laptop!)
-    scene.add(new AmbientLight(0xffffff, 0.78));
-    scene.add(new HemisphereLight(0xf0fdfa, 0xd6d3c9, 0.55));
-    const sun = new DirectionalLight(0xfff7e6, 0.95);
-    sun.position.set(12, 18, 10);
+    // Warm sunlit Studio Ghibli architectural lighting + crisp soft shadows
+    scene.add(new AmbientLight(0xffffff, 0.72));
+    scene.add(new HemisphereLight(0xe0f7fa, 0xd6cfc2, 0.62));
+    const sun = new DirectionalLight(0xfff5e0, 1.15);
+    sun.position.set(14, 22, -16);
+    if (!isLowPower) {
+      sun.castShadow = true;
+      sun.shadow.mapSize.set(1024, 1024);
+      sun.shadow.camera.near = 2;
+      sun.shadow.camera.far = 60;
+      sun.shadow.camera.left = -16;
+      sun.shadow.camera.right = 16;
+      sun.shadow.camera.top = 16;
+      sun.shadow.camera.bottom = -16;
+      sun.shadow.bias = -0.0004;
+    }
     scene.add(sun);
 
     const toonGradient = createToonGradient();
@@ -257,12 +283,23 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       vy: 0,
       yaw: mapCfg.spawn.yaw,
       camYaw: mapCfg.spawn.yaw,
-      camDist: 5.2,
-      camPitch: 0.42,
+      camDist: 5.5,
+      camPitch: 0.28,
       dragging: false,
       lastX: 0,
       lastY: 0,
     };
+
+    // Snap camera immediately to spawn over-the-shoulder view (no initial backward lerp!)
+    {
+      const initHoriz = Math.cos(pState.camPitch) * pState.camDist;
+      camera.position.set(
+        pState.x - Math.sin(pState.camYaw) * initHoriz,
+        1.45 + Math.sin(pState.camPitch) * pState.camDist,
+        pState.z - Math.cos(pState.camYaw) * initHoriz
+      );
+      camera.lookAt(pState.x, 1.1, pState.z);
+    }
 
     // Build Quest NPCs
     const badgeTodo = makeBadgeTex(false);
@@ -475,6 +512,14 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       pState.z = target.z + offsetZ;
       pState.yaw = Math.atan2(target.x - pState.x, target.z - pState.z);
       pState.camYaw = pState.yaw;
+      pState.camDist = 4.2;
+      const horiz = Math.cos(pState.camPitch) * pState.camDist;
+      camera.position.set(
+        pState.x - Math.sin(pState.camYaw) * horiz,
+        1.45 + Math.sin(pState.camPitch) * pState.camDist,
+        pState.z - Math.cos(pState.camYaw) * horiz
+      );
+      camera.lookAt(pState.x, 1.1, pState.z);
       setChecklistOpen(false);
       showToast(`🧭 Đã dịch chuyển tới ${target.landmark}!`);
     };

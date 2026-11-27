@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildStudioAirportScene } from './airportSceneBuilder';
 import type { HairStyle, TopStyle } from './playerController';
 
 export type RoleplayMapId = 'airport' | 'supermarket';
@@ -340,9 +341,9 @@ const AIRPORT_NPCS: RoleplayNpcSpec[] = [
     id: 'airport-cafe',
     name: 'Barista Leo',
     landmark: 'Airport Café & Duty-Free',
-    x: -6.2,
-    z: 4.5,
-    facingYaw: 2.8,
+    x: -7.2,
+    z: 6.4,
+    facingYaw: 3.14,
     style: {
       hatColor: 0x3f2e26,
       shirtColor: 0x458b67,
@@ -939,15 +940,20 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
     id: 'airport',
     title: '✈️ Sân bay Quốc tế',
     subtitle: 'SpeakSharp International Airport',
-    skyColor: '#7dd3fc',
-    bounds: { minX: -12.2, maxX: 12.2, minZ: -9.2, maxZ: 9.2 },
-    spawn: { x: 0, z: 6.2, yaw: Math.PI },
+    skyColor: '#7ad7e8',
+    bounds: { minX: -12.3, maxX: 12.3, minZ: -9.2, maxZ: 9.2 },
+    spawn: { x: 0, z: 7.4, yaw: Math.PI },
     colliders: [
-      { minX: -10.3, maxX: -2.4, minZ: -5.5, maxZ: -3.7 }, // Check-in counter + belt
-      { minX: 1.4, maxX: 3.2, minZ: -4.8, maxZ: -2.2 }, // Security X-ray
-      { minX: 6.9, maxX: 9.5, minZ: -5.3, maxZ: -3.9 }, // Gate B12 podium
-      { minX: -8.9, maxX: -4.1, minZ: 5.3, maxZ: 7.1 }, // Airport Café
-      { minX: 4.8, maxX: 9.6, minZ: 3.1, maxZ: 4.1 }, // Lounge chairs
+      { minX: -10.6, maxX: -1.8, minZ: -5.6, maxZ: -3.9 }, // Check-in counter + belt
+      { minX: -10.4, maxX: -8.1, minZ: -2.4, maxZ: -1.8 }, // Check-in left stanchion rope
+      { minX: -6.3, maxX: -4.0, minZ: -2.4, maxZ: -1.8 }, // Check-in right stanchion rope
+      { minX: 1.5, maxX: 3.2, minZ: -5.6, maxZ: -1.4 }, // Security X-ray
+      { minX: 6.8, maxX: 9.6, minZ: -5.4, maxZ: -4.0 }, // Gate B12 podium
+      { minX: -10.4, maxX: -4.8, minZ: 7.3, maxZ: 9.1 }, // Airport Café
+      { minX: 5.0, maxX: 9.8, minZ: 1.3, maxZ: 4.1 }, // Lounge chairs (2 rows)
+      { minX: 5.1, maxX: 9.7, minZ: 4.4, maxZ: 8.8 }, // Baggage claim carousel
+      { minX: -12.4, maxX: -9.2, minZ: -1.8, maxZ: 1.4 }, // Left indoor zen tree
+      { minX: 9.2, maxX: 12.4, minZ: -1.8, maxZ: 1.4 }, // Right indoor zen tree
     ],
     npcs: AIRPORT_NPCS,
     strollers: [
@@ -962,10 +968,10 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
           topStyle: 'coat',
         },
         waypoints: [
-          [-9.5, 0.5],
-          [3.5, 0.5],
-          [4.5, -1.5],
-          [-5.5, -1.5],
+          [-7.5, 0.2],
+          [3.6, 0.2],
+          [3.6, -1.2],
+          [-7.5, -1.2],
         ],
         speed: 1.55,
         phase: 0.4,
@@ -981,16 +987,16 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
           topStyle: 'tee',
         },
         waypoints: [
-          [9.8, 0.8],
-          [9.8, 6.2],
-          [1.8, 6.2],
-          [1.8, 1.2],
+          [4.2, 0.6],
+          [4.2, 6.2],
+          [1.2, 6.2],
+          [1.2, 0.6],
         ],
         speed: 1.45,
         phase: 2.6,
       },
     ],
-    buildScene: buildAirportScene,
+    buildScene: buildStudioAirportScene,
   },
   supermarket: {
     id: 'supermarket',
