@@ -419,6 +419,18 @@ export default function App() {
                   setActiveTopic(t);
                   setActiveTab('arena');
                 }}
+                onEarnXp={(xp) => {
+                  setTotalXp((prev) => {
+                    const next = prev + xp;
+                    try {
+                      localStorage.setItem('speaksharp_xp', String(next));
+                    } catch {
+                      // ignore
+                    }
+                    return next;
+                  });
+                }}
+                onOpenWorld3D={() => setActiveTab('world')}
                 onOpenStore={() => setActiveTab('pricing')}
                 onOpenSurvey={() => setShowSurveyModal(true)}
               />

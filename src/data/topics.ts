@@ -421,4 +421,109 @@ export const DEBATE_TOPICS: DebateTopic[] = [
       'Super clear and thoughtful—well done!',
     ],
   },
+  {
+    id: 'travel-airport-checkin',
+    title: 'International Airport Check-in & Boarding',
+    titleVi: 'Giao tiếp Sân bay Quốc tế: Check-in & Lên máy bay',
+    motion: 'Practice polite, confident English at airport check-in, security screening, and boarding gates.',
+    category: 'Giao tiếp hằng ngày',
+    level: 'A2',
+    isPro: false,
+    durationMin: 10,
+    keyVocab: [
+      { word: 'boarding pass', ipa: '/ˈbɔːrdɪŋ pæs/', meaningVi: 'thẻ lên máy bay' },
+      { word: 'window seat', ipa: '/ˈwɪndoʊ siːt/', meaningVi: 'ghế cạnh cửa sổ' },
+      { word: 'carry-on luggage', ipa: '/ˈkæri ɒn ˈlʌɡɪdʒ/', meaningVi: 'hành lý xách tay' },
+      { word: 'on schedule', ipa: '/ɒn ˈʃedʒuːl/', meaningVi: 'đúng giờ dự kiến' },
+    ],
+    openingQuestionJudge:
+      'Welcome to SpeakSharp Airlines! You are checking in for Flight JL 752 to Tokyo. Present your passport, request your preferred seat, and ask about your boarding time.',
+    openingQuestionBuddy:
+      "Hey traveler! Let's practice real-life airport English! Imagine you just arrived at the check-in counter—how would you politely ask for a window seat and check your suitcase?",
+    sampleHints: [
+      'Good morning! Here is my passport. Could I have a window seat, please?',
+      'I have one carry-on backpack and one suitcase to check in.',
+      'Excuse me, what time does boarding start at Gate B12, and is the flight on schedule?',
+    ],
+    followUpsJudge: [
+      'At security screening, the officer asks if you have a laptop or liquids in your bag. Respond clearly and politely.',
+      'Your flight is delayed by 30 minutes. Ask the gate agent politely whether you will still make your connecting flight.',
+      'Great job! Now order a drink and a croissant at the airport café using natural English.',
+    ],
+    followUpsBuddy: [
+      'Super polite and clear! Now imagine you are at Security—what should you put into a separate plastic tray?',
+      'Awesome! You sound like a seasoned international traveler. Where would you love to fly to first?',
+      'Fantastic fluency—you are 100% ready for our 3D Airport map!',
+    ],
+  },
+  {
+    id: 'daily-smart-shopping',
+    title: 'Smart Shopping & Eco-Friendly Habits at the Supermarket',
+    titleVi: 'Mua sắm Thông minh & Giao tiếp tại Siêu thị',
+    motion: 'Practice asking prices, checking food ingredients, and paying politely at an international supermarket.',
+    category: 'Giao tiếp hằng ngày',
+    level: 'A2',
+    isPro: false,
+    durationMin: 10,
+    keyVocab: [
+      { word: 'organic produce', ipa: '/ɔːrˈɡænɪk ˈproʊduːs/', meaningVi: 'nông sản hữu cơ' },
+      { word: 'reusable bag', ipa: '/riːˈjuːzəbəl bæɡ/', meaningVi: 'túi tái sử dụng' },
+      { word: 'ingredient', ipa: '/ɪnˈɡriːdiənt/', meaningVi: 'thành phần nguyên liệu' },
+      { word: 'receipt', ipa: '/rɪˈsiːt/', meaningVi: 'hóa đơn thanh toán' },
+    ],
+    openingQuestionJudge:
+      'Welcome to Fresh Mart! You want to buy fresh fruit, ask a staff member where the milk aisle is, and pay by card with your own reusable bag. Begin your conversation.',
+    openingQuestionBuddy:
+      "Hi! Let's go shopping at Fresh Mart! How would you politely ask the clerk how much the organic apples cost per kilogram?",
+    sampleHints: [
+      'Excuse me, how much are these organic apples per kilogram? I would like one kilo, please.',
+      'Could you tell me which aisle the fresh milk and orange juice are in?',
+      'I brought my own reusable bag. I will pay by card—may I have a receipt, please?',
+    ],
+    followUpsJudge: [
+      'At the bakery counter, ask whether the butter croissants contain any nuts before ordering two.',
+      'Why do you think using reusable bags at supermarkets is an important habit for students?',
+      'Very clear! Summarize three polite phrases every shopper should know in English.',
+    ],
+    followUpsBuddy: [
+      'Natural and friendly! Remember that "receipt" has a silent "p" (/rɪˈsiːt/). Try using it in a sentence!',
+      'Great job! What is your favorite snack or pastry to buy at a supermarket?',
+      'You nailed it—go try these exact phrases in our 3D Fresh Mart map!',
+    ],
+  },
+  {
+    id: 'ielts-future-careers-ai',
+    title: 'Future Careers in the Age of Artificial Intelligence',
+    titleVi: 'Nghề nghiệp Tương lai & Sáng tạo cùng Trí tuệ Nhân tạo',
+    motion: 'Which human skills will become most valuable as AI transforms the global job market?',
+    category: 'IELTS Speaking',
+    level: 'B2',
+    isPro: true,
+    durationMin: 15,
+    keyVocab: [
+      { word: 'adaptability', ipa: '/əˌdæptəˈbɪləti/', meaningVi: 'khả năng thích nghi' },
+      { word: 'automation', ipa: '/ˌɔːtəˈmeɪʃən/', meaningVi: 'tự động hóa' },
+      { word: 'empathy', ipa: '/ˈempəθi/', meaningVi: 'sự thấu cảm' },
+      { word: 'lifelong learning', ipa: '/ˈlaɪflɒŋ ˈlɜːrnɪŋ/', meaningVi: 'học tập suốt đời' },
+    ],
+    openingQuestionJudge:
+      'In IELTS Speaking Part 3, let us discuss the future of work: as AI automates repetitive tasks, which uniquely human skills should schools prioritize teaching today?',
+    openingQuestionBuddy:
+      "Let's imagine the year 2035! What dream career excites you, and how do you think AI tools will work alongside humans in that job?",
+    sampleHints: [
+      'As automation handles routine tasks, human empathy, creativity, and adaptability will become priceless.',
+      'Schools should emphasize lifelong learning and communication skills rather than pure memorization.',
+      'Students who learn to collaborate with AI tools will lead the next generation of innovation.',
+    ],
+    followUpsJudge: [
+      'Should governments retrain workers displaced by automation, or is that the responsibility of private tech companies?',
+      'Can AI ever truly replace human teachers or doctors? Justify your stance with a concrete example.',
+      'Deliver a strong 20-second conclusion on why English fluency unlocks global career opportunities.',
+    ],
+    followUpsBuddy: [
+      'What a forward-thinking answer! You used awesome vocabulary there.',
+      'Love how you connected technology with human creativity! What skill do you want to master this year?',
+      'Band 8.0 energy—fantastic job!',
+    ],
+  },
 ];
