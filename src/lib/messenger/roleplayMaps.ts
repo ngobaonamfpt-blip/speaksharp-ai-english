@@ -1042,7 +1042,7 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
     title: '🛒 Siêu thị Fresh Mart',
     subtitle: 'SpeakSharp International Supermarket',
     skyColor: '#d1fae5',
-    bounds: { minX: -11.9, maxX: 11.9, minZ: -9.3, maxZ: 8.8 },
+    bounds: { minX: -12.1, maxX: 12.1, minZ: -11.9, maxZ: 11.9 },
     spawn: { x: 0, z: 3.6, yaw: Math.PI },
     colliders: [],
     npcs: SUPERMARKET_NPCS,

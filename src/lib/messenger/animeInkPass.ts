@@ -337,7 +337,11 @@ export class AnimeInkPass {
 
       scene.traverse((obj) => {
         if (obj === this.cachedPlayerRoot) return;
-        if (SKIP_INFO_NAMES.has(obj.name) || (obj as SkinnedMesh).isSkinnedMesh) {
+        if (
+          SKIP_INFO_NAMES.has(obj.name) ||
+          (obj as SkinnedMesh).isSkinnedMesh ||
+          (obj as { isSprite?: boolean }).isSprite
+        ) {
           this.cachedInfoHidden.push(obj);
           return;
         }
