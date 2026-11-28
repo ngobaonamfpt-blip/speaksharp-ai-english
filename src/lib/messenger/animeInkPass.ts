@@ -111,7 +111,7 @@ void main() {
     float depthEdge = sqrt(gx * gx + gy * gy) / max(dC, 0.001);
     depthEdge = smoothstep(0.014, 0.040, depthEdge);
 
-    // --- 2. 3-tap Normal + SurfaceId/ElementId Crease Detection (1:1 crisp, 3 reads instead of 5!) ---
+    // --- 2. Anti-aliased Normal + SurfaceId/ElementId Crease Detection ---
     vec2 infoTexel = 1.0 / uInfoResolution;
     vec4 iC = texture2D(tInfo, vUv);
     vec4 iR = texture2D(tInfo, vUv + vec2(infoTexel.x, 0.0));
@@ -123,10 +123,10 @@ void main() {
     vec3 nU = iU.rgb * 2.0 - 1.0;
     float nDiffH = length(nR - nC);
     float nDiffV = length(nU - nC);
-    float normalEdge = smoothstep(0.20, 0.44, max(nDiffH, nDiffV)) * hasInfo;
+    float normalEdge = smoothstep(0.24, 0.52, max(nDiffH, nDiffV)) * hasInfo;
 
     float idDiff = max(abs(iC.a - iR.a), abs(iC.a - iU.a));
-    float idEdge = step(0.032, idDiff) * hasInfo;
+    float idEdge = smoothstep(0.025, 0.075, idDiff) * hasInfo;
 
     // --- 3. 3-tap Colour Edge (reuses center col -> only 2 extra reads instead of 8!) ---
     float lC = luma(col);
@@ -309,7 +309,7 @@ export class AnimeInkPass {
     this.infoTarget.setSize(iw, ih);
     this.material.uniforms.uResolution.value.set(w, h);
     this.material.uniforms.uInfoResolution.value.set(iw, ih);
-    this.material.uniforms.uLineWidth.value = h > 950 ? 1.15 : 0.95;
+    this.material.uniforms.uLineWidth.value = h > 1150 ? 1.05 : 0.82;
   }
 
   render(renderer: WebGLRenderer, scene: Scene, camera: Camera, time: number) {

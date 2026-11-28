@@ -19,20 +19,20 @@ export const GFX_META: Record<
 > = {
   high: {
     label: '🎨 Cao',
-    toast: '🎨 Đồ họa Cao: Anime Ink sắc nét 100% + Bóng 3D',
+    toast: '🎨 Đồ họa Cao: Anime Ink sắc nét HiDPI + Bóng 3D',
     bg: '#e0f2fe',
     fg: '#0369a1',
     inkScale: 1.0,
-    maxDpr: 1.35,
+    maxDpr: 2.0,
     shadows: true,
   },
   medium: {
     label: '⚖️ Ink Nhẹ',
-    toast: '⚖️ Đồ họa Trung bình (Ink Nhẹ): Giữ viền Anime, giảm ~48% tải GPU',
+    toast: '⚖️ Đồ họa Trung bình (Ink Nhẹ): Giữ viền Anime, giảm ~35% tải GPU',
     bg: '#dcfce7',
     fg: '#15803d',
-    inkScale: 0.72,
-    maxDpr: 1.0,
+    inkScale: 0.85,
+    maxDpr: 1.15,
     shadows: true,
   },
   eco: {

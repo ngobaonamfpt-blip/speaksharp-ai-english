@@ -1085,13 +1085,14 @@ export const MessengerProWorld: React.FC<MessengerProWorldProps> = ({
 
     const resize = () => {
       const { clientWidth, clientHeight } = host;
+      const dpr = renderer.getPixelRatio();
       camera.aspect = clientWidth / Math.max(clientHeight, 1);
       camera.updateProjectionMatrix();
       renderer.setSize(clientWidth, clientHeight);
       const dw = Math.max(1, clientWidth >> 1);
       const dh = Math.max(1, clientHeight >> 1);
       resizeSceneDepthTarget(sceneDepthTarget, dw, dh);
-      animeInk.setSize(clientWidth, clientHeight);
+      animeInk.setSize(Math.floor(clientWidth * dpr), Math.floor(clientHeight * dpr));
       waterDepthCaptured = false;
       if (runtime.gameplayWaterMaterial) {
         setGameplayWaterDepth(
