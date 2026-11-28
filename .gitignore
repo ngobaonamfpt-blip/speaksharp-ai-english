@@ -10,6 +10,7 @@ dist-ssr/
 
 # Large 3D binary models (>100MB GitHub limit)
 public/models/*.glb
+!public/models/supermarket.glb
 
 # Logs
 logs
