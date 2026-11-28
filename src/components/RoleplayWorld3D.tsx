@@ -528,12 +528,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
 
     const hitsCollider = (nx: number, nz: number) => {
       const pad = 0.45;
-      if (
-        nx < mapCfg.bounds.minX ||
-        nx > mapCfg.bounds.maxX ||
-        nz < mapCfg.bounds.minZ ||
-        nz > mapCfg.bounds.maxZ
-      ) {
+      const b = (scene.userData.autoBounds as typeof mapCfg.bounds | undefined) ?? mapCfg.bounds;
+      if (nx < b.minX || nx > b.maxX || nz < b.minZ || nz > b.maxZ) {
         return true;
       }
       for (const c of mapCfg.colliders) {

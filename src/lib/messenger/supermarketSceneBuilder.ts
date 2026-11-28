@@ -120,6 +120,14 @@ export function buildStudioSupermarketScene(
 
       const normBox = new THREE.Box3().setFromObject(model);
       const normSize = normBox.getSize(new THREE.Vector3());
+      // Auto-fit walkable interior bounds right up to the real 3D walls (0.65m wall thickness margin)
+      const wallMargin = 0.65;
+      scene.userData.autoBounds = {
+        minX: normBox.min.x + wallMargin,
+        maxX: normBox.max.x - wallMargin,
+        minZ: normBox.min.z + wallMargin,
+        maxZ: normBox.max.z - wallMargin,
+      };
       console.info(
         `[FreshMart GLB] Loaded! raw=(${rawSize.x.toFixed(1)}, ${rawSize.y.toFixed(1)}, ${rawSize.z.toFixed(1)}) -> norm=(${normSize.x.toFixed(1)}, ${normSize.y.toFixed(1)}, ${normSize.z.toFixed(1)})`
       );
