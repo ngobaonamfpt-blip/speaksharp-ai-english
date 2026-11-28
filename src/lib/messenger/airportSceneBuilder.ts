@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { addAirportRichDetails } from './airportDetailsBuilder';
 import { createToonMaterialCache } from './perfOptimizer';
 
@@ -22,30 +23,21 @@ function roundedRectShape(w: number, h: number, r: number): THREE.Shape {
 
 const airportBevelCache = new Map<string, THREE.BufferGeometry>();
 
-/** Extruded rounded architectural block standing upright along Y (eliminates raw sharp boxes!) */
+/** Smooth-normal RoundedBoxGeometry standing upright from Y=0 (zero ugly bevel seam lines!) */
 function createBeveledBlock(
   w: number,
   h: number,
   d: number,
   radius = 0.14,
-  bevel = 0.03
+  _bevel = 0.03
 ): THREE.BufferGeometry {
-  const isSmall = Math.max(w, h, d) <= 0.7;
-  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const r = Math.min(radius, w * 0.45, h * 0.45, d * 0.45);
+  const segs = Math.max(w, h, d) <= 0.7 ? 2 : 3;
+  const key = `rb_${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${r.toFixed(3)}_${segs}`;
   const cached = airportBevelCache.get(key);
   if (cached) return cached;
-  const shape = roundedRectShape(w, d, radius);
-  const geo = new THREE.ExtrudeGeometry(shape, {
-    depth: Math.max(0.02, h - bevel * 2),
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: isSmall ? 1 : 2,
-    curveSegments: isSmall ? 4 : 6,
-  });
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(0, bevel, 0);
-  geo.computeVertexNormals();
+  const geo = new RoundedBoxGeometry(w, h, d, segs, r);
+  geo.translate(0, h / 2, 0);
   geo.userData.__sharedCache = true;
   airportBevelCache.set(key, geo);
   return geo;

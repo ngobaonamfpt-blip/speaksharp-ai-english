@@ -1,21 +1,5 @@
 import * as THREE from 'three';
-
-function roundedRect(w: number, h: number, r: number): THREE.Shape {
-  const s = new THREE.Shape();
-  const hw = w / 2;
-  const hh = h / 2;
-  const cr = Math.min(r, hw, hh);
-  s.moveTo(-hw + cr, -hh);
-  s.lineTo(hw - cr, -hh);
-  s.quadraticCurveTo(hw, -hh, hw, -hh + cr);
-  s.lineTo(hw, hh - cr);
-  s.quadraticCurveTo(hw, hh, hw - cr, hh);
-  s.lineTo(-hw + cr, hh);
-  s.quadraticCurveTo(-hw, hh, -hw, hh - cr);
-  s.lineTo(-hw, -hh + cr);
-  s.quadraticCurveTo(-hw, -hh, -hw + cr, -hh);
-  return s;
-}
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 const airportDetailBevelCache = new Map<string, THREE.BufferGeometry>();
 
@@ -24,23 +8,15 @@ function beveledBox(
   h: number,
   d: number,
   radius = 0.1,
-  bevel = 0.025
+  _bevel = 0.025
 ): THREE.BufferGeometry {
-  const isSmall = Math.max(w, h, d) <= 0.7;
-  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const r = Math.min(radius, w * 0.45, h * 0.45, d * 0.45);
+  const segs = Math.max(w, h, d) <= 0.7 ? 2 : 3;
+  const key = `adrb_${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${r.toFixed(3)}_${segs}`;
   const cached = airportDetailBevelCache.get(key);
   if (cached) return cached;
-  const geo = new THREE.ExtrudeGeometry(roundedRect(w, d, radius), {
-    depth: Math.max(0.02, h - bevel * 2),
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: isSmall ? 1 : 2,
-    curveSegments: isSmall ? 4 : 6,
-  });
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(0, bevel, 0);
-  geo.computeVertexNormals();
+  const geo = new RoundedBoxGeometry(w, h, d, segs, r);
+  geo.translate(0, h / 2, 0);
   geo.userData.__sharedCache = true;
   airportDetailBevelCache.set(key, geo);
   return geo;
@@ -352,27 +328,64 @@ function makeLuggageTrolley(
   return g;
 }
 
-/** 3-color airport recycling & waste station */
+/** Sleek 3-compartment airport recycling station with crisp sorting icons & recessed slots */
 function makeRecyclingStation(
   toon: (h: number) => THREE.MeshToonMaterial,
   steelMat: THREE.Material
 ): THREE.Group {
   const g = new THREE.Group();
-  const body = new THREE.Mesh(beveledBox(1.26, 0.86, 0.46, 0.08, 0.02), toon(0xe2e8f0));
+  const body = new THREE.Mesh(beveledBox(1.16, 0.72, 0.42, 0.05), toon(0xe8eef3));
   body.castShadow = true;
-  const lids = [0x2563eb, 0x16a34a, 0xf59e0b];
+  const plinth = new THREE.Mesh(beveledBox(1.12, 0.06, 0.38, 0.03), steelMat);
+  g.add(body, plinth);
+
+  const labelTex = makeCanvasTex(384, 192, (ctx, w, h) => {
+    ctx.fillStyle = '#e8eef3';
+    ctx.fillRect(0, 0, w, h);
+    const cols = [
+      { bg: '#2563eb', icon: '📄', text: 'PAPER' },
+      { bg: '#16a34a', icon: '♻️', text: 'PLASTIC' },
+      { bg: '#d97706', icon: '🗑️', text: 'WASTE' },
+    ];
+    cols.forEach((c, i) => {
+      const x = 10 + i * 124;
+      ctx.fillStyle = c.bg;
+      ctx.beginPath();
+      ctx.roundRect(x, 16, 114, 160, 14);
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.font = '700 42px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(c.icon, x + 57, 94);
+      ctx.font = '900 18px system-ui, sans-serif';
+      ctx.fillText(c.text, x + 57, 148);
+    });
+  });
+  const labelMat = new THREE.MeshBasicMaterial({ map: labelTex });
+  const frontPanel = new THREE.Mesh(new THREE.PlaneGeometry(1.04, 0.52), labelMat);
+  frontPanel.position.set(0, 0.38, 0.215);
+  const backPanel = frontPanel.clone();
+  backPanel.position.z = -0.215;
+  backPanel.rotation.y = Math.PI;
+  g.add(frontPanel, backPanel);
+
+  const lids = [0x2563eb, 0x16a34a, 0xd97706];
   lids.forEach((col, i) => {
-    const lid = new THREE.Mesh(beveledBox(0.36, 0.12, 0.42, 0.05, 0.015), toon(col));
-    lid.position.set(-0.4 + i * 0.4, 0.84, 0);
-    const slot = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.04, 0.14), steelMat);
-    slot.position.set(-0.4 + i * 0.4, 0.96, 0);
+    const lx = -0.36 + i * 0.36;
+    const lid = new THREE.Mesh(beveledBox(0.33, 0.09, 0.38, 0.03), toon(col));
+    lid.position.set(lx, 0.71, 0);
+    const slot = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.18, 0.1),
+      new THREE.MeshBasicMaterial({ color: 0x0f172a })
+    );
+    slot.rotation.x = -Math.PI / 2;
+    slot.position.set(lx, 0.805, 0);
     g.add(lid, slot);
   });
-  g.add(body);
   return g;
 }
 
-/** Cute stylized seated waiting traveler on a Gate B12 lounge chair */
+/** Cute anime-styled seated waiting traveler on a Gate B12 lounge chair */
 function makeSeatedTraveler(
   shirtHex: number,
   pantsHex: number,
@@ -385,42 +398,64 @@ function makeSeatedTraveler(
   const shirtMat = toon(shirtHex);
   const pantsMat = toon(pantsHex);
   const hairMat = toon(hairHex);
+  const whiteMat = toon(0xf8fafc);
+  const eyeMat = new THREE.MeshBasicMaterial({ color: 0x1e293b });
+  const blushMat = new THREE.MeshBasicMaterial({ color: 0xfca5a5 });
 
-  // Torso
-  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.18, 0.26, 6, 10), shirtMat);
-  torso.position.set(0, 0.84, -0.05);
-  torso.castShadow = true;
+  // Torso + crisp white collar + side sleeves
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.16, 0.24, 6, 12), shirtMat);
+  torso.position.set(0, 0.82, -0.06);
+  const collar = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.14, 0.06, 10), whiteMat);
+  collar.position.set(0, 1.01, -0.05);
+  ([-0.19, 0.19] as const).forEach((ax) => {
+    const arm = new THREE.Mesh(new THREE.CapsuleGeometry(0.05, 0.22, 4, 8), shirtMat);
+    arm.position.set(ax, 0.82, 0.04);
+    arm.rotation.x = -0.65;
+    arm.rotation.z = ax < 0 ? 0.15 : -0.15;
+    g.add(arm);
+  });
 
-  // Head + hair cap
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skinMat);
-  head.position.set(0, 1.24, -0.02);
-  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.205, 12, 10, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
-  hair.position.set(0, 1.27, -0.04);
+  // Head + anime eyes + rosy cheeks + sculpted hair cap & bangs
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.185, 14, 12), skinMat);
+  head.position.set(0, 1.22, -0.02);
+  ([-0.065, 0.065] as const).forEach((ex) => {
+    const eye = new THREE.Mesh(new THREE.SphereGeometry(0.022, 8, 6), eyeMat);
+    eye.position.set(ex, 1.22, 0.155);
+    const blush = new THREE.Mesh(new THREE.SphereGeometry(0.024, 6, 6), blushMat);
+    blush.scale.set(1.2, 0.6, 0.4);
+    blush.position.set(ex * 1.45, 1.18, 0.15);
+    g.add(eye, blush);
+  });
+  const hair = new THREE.Mesh(new THREE.SphereGeometry(0.198, 14, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), hairMat);
+  hair.position.set(0, 1.25, -0.04);
+  const hairBack = new THREE.Mesh(new THREE.SphereGeometry(0.185, 12, 10), hairMat);
+  hairBack.scale.set(1.02, 0.95, 0.72);
+  hairBack.position.set(0, 1.2, -0.11);
 
-  // Seated thighs + lower legs + shoes
-  ([-0.1, 0.1] as const).forEach((lx) => {
-    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.068, 0.22, 4, 8), pantsMat);
+  // Seated thighs + shins + shoes neatly inside chair width (zero armrest clipping!)
+  ([-0.095, 0.095] as const).forEach((lx) => {
+    const thigh = new THREE.Mesh(new THREE.CapsuleGeometry(0.062, 0.2, 4, 8), pantsMat);
     thigh.rotation.x = Math.PI / 2;
-    thigh.position.set(lx, 0.58, 0.12);
-    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.06, 0.28, 4, 8), pantsMat);
-    shin.position.set(lx, 0.34, 0.28);
-    const shoe = new THREE.Mesh(beveledBox(0.12, 0.08, 0.18, 0.03, 0.01), toon(0x1e293b));
-    shoe.position.set(lx, 0.06, 0.32);
+    thigh.position.set(lx, 0.59, 0.11);
+    const shin = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.28, 4, 8), pantsMat);
+    shin.position.set(lx, 0.34, 0.27);
+    const shoe = new THREE.Mesh(beveledBox(0.11, 0.08, 0.17, 0.03), toon(0x1e293b));
+    shoe.position.set(lx, 0.04, 0.31);
     g.add(thigh, shin, shoe);
   });
 
-  // Holding a glowing smartphone / boarding pass
-  const phone = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.15, 0.02), new THREE.MeshBasicMaterial({ color: 0x7dd3fc }));
-  phone.position.set(0.04, 0.86, 0.26);
+  // Holding a glowing smartphone
+  const phone = new THREE.Mesh(new THREE.BoxGeometry(0.09, 0.14, 0.018), new THREE.MeshBasicMaterial({ color: 0x7dd3fc }));
+  phone.position.set(0, 0.84, 0.24);
   phone.rotation.x = -0.45;
 
-  // Carry-on suitcase parked right beside their seat
+  // Carry-on suitcase parked neatly beside seat
   const carryOn = makeSmallSuitcase(bagHex, toon);
-  carryOn.scale.setScalar(0.86);
-  carryOn.position.set(0.48, 0, 0.38);
-  carryOn.rotation.y = -0.25;
+  carryOn.scale.setScalar(0.84);
+  carryOn.position.set(0.54, 0, 0.34);
+  carryOn.rotation.y = -0.22;
 
-  g.add(torso, head, hair, phone, carryOn);
+  g.add(torso, collar, head, hair, hairBack, phone, carryOn);
   return g;
 }
 
@@ -562,10 +597,10 @@ export function addAirportRichDetails(
   trolley2.rotation.y = 0.55;
   root.add(trolley1, trolley2);
 
-  // 5. 3-COLOR AIRPORT RECYCLING & WASTE STATIONS
+  // 5. 3-COLOR AIRPORT RECYCLING & WASTE STATIONS (kept clear of GATE B12 floor decal!)
   const bin1 = makeRecyclingStation(toon, steelMat);
-  bin1.position.set(2.5, 0, 1.8);
-  bin1.rotation.y = -0.18;
+  bin1.position.set(4.35, 0, 2.55);
+  bin1.rotation.y = -Math.PI / 2;
   const bin2 = makeRecyclingStation(toon, steelMat);
   bin2.position.set(-11.4, 0, 4.9);
   bin2.rotation.y = Math.PI / 2;

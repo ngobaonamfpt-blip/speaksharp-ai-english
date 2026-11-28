@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { addSupermarketRichDetails } from './supermarketDetailsBuilder';
 import { createToonMaterialCache } from './perfOptimizer';
 
@@ -26,23 +27,15 @@ export function createMarketBeveledBox(
   h: number,
   d: number,
   radius = 0.12,
-  bevel = 0.028
+  _bevel = 0.028
 ): THREE.BufferGeometry {
-  const isSmall = Math.max(w, h, d) <= 0.65;
-  const key = `${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${radius.toFixed(2)}_${bevel.toFixed(3)}_${isSmall ? 1 : 2}`;
+  const r = Math.min(radius, w * 0.45, h * 0.45, d * 0.45);
+  const segs = Math.max(w, h, d) <= 0.65 ? 2 : 3;
+  const key = `mrb_${w.toFixed(2)}_${h.toFixed(2)}_${d.toFixed(2)}_${r.toFixed(3)}_${segs}`;
   const cached = marketBevelCache.get(key);
   if (cached) return cached;
-  const geo = new THREE.ExtrudeGeometry(roundedRectShape(w, d, radius), {
-    depth: Math.max(0.02, h - bevel * 2),
-    bevelEnabled: true,
-    bevelThickness: bevel,
-    bevelSize: bevel,
-    bevelSegments: isSmall ? 1 : 2,
-    curveSegments: isSmall ? 4 : 6,
-  });
-  geo.rotateX(-Math.PI / 2);
-  geo.translate(0, bevel, 0);
-  geo.computeVertexNormals();
+  const geo = new RoundedBoxGeometry(w, h, d, segs, r);
+  geo.translate(0, h / 2, 0);
   geo.userData.__sharedCache = true;
   marketBevelCache.set(key, geo);
   return geo;
