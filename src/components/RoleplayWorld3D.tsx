@@ -66,7 +66,7 @@ interface RoleplayWorld3DProps {
   onEarnXp: (xp: number, reason: string) => void;
 }
 
-const CHAR_SCALE = 3.15;
+const CHAR_SCALE = 3.75;
 
 const PAPER_BTN_STYLE: React.CSSProperties = {
   width: 46,
@@ -337,7 +337,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       vy: 0,
       yaw: mapCfg.spawn.yaw,
       camYaw: mapCfg.spawn.yaw,
-      camDist: 5.5,
+      camDist: 4.5,
       camPitch: 0.28,
       dragging: false,
       lastX: 0,
@@ -397,8 +397,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           depthWrite: false,
         })
       );
-      badge.scale.set(0.7, 0.7, 1);
-      badge.position.set(spec.x, 2.05, spec.z);
+      badge.scale.set(0.74, 0.74, 1);
+      badge.position.set(spec.x, 2.38, spec.z);
       scene.add(badge);
 
       npcNodes.push({ spec, group: grp, ring, badge, badgeDone: isDoneInit });
@@ -927,7 +927,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           n.badge.material.needsUpdate = true;
         }
         (n.ring.material as MeshBasicMaterial).color.setHex(isDone ? 0x4ade80 : 0xf5bd33);
-        n.badge.position.y = 2.05 + Math.sin(elapsed * 3.2 + idx) * 0.09;
+        n.badge.position.y = 2.38 + Math.sin(elapsed * 3.2 + idx) * 0.09;
         const isClose = currentNearby?.id === n.spec.id;
         if (isClose) {
           const targetYaw = Math.atan2(pState.x - n.spec.x, pState.z - n.spec.z);

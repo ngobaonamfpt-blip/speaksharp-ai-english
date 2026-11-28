@@ -91,12 +91,12 @@ export function buildStudioSupermarketScene(
       const model = gltf.scene;
       model.updateMatrixWorld(true);
 
-      // Compute raw bounding box and normalize to a ~24m x 20m playable supermarket interior
+      // Compute raw bounding box and normalize to realistic human-scale supermarket (~19.5m x 15.2m)
       const rawBox = new THREE.Box3().setFromObject(model);
       const rawSize = rawBox.getSize(new THREE.Vector3());
       const rawCenter = rawBox.getCenter(new THREE.Vector3());
       const maxHoriz = Math.max(rawSize.x, rawSize.z, 0.001);
-      const targetSpan = 24.5;
+      const targetSpan = 19.5;
       const scale = targetSpan / maxHoriz;
 
       model.scale.setScalar(scale);

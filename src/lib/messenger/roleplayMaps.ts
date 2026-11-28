@@ -582,8 +582,8 @@ const SUPERMARKET_NPCS: RoleplayNpcSpec[] = [
     id: 'mart-produce',
     name: 'Clerk Emma',
     landmark: 'Fresh Produce Island',
-    x: -6.8,
-    z: -2.4,
+    x: -5.4,
+    z: -1.9,
     facingYaw: 0.2,
     style: {
       hatColor: 0x3b2f2a,
@@ -633,8 +633,8 @@ const SUPERMARKET_NPCS: RoleplayNpcSpec[] = [
     id: 'mart-bakery',
     name: 'Baker Ken',
     landmark: 'Fresh Bakery Counter',
-    x: 7.2,
-    z: -3.2,
+    x: 5.7,
+    z: -2.5,
     facingYaw: -0.3,
     style: {
       hatColor: 0xf5f1e6,
@@ -735,8 +735,8 @@ const SUPERMARKET_NPCS: RoleplayNpcSpec[] = [
     id: 'mart-checkout',
     name: 'Cashier Sophia',
     landmark: 'Checkout Lane',
-    x: -5.4,
-    z: 5.2,
+    x: -4.3,
+    z: 4.1,
     facingYaw: 3.14,
     style: {
       hatColor: 0x4d3430,
@@ -1042,8 +1042,8 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
     title: '🛒 Siêu thị Fresh Mart',
     subtitle: 'SpeakSharp International Supermarket',
     skyColor: '#d1fae5',
-    bounds: { minX: -12.1, maxX: 12.1, minZ: -11.9, maxZ: 11.9 },
-    spawn: { x: 0, z: 3.6, yaw: Math.PI },
+    bounds: { minX: -9.6, maxX: 9.6, minZ: -9.4, maxZ: 9.4 },
+    spawn: { x: 0, z: 2.8, yaw: Math.PI },
     colliders: [],
     npcs: SUPERMARKET_NPCS,
     strollers: [
