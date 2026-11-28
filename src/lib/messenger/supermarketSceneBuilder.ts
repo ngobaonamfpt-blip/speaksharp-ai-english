@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+import { acceleratedRaycast, computeBoundsTree, disposeBoundsTree } from 'three-mesh-bvh';
 import { patchMaterialForInk } from './animeInkPass';
+
+// Enable ultra-fast BVH raycasting for solid 3D shelf & wall collisions
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 /**
  * Loads the real 3D Supermarket GLB model (`/models/supermarket.glb`) into
@@ -101,17 +107,32 @@ export function buildStudioSupermarketScene(
       );
       model.updateMatrixWorld(true);
 
-      // Patch all materials for sRGB parity inside AnimeInkPass & optimize shadow flags
+      // Patch all materials for sRGB parity inside AnimeInkPass & collect solid collision meshes!
+      const solidMeshes: THREE.Mesh[] = [];
+      const tmpBox = new THREE.Box3();
       model.traverse((obj) => {
         const mesh = obj as THREE.Mesh;
         if (!mesh.isMesh) return;
         mesh.receiveShadow = true;
         mesh.castShadow = false;
         const mat = mesh.material as THREE.Material | THREE.Material[] | undefined;
-        if (!mat) return;
-        const list = Array.isArray(mat) ? mat : [mat];
-        for (const m of list) {
-          patchMaterialForInk(m);
+        if (mat) {
+          const list = Array.isArray(mat) ? mat : [mat];
+          for (const m of list) {
+            patchMaterialForInk(m);
+          }
+        }
+        // Build BVH for any mesh spanning player body height (0.25m..1.85m) -> real shelf/wall collision!
+        tmpBox.setFromObject(mesh);
+        if (tmpBox.max.y > 0.25 && tmpBox.min.y < 1.85) {
+          const geo = mesh.geometry as THREE.BufferGeometry & {
+            computeBoundsTree?: () => void;
+            boundsTree?: unknown;
+          };
+          if (geo.computeBoundsTree && !geo.boundsTree) {
+            geo.computeBoundsTree();
+          }
+          solidMeshes.push(mesh);
         }
       });
 
@@ -128,8 +149,9 @@ export function buildStudioSupermarketScene(
         minZ: normBox.min.z + wallMargin,
         maxZ: normBox.max.z - wallMargin,
       };
+      scene.userData.solidMeshes = solidMeshes;
       console.info(
-        `[FreshMart GLB] Loaded! raw=(${rawSize.x.toFixed(1)}, ${rawSize.y.toFixed(1)}, ${rawSize.z.toFixed(1)}) -> norm=(${normSize.x.toFixed(1)}, ${normSize.y.toFixed(1)}, ${normSize.z.toFixed(1)})`
+        `[FreshMart GLB] Loaded! solidMeshes=${solidMeshes.length} raw=(${rawSize.x.toFixed(1)}, ${rawSize.y.toFixed(1)}, ${rawSize.z.toFixed(1)}) -> norm=(${normSize.x.toFixed(1)}, ${normSize.y.toFixed(1)}, ${normSize.z.toFixed(1)})`
       );
     },
     undefined,

@@ -25,6 +25,7 @@ import {
   MeshBasicMaterial,
   PCFSoftShadowMap,
   PerspectiveCamera,
+  Raycaster,
   RingGeometry,
   Scene,
   SRGBColorSpace,
@@ -526,7 +527,18 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       ]);
     };
 
-    const hitsCollider = (nx: number, nz: number) => {
+    const moveRay = new Raycaster();
+    (moveRay as unknown as { firstHitOnly: boolean }).firstHitOnly = true;
+    const rayOrig = new Vector3();
+    const rayDir = new Vector3();
+    const PROBE_DIRS = [
+      new Vector3(1, 0, 0),
+      new Vector3(-1, 0, 0),
+      new Vector3(0, 0, 1),
+      new Vector3(0, 0, -1),
+    ];
+
+    const hitsCollider = (nx: number, nz: number, fromX = pState.x, fromZ = pState.z) => {
       const pad = 0.45;
       const b = (scene.userData.autoBounds as typeof mapCfg.bounds | undefined) ?? mapCfg.bounds;
       if (nx < b.minX || nx > b.maxX || nz < b.minZ || nz > b.maxZ) {
@@ -535,6 +547,31 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       for (const c of mapCfg.colliders) {
         if (nx > c.minX - pad && nx < c.maxX + pad && nz > c.minZ - pad && nz < c.maxZ + pad) {
           return true;
+        }
+      }
+      // Real 3D BVH mesh collision for GLB shelves, checkout counters & interior walls!
+      const solidMeshes = scene.userData.solidMeshes as Mesh[] | undefined;
+      if (solidMeshes && solidMeshes.length > 0) {
+        const dx = nx - fromX;
+        const dz = nz - fromZ;
+        const step = Math.hypot(dx, dz);
+        if (step > 0.0001) {
+          rayDir.set(dx / step, 0, dz / step);
+          moveRay.far = step + 0.36;
+          // Check waist (0.65m) & chest (1.2m) rays along movement direction
+          rayOrig.set(fromX, 0.65, fromZ);
+          moveRay.set(rayOrig, rayDir);
+          if (moveRay.intersectObjects(solidMeshes, false).length > 0) return true;
+          rayOrig.set(fromX, 1.2, fromZ);
+          moveRay.set(rayOrig, rayDir);
+          if (moveRay.intersectObjects(solidMeshes, false).length > 0) return true;
+        }
+        // 4 short cardinal body-radius probes at destination so corners never clip into shelves
+        moveRay.far = 0.32;
+        rayOrig.set(nx, 0.72, nz);
+        for (let i = 0; i < 4; i++) {
+          moveRay.set(rayOrig, PROBE_DIRS[i]);
+          if (moveRay.intersectObjects(solidMeshes, false).length > 0) return true;
         }
       }
       return false;
