@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BookOpen,
   Check,
@@ -804,141 +805,143 @@ export const LearningPath: React.FC<LearningPathProps> = ({
       </div>
 
       {/* UNIT GUIDEBOOK MODAL (Vocab + IPA Audio + Model Phrases!) */}
-      {guideUnit && (
-        <div
-          className="modal-backdrop"
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 80,
-            display: 'grid',
-            placeItems: 'center',
-            background: 'rgba(15, 23, 42, 0.56)',
-            padding: 16,
-          }}
-          onClick={() => setGuideUnit(null)}
-        >
+      {guideUnit &&
+        createPortal(
           <div
-            className="modal-box"
-            style={{ maxWidth: 560, width: '92vw', maxHeight: '88vh', overflowY: 'auto' }}
-            onClick={(e) => e.stopPropagation()}
+            className="modal-backdrop"
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 9999,
+              display: 'grid',
+              placeItems: 'center',
+              background: 'rgba(15, 23, 42, 0.56)',
+              padding: 16,
+            }}
+            onClick={() => setGuideUnit(null)}
           >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
-              <div>
-                <span className="badge badge-indigo">{guideUnit.partLabel} · CEFR {guideUnit.cefr}</span>
-                <h3 className="display-font" style={{ fontSize: 19, fontWeight: 800, marginTop: 5 }}>
-                  📖 Sổ tay: {guideUnit.title}
-                </h3>
-              </div>
-              <button className="icon-btn" onClick={() => setGuideUnit(null)}>
-                <X size={16} />
-              </button>
-            </div>
-
             <div
-              style={{
-                background: '#fefce8',
-                border: '1.5px solid #fde047',
-                borderRadius: 12,
-                padding: '10px 13px',
-                fontSize: 12.5,
-                fontWeight: 600,
-                color: '#713f12',
-                marginBottom: 14,
-              }}
+              className="modal-box"
+              style={{ maxWidth: 560, width: '92vw', maxHeight: '88vh', overflowY: 'auto' }}
+              onClick={(e) => e.stopPropagation()}
             >
-              💡 {guideUnit.guideTipVi}
-            </div>
-
-            <div style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#64748b', marginBottom: 8 }}>
-                Từ vựng & Phát âm IPA trọng tâm (Bấm loa để nghe)
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+                <div>
+                  <span className="badge badge-indigo">{guideUnit.partLabel} · CEFR {guideUnit.cefr}</span>
+                  <h3 className="display-font" style={{ fontSize: 19, fontWeight: 800, marginTop: 5 }}>
+                    📖 Sổ tay: {guideUnit.title}
+                  </h3>
+                </div>
+                <button className="icon-btn" onClick={() => setGuideUnit(null)}>
+                  <X size={16} />
+                </button>
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
-                {guideUnit.topicIds
-                  .map((id) => topicMap.get(id))
-                  .filter(Boolean)
-                  .flatMap((t) => (t as DebateTopic).keyVocab.slice(0, 2))
-                  .slice(0, 6)
-                  .map((v) => (
+
+              <div
+                style={{
+                  background: '#fefce8',
+                  border: '1.5px solid #fde047',
+                  borderRadius: 12,
+                  padding: '10px 13px',
+                  fontSize: 12.5,
+                  fontWeight: 600,
+                  color: '#713f12',
+                  marginBottom: 14,
+                }}
+              >
+                💡 {guideUnit.guideTipVi}
+              </div>
+
+              <div style={{ marginBottom: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#64748b', marginBottom: 8 }}>
+                  Từ vựng & Phát âm IPA trọng tâm (Bấm loa để nghe)
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 8 }}>
+                  {guideUnit.topicIds
+                    .map((id) => topicMap.get(id))
+                    .filter(Boolean)
+                    .flatMap((t) => (t as DebateTopic).keyVocab.slice(0, 2))
+                    .slice(0, 6)
+                    .map((v) => (
+                      <div
+                        key={v.word}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: 8,
+                          padding: '8px 10px',
+                          borderRadius: 10,
+                          border: '1.5px solid #e2e8f0',
+                          background: '#f8fafc',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: 13, fontWeight: 800, color: '#141517' }}>{v.word}</div>
+                          <div style={{ fontSize: 11, color: '#0369a1', fontFamily: 'monospace' }}>{v.ipa}</div>
+                          <div style={{ fontSize: 11.5, color: '#64748b' }}>{v.meaningVi}</div>
+                        </div>
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title={`Nghe phát âm ${v.word}`}
+                          onClick={() => speakText(v.word)}
+                        >
+                          <Volume2 size={14} />
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#64748b', marginBottom: 8 }}>
+                  Mẫu câu ăn điểm
+                </div>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  {guideUnit.guidePhrases.map((p) => (
                     <div
-                      key={v.word}
+                      key={p.en}
                       style={{
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'space-between',
-                        gap: 8,
-                        padding: '8px 10px',
+                        gap: 10,
+                        padding: '9px 12px',
                         borderRadius: 10,
                         border: '1.5px solid #e2e8f0',
-                        background: '#f8fafc',
+                        background: '#ffffff',
                       }}
                     >
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: '#141517' }}>{v.word}</div>
-                        <div style={{ fontSize: 11, color: '#0369a1', fontFamily: 'monospace' }}>{v.ipa}</div>
-                        <div style={{ fontSize: 11.5, color: '#64748b' }}>{v.meaningVi}</div>
+                        <div style={{ fontSize: 13, fontWeight: 800, color: '#141517' }}>“{p.en}”</div>
+                        <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.vi}</div>
                       </div>
                       <button
                         type="button"
                         className="icon-btn"
-                        title={`Nghe phát âm ${v.word}`}
-                        onClick={() => speakText(v.word)}
+                        title="Nghe câu mẫu"
+                        onClick={() => speakText(p.en)}
                       >
                         <Volume2 size={14} />
                       </button>
                     </div>
                   ))}
+                </div>
               </div>
-            </div>
 
-            <div style={{ marginBottom: 16 }}>
-              <div style={{ fontSize: 12, fontWeight: 800, textTransform: 'uppercase', color: '#64748b', marginBottom: 8 }}>
-                Mẫu câu ăn điểm
-              </div>
-              <div style={{ display: 'grid', gap: 8 }}>
-                {guideUnit.guidePhrases.map((p) => (
-                  <div
-                    key={p.en}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      gap: 10,
-                      padding: '9px 12px',
-                      borderRadius: 10,
-                      border: '1.5px solid #e2e8f0',
-                      background: '#ffffff',
-                    }}
-                  >
-                    <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: '#141517' }}>“{p.en}”</div>
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>{p.vi}</div>
-                    </div>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="Nghe câu mẫu"
-                      onClick={() => speakText(p.en)}
-                    >
-                      <Volume2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+              <button
+                type="button"
+                className="duo-btn-3d gold"
+                style={{ width: '100%' }}
+                onClick={() => setGuideUnit(null)}
+              >
+                Đã hiểu — Quay lại Lộ trình
+              </button>
             </div>
-
-            <button
-              type="button"
-              className="duo-btn-3d gold"
-              style={{ width: '100%' }}
-              onClick={() => setGuideUnit(null)}
-            >
-              Đã hiểu — Quay lại Lộ trình
-            </button>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 };
