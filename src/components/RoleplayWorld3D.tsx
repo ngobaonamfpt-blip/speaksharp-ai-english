@@ -66,7 +66,7 @@ interface RoleplayWorld3DProps {
   onEarnXp: (xp: number, reason: string) => void;
 }
 
-const CHAR_SCALE = 3.75;
+const CHAR_SCALE = 4.35;
 
 const PAPER_BTN_STYLE: React.CSSProperties = {
   width: 46,
@@ -397,8 +397,8 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           depthWrite: false,
         })
       );
-      badge.scale.set(0.74, 0.74, 1);
-      badge.position.set(spec.x, 2.38, spec.z);
+      badge.scale.set(0.76, 0.76, 1);
+      badge.position.set(spec.x, 2.72, spec.z);
       scene.add(badge);
 
       npcNodes.push({ spec, group: grp, ring, badge, badgeDone: isDoneInit });
@@ -927,7 +927,7 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
           n.badge.material.needsUpdate = true;
         }
         (n.ring.material as MeshBasicMaterial).color.setHex(isDone ? 0x4ade80 : 0xf5bd33);
-        n.badge.position.y = 2.38 + Math.sin(elapsed * 3.2 + idx) * 0.09;
+        n.badge.position.y = 2.72 + Math.sin(elapsed * 3.2 + idx) * 0.09;
         const isClose = currentNearby?.id === n.spec.id;
         if (isClose) {
           const targetYaw = Math.atan2(pState.x - n.spec.x, pState.z - n.spec.z);
@@ -1007,10 +1007,10 @@ export const RoleplayWorld3D: React.FC<RoleplayWorld3DProps> = ({
       const horiz = Math.cos(pState.camPitch) * pState.camDist;
       const camX = pState.x - Math.sin(pState.camYaw) * horiz;
       const camZ = pState.z - Math.cos(pState.camYaw) * horiz;
-      const camY = 1.45 + Math.sin(pState.camPitch) * pState.camDist + pState.y * 0.4;
+      const camY = 1.65 + Math.sin(pState.camPitch) * pState.camDist + pState.y * 0.4;
       camGoal.set(camX, camY, camZ);
       camera.position.lerp(camGoal, 0.16);
-      lookTarget.set(pState.x, 1.1 + pState.y * 0.3, pState.z);
+      lookTarget.set(pState.x, 1.32 + pState.y * 0.3, pState.z);
       camera.lookAt(lookTarget);
 
       if (liveGfxRef.current !== 'eco') {
