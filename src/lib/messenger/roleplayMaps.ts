@@ -684,8 +684,8 @@ const SUPERMARKET_NPCS: RoleplayNpcSpec[] = [
     id: 'mart-aisle',
     name: 'Helper Noah',
     landmark: 'Grocery Aisles',
-    x: 0.2,
-    z: 2.2,
+    x: 0.0,
+    z: -0.2,
     facingYaw: 0,
     style: {
       hatColor: 0x2e3c4c,
@@ -1042,15 +1042,9 @@ export const ROLEPLAY_MAPS: Record<RoleplayMapId, RoleplayMapConfig> = {
     title: '🛒 Siêu thị Fresh Mart',
     subtitle: 'SpeakSharp International Supermarket',
     skyColor: '#d1fae5',
-    bounds: { minX: -11.2, maxX: 11.2, minZ: -9.0, maxZ: 9.0 },
-    spawn: { x: 0, z: 7.4, yaw: Math.PI },
-    colliders: [
-      { minX: -9.4, maxX: -4.2, minZ: -5.7, maxZ: -3.1 }, // Produce island
-      { minX: 4.6, maxX: 9.8, minZ: -5.8, maxZ: -3.8 }, // Bakery counter
-      { minX: -3.7, maxX: -2.3, minZ: -2.0, maxZ: 3.6 }, // Left grocery aisle
-      { minX: 2.3, maxX: 3.7, minZ: -2.0, maxZ: 3.6 }, // Right grocery aisle
-      { minX: -7.8, maxX: -3.0, minZ: 6.0, maxZ: 7.6 }, // Checkout counter
-    ],
+    bounds: { minX: -10.5, maxX: 10.5, minZ: -8.2, maxZ: 7.4 },
+    spawn: { x: 0, z: 3.6, yaw: Math.PI },
+    colliders: [],
     npcs: SUPERMARKET_NPCS,
     strollers: [
       {
